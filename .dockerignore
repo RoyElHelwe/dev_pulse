@@ -1,0 +1,44 @@
+# Node modules
+node_modules
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Build outputs
+dist
+build
+.next
+out
+.turbo
+coverage
+
+# Environment variables
+.env*.local
+.env.development.local
+.env.test.local
+.env.production.local
+# Keep .env and .env.template, but usually we don't want .env in image if passing via compose
+# But for dev image it's sometimes convenient. Let's exclude .env to be safe and rely on compose env_file or environment
+.env
+
+# GIT
+.git
+.gitignore
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Documentation
+docs
+
+# Logs
+logs
+*.log

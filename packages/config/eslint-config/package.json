@@ -1,0 +1,13 @@
+{
+  "name": "@ft-trans/eslint-config",
+  "version": "1.0.0",
+  "private": true,
+  "engines": {
+    "node": ">=22.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "main": "index.js",
+  "files": [
+    "index.js"
+  ]
+}

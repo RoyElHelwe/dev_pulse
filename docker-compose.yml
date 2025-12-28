@@ -1,0 +1,126 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: ft_trans_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ft_trans
+      POSTGRES_USER: dev
+      POSTGRES_PASSWORD: dev
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U dev -d ft_trans']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ft_trans_network
+
+  # Redis Cache & Session Store
+  redis:
+    image: redis:7-alpine
+    container_name: ft_trans_redis
+    restart: unless-stopped
+    ports:
+      - '6379:6379'
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - /app/apps/web/node_modules
+      - /app/apps/web/.next
+      - redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ft_trans_network
+
+  # NATS Message Bus
+  nats:
+    image: nats:latest
+    container_name: ft_trans_nats
+    restart: unless-stopped
+    ports:
+      - '4222:4222'
+      - '8222:8222'
+      - '6222:6222'
+    command: '--http_port 8222 --js'
+    networks:
+      - ft_trans_network
+
+  # Mailpit - Email Testing
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: ft_trans_mailpit
+    restart: unless-stopped
+    ports:
+      - '1025:1025'
+      - '8025:8025'
+    environment:
+      MP_MAX_MESSAGES: 5000
+      MP_SMTP_AUTH_ACCEPT_ANY: 1
+      MP_SMTP_AUTH_ALLOW_INSECURE: 1
+    networks:
+      - ft_trans_network
+
+  # API Gateway (NestJS)
+  api-gateway:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.gateway
+    container_name: ft_trans_api_gateway
+    restart: unless-stopped
+    ports:
+      - '4000:4000'
+    environment:
+      - NODE_ENV=development
+      - DATABASE_URL=postgresql://dev:dev@postgres:5432/ft_trans?schema=public
+      - REDIS_URL=redis://redis:6379
+      - NATS_URL=nats://nats:4222
+      - API_GATEWAY_PORT=4000
+      - CORS_ORIGINS=http://localhost:3000,http://web:3000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      nats:
+        condition: service_started
+    networks:
+      - ft_trans_network
+
+  # Web Frontend (Next.js)
+  web:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.web
+    container_name: ft_trans_web
+    restart: unless-stopped
+    ports:
+      - '3000:3000'
+    environment:
+      - NODE_ENV=development
+      - NEXT_PUBLIC_API_URL=http://localhost:4000
+      - NEXT_PUBLIC_WS_URL=ws://localhost:4000
+    depends_on:
+      - api-gateway
+    networks:
+      - ft_trans_network
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  ft_trans_network:
+    driver: bridge

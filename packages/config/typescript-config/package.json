@@ -1,0 +1,11 @@
+{
+  "name": "@ft-trans/typescript-config",
+  "version": "1.0.0",
+  "private": true,
+  "engines": {
+    "node": ">=22.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "main": "base.json",
+  "files": ["base.json", "nextjs.json", "nestjs.json"]
+}
