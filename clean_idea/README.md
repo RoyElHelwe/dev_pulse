@@ -17,16 +17,16 @@ Traditional Workspace (Boring):
   - Build API
   - Fix bug #123
   - Write docs
-
+  
 Just text, no interaction 😴
 
 Your Workspace (Fun & Visual):
 ━━━━━━━━━━━━━━━━━━━━━━━━━
         🏢 Virtual Office
-
+        
     👤      👤       👤
    Alice   Bob    Carol
-
+   
 Alice walks to Bob's desk
 "Hey Bob, need help with that API?"
 Voice chat gets louder as she gets closer!
@@ -42,7 +42,6 @@ Carol is in the meeting room 🚪
 **What it is:** A game-like office where people move avatars and interact
 
 **Why it's better:**
-
 - 🚶 Walk around the office (feels like being there)
 - 🗣️ Proximity voice chat (closer = louder, like real life)
 - 👀 See who's at their desk, in meetings, or away
@@ -50,7 +49,6 @@ Carol is in the meeting room 🚪
 - 🎨 Customize your office layout
 
 **Example:**
-
 ```
 Your Office Layout:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -72,7 +70,6 @@ Your Office Layout:
 **What it is:** Normal project management but visual and real-time
 
 **Features:**
-
 - ✅ Create tasks, assign to people
 - 📊 Kanban board (To Do → In Progress → Done)
 - 🏃 Sprint planning
@@ -80,7 +77,6 @@ Your Office Layout:
 - 📈 Team progress tracking
 
 **But here's the twist:**
-
 - See task status IN the 2D office (icons above desks)
 - Walk to teammate's desk to discuss tasks
 - Whiteboard for brainstorming
@@ -91,11 +87,10 @@ Your Office Layout:
 **What it is:** AI creates your office layout automatically
 
 **How it works:**
-
 ```
 Step 1: You tell AI about your team
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-"I have 3 frontend devs, 2 backend devs,
+"I have 3 frontend devs, 2 backend devs, 
  1 designer, and 1 manager"
 
 Step 2: AI generates office layout
@@ -107,7 +102,7 @@ Step 2: AI generates office layout
 ✅ Adds meeting room
 ✅ Adds whiteboard for collaboration
 
-Step 3: Done!
+Step 3: Done! 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Your perfect office is ready in 30 seconds!
 ```
@@ -115,26 +110,22 @@ Your perfect office is ready in 30 seconds!
 ## 🛠️ Technology Stack (Simple Version)
 
 ### Frontend
-
 - **Next.js 16** - Modern React framework
 - **Phaser.js** - 2D game engine (for the office)
 - **TypeScript** - Type safety
 - **TailwindCSS** - Styling
 
 ### Backend
-
 - **NestJS** - Node.js framework
 - **PostgreSQL** - Database
 - **Socket.io** - Real-time updates
 - **Redis** - Fast caching
 
 ### AI
-
 - **OpenAI GPT-4** - Generate office layouts
 - **Python FastAPI** - AI service
 
 ### Infrastructure
-
 - **Docker** - Easy deployment
 - **Nginx** - Web server
 
@@ -161,7 +152,6 @@ ft_trans/
 ## 🎯 Core Features (What You'll Build)
 
 ### Phase 1: Basic Workspace
-
 - ✅ User login/registration
 - ✅ Create teams
 - ✅ Basic task management (create, assign, complete)
@@ -169,7 +159,6 @@ ft_trans/
 - ✅ Real-time chat
 
 ### Phase 2: Advanced Features
-
 - ✅ Proximity voice chat
 - ✅ Kanban boards
 - ✅ Sprint planning
@@ -177,7 +166,6 @@ ft_trans/
 - ✅ Better 2D graphics
 
 ### Phase 3: Polish
-
 - ✅ Performance optimization
 - ✅ Mobile-friendly
 - ✅ Testing
@@ -186,7 +174,6 @@ ft_trans/
 ## 🚀 Why This Is Perfect for 42
 
 ### Shows Advanced Skills
-
 - ✅ Full-stack development (Next.js + NestJS)
 - ✅ Real-time systems (WebSocket)
 - ✅ Game development (Phaser.js)
@@ -195,14 +182,12 @@ ft_trans/
 - ✅ DevOps (Docker)
 
 ### Unique & Impressive
-
 - 🎮 2D metaverse (not just another CRUD app)
 - 🤖 AI-powered (cutting edge)
 - 🚀 Real-time collaboration (advanced)
 - 🎨 Visual and fun (memorable in demos)
 
 ### Practical & Useful
-
 - 💼 Solves real problems (remote work collaboration)
 - 🏢 Companies could actually use it
 - 📈 Portfolio piece that stands out
@@ -210,7 +195,6 @@ ft_trans/
 ## 🎮 How It Works (User Journey)
 
 ### 1. **Manager Creates Team**
-
 ```
 1. Sign up / Login
 2. Create team: "Development Team"
@@ -220,7 +204,6 @@ ft_trans/
 ```
 
 ### 2. **Team Members Join**
-
 ```
 1. Receive invitation email
 2. Click link, create account
@@ -230,7 +213,6 @@ ft_trans/
 ```
 
 ### 3. **Daily Work**
-
 ```
 Morning:
 - Alice walks to her desk 🪑
@@ -254,14 +236,12 @@ End of Day:
 ## 💡 The "Aha!" Moment
 
 **Problem with traditional tools:**
-
 - Remote work feels isolated
 - Just staring at lists all day
 - No sense of "being together"
 - Hard to casually ask questions
 
 **Your solution:**
-
 - Feel like you're in an office together
 - See who's working on what
 - Natural interactions (walk up and talk)
@@ -270,7 +250,6 @@ End of Day:
 ## 🎨 Visual Examples
 
 ### Traditional Tool (Boring):
-
 ```
 JIRA / Asana / Monday.com
 ━━━━━━━━━━━━━━━━━━━━━━
@@ -285,18 +264,17 @@ Just a list. No context. No interaction.
 ```
 
 ### Your Tool (Exciting):
-
 ```
 ft_transcendence
 ━━━━━━━━━━━━━━━━━━━━━━
     🏢 VIRTUAL OFFICE
-
+    
 👤 Alice          📊 Kanban Board
    "Building         ┌─────────┐
     login API"       │ To Do   │
                      │  3 tasks│
                      └─────────┘
-👤 Bob
+👤 Bob            
    "In meeting"      ┌─────────┐
                      │Progress │
 🚪 Meeting Room      │  2 tasks│
@@ -313,7 +291,6 @@ Visual, interactive, fun!
 ## 🎯 Success Criteria
 
 ### For 42 Evaluation
-
 - ✅ Works smoothly (no crashes)
 - ✅ Real-time updates (WebSocket)
 - ✅ 2D office is playable
@@ -322,7 +299,6 @@ Visual, interactive, fun!
 - ✅ Good documentation
 
 ### Bonus Points
-
 - 🌟 AI office generator working
 - 🌟 Voice chat implemented
 - 🌟 Beautiful graphics
@@ -362,7 +338,6 @@ npm run dev
 ## 🏆 Final Thoughts
 
 This project combines:
-
 - 🎮 **Fun** (game-like interface)
 - 💼 **Practical** (real work management)
 - 🚀 **Innovative** (AI + metaverse)

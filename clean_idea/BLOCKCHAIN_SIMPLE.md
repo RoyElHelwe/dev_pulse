@@ -5,7 +5,6 @@
 **You do NOT need blockchain to make this project work!**
 
 Only add this if:
-
 - ✅ You finished all core features
 - ✅ You have extra time (1-2 weeks)
 - ✅ You want to impress evaluators
@@ -18,20 +17,18 @@ Only add this if:
 ## What Does Blockchain Add? (In Simple Terms)
 
 ### The Problem
-
 ```
 Normal Database:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 🗄️ Company database stores:
    - "Bob completed 50 tasks"
-
+   
 ❌ Manager can edit database: "Bob completed 20 tasks"
 ❌ No proof, data can be changed
 ❌ Bob loses evidence of his work
 ```
 
 ### The Solution
-
 ```
 With Blockchain:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -39,7 +36,7 @@ With Blockchain:
    - "Bob completed Task #1 - Dec 1, 3:45pm"
    - "Bob completed Task #2 - Dec 2, 10:22am"
    - ... 50 entries
-
+   
 ✅ Nobody can delete or modify these records
 ✅ Bob has permanent proof
 ✅ Fair performance reviews
@@ -54,14 +51,12 @@ With Blockchain:
 **That's it!** Just ONE simple feature:
 
 When someone completes a task, record it on blockchain:
-
 - Task ID
 - Who completed it
 - When (timestamp)
 - Proof (link to code/work)
 
 **Benefits:**
-
 - 📊 Fair performance reviews
 - 🏆 Employees have proof of their work
 - 📈 Transparent productivity tracking
@@ -76,14 +71,12 @@ When someone completes a task, record it on blockchain:
 Use Ethereum test network (completely free, perfect for 42 project):
 
 **What you need:**
-
 1. MetaMask wallet (browser extension - free)
 2. Hardhat (development tool - free)
 3. Test network (Sepolia - free)
 4. Test ETH (from faucet - free)
 
 **Steps:**
-
 ```bash
 # 1. Install Hardhat
 npm install --save-dev hardhat
@@ -117,9 +110,9 @@ contract TaskRecord {
         uint256 timestamp;   // When
         string proof;        // Link to work
     }
-
+    
     Record[] public records;
-
+    
     // Record a task completion (called from your backend)
     function recordTask(
         uint256 taskId,
@@ -133,7 +126,7 @@ contract TaskRecord {
             proof: proof
         }));
     }
-
+    
     // Get someone's task history
     function getRecords(address worker) public view returns (Record[] memory) {
         // Return all records for this worker
@@ -154,17 +147,17 @@ That's it! Simple contract that stores task completions.
 
 async completeTask(taskId: number) {
   // 1. Update your database (normal)
-  await this.db.task.update({
-    status: 'done'
+  await this.db.task.update({ 
+    status: 'done' 
   });
-
+  
   // 2. Record on blockchain (optional)
   await this.blockchain.recordTask(
     taskId,
     userId,
     linkToWork
   );
-
+  
   // Done!
 }
 ```
@@ -178,7 +171,6 @@ Just show a badge: "✅ Verified on Blockchain"
 ## What NOT to Do (Keep It Simple!)
 
 ### ❌ DON'T:
-
 - Build payment systems
 - Create tokens
 - Make NFTs (unless super quick)
@@ -187,7 +179,6 @@ Just show a badge: "✅ Verified on Blockchain"
 - Spend more than 1-2 weeks on this
 
 ### ✅ DO:
-
 - Use test network (free)
 - Only record task completions
 - Keep contract simple (40 lines)
@@ -235,14 +226,12 @@ Total: 2-3 days
 ### Should You Add Blockchain?
 
 **Add it if:**
-
 - ✅ Core features are 100% done
 - ✅ You have 2-3 extra days
 - ✅ You want bonus points
 - ✅ Curious about blockchain
 
 **Skip it if:**
-
 - ❌ Core features not done yet
 - ❌ Limited time (< 4 weeks left)
 - ❌ Already complex enough
@@ -251,7 +240,6 @@ Total: 2-3 days
 ### The Truth
 
 Your project is already strong without blockchain:
-
 - 2D metaverse office ⭐⭐⭐
 - Real-time collaboration ⭐⭐
 - AI office generator ⭐⭐
@@ -265,13 +253,11 @@ Blockchain is just a bonus feature: ⭐
 ## Resources (If You Decide to Add It)
 
 ### Learning
-
 - CryptoZombies (interactive tutorial) - 2 hours
 - Hardhat docs - 1 hour
 - Solidity basics - 2 hours
 
 ### Tools
-
 - MetaMask - metamask.io
 - Hardhat - hardhat.org
 - Sepolia Faucet - sepoliafaucet.com
@@ -284,7 +270,6 @@ Blockchain is just a bonus feature: ⭐
 ## Summary
 
 **Blockchain for your project:**
-
 - 🎯 Purpose: Record task completions permanently
 - 💰 Cost: $0 (use test network)
 - ⏱️ Time: 2-3 days

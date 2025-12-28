@@ -4,6 +4,7 @@ import { ThrottlerModule } from '@nestjs/throttler'
 import { AppController } from './app.controller'
 import { AppService } from './app.service'
 import { WebsocketModule } from './websocket/websocket.module'
+import { AuthModule } from './auth/auth.module'
 
 @Module({
   imports: [
@@ -20,6 +21,9 @@ import { WebsocketModule } from './websocket/websocket.module'
         limit: 100, // 100 requests per minute
       },
     ]),
+
+    // Authentication
+    AuthModule,
 
     // WebSocket gateway
     WebsocketModule,
