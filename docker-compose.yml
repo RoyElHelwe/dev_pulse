@@ -30,10 +30,6 @@ services:
     ports:
       - '6379:6379'
     volumes:
-      - .:/app
-      - /app/node_modules
-      - /app/apps/web/node_modules
-      - /app/apps/web/.next
       - redis_data:/data
     healthcheck:
       test: ['CMD', 'redis-cli', 'ping']
@@ -80,6 +76,9 @@ services:
     restart: unless-stopped
     ports:
       - '4000:4000'
+    volumes:
+      - ./apps/api-gateway/src:/app/apps/api-gateway/src
+      - ./apps/api-gateway/prisma:/app/apps/api-gateway/prisma
     environment:
       - NODE_ENV=development
       - DATABASE_URL=postgresql://dev:dev@postgres:5432/ft_trans?schema=public
@@ -106,6 +105,11 @@ services:
     restart: unless-stopped
     ports:
       - '3000:3000'
+    volumes:
+      - ./apps/web/app:/app/apps/web/app
+      - ./apps/web/components:/app/apps/web/components
+      - ./apps/web/lib:/app/apps/web/lib
+      - ./apps/web/public:/app/apps/web/public
     environment:
       - NODE_ENV=development
       - NEXT_PUBLIC_API_URL=http://localhost:4000

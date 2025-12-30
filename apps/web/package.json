@@ -15,7 +15,8 @@
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
-    "@ft-trans/shared": "workspace:*",
+    "@radix-ui/react-label": "^2.1.8",
+    "@radix-ui/react-slot": "^1.2.4",
     "@tailwindcss/postcss": "^4.1.18",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -29,8 +30,6 @@
     "zustand": "^5.0.9"
   },
   "devDependencies": {
-    "@ft-trans/eslint-config": "workspace:*",
-    "@ft-trans/typescript-config": "workspace:*",
     "@types/node": "^22.10.2",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",

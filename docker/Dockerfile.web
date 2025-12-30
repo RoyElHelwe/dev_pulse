@@ -5,16 +5,16 @@ FROM node:22-alpine
 RUN apk add --no-cache libc6-compat python3 make g++
 RUN corepack enable && corepack prepare pnpm@9.14.4 --activate
 
-WORKDIR /app
+WORKDIR /app/apps/web
 
-# Copy source code (using .dockerignore to exclude node_modules etc)
-COPY . .
+# Copy package files
+COPY apps/web/package.json apps/web/pnpm-lock.yaml* ./
 
 # Install dependencies
 RUN pnpm install --no-frozen-lockfile
-RUN cd packages/shared && pnpm run build
 
-WORKDIR /app/apps/web
+# Copy application source
+COPY apps/web .
 
 EXPOSE 3000
 

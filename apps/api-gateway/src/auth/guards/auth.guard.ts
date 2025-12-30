@@ -3,30 +3,33 @@ import {
   CanActivate,
   ExecutionContext,
   UnauthorizedException,
-} from '@nestjs/common'
-import { AuthService } from '../auth.service'
+} from '@nestjs/common';
+import { AuthService } from '../auth.service';
 
 @Injectable()
 export class AuthGuard implements CanActivate {
   constructor(private authService: AuthService) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const request = context.switchToHttp().getRequest()
-    const authHeader = request.headers.authorization
+    const request = context.switchToHttp().getRequest();
 
-    if (!authHeader) {
-      throw new UnauthorizedException('No authorization header')
+    // Try to get token from cookie first, then fallback to Authorization header
+    const sessionToken =
+      request.cookies?.session_token ||
+      request.headers.authorization?.replace('Bearer ', '');
+
+    if (!sessionToken) {
+      throw new UnauthorizedException('No session token provided');
     }
 
-    const sessionToken = authHeader.replace('Bearer ', '')
-
     try {
-      const { user, session } = await this.authService.validateSession(sessionToken)
-      request.user = user
-      request.session = session
-      return true
+      const { user, session } =
+        await this.authService.validateSession(sessionToken);
+      request.user = user;
+      request.session = session;
+      return true;
     } catch (error) {
-      throw new UnauthorizedException('Invalid or expired session')
+      throw new UnauthorizedException('Invalid or expired session');
     }
   }
 }

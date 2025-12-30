@@ -1,6 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  transpilePackages: ['@ft-trans/shared'],
+  transpilePackages: ['@ft-trans/frontend-shared'],
   experimental: {
     turbo: {
       rules: {

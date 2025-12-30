@@ -6,14 +6,21 @@ import {
   Body,
   Headers,
   Req,
+  Res,
   UseGuards,
   HttpCode,
   HttpStatus,
-} from '@nestjs/common'
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger'
-import { AuthService } from './auth.service'
-import { AuthGuard } from './guards/auth.guard'
-import { Request } from 'express'
+  UnauthorizedException,
+} from '@nestjs/common';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
+import { AuthService } from './auth.service';
+import { AuthGuard } from './guards/auth.guard';
+import { Request, Response } from 'express';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -28,7 +35,7 @@ export class AuthController {
   async register(
     @Body() body: { email: string; password: string; name?: string },
   ) {
-    return this.authService.register(body.email, body.password, body.name)
+    return this.authService.register(body.email, body.password, body.name);
   }
 
   @Post('login')
@@ -39,11 +46,54 @@ export class AuthController {
   async login(
     @Body() body: { email: string; password: string },
     @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
   ) {
-    const ipAddress = req.ip
-    const userAgent = req.headers['user-agent']
+    const ipAddress = req.ip;
+    const userAgent = req.headers['user-agent'];
 
-    return this.authService.login(body.email, body.password, ipAddress, userAgent)
+    const result = await this.authService.login(
+      body.email,
+      body.password,
+      ipAddress,
+      userAgent,
+    );
+
+    // Set cookies if not 2FA
+    if (!result.requires2FA && result.sessionToken && result.refreshToken) {
+      // Set httpOnly cookie for session token
+      res.cookie('session_token', result.sessionToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 15 * 60 * 1000, // 15 minutes
+        path: '/',
+        domain:
+          process.env.NODE_ENV === 'production'
+            ? process.env.COOKIE_DOMAIN
+            : 'localhost',
+      });
+
+      // Set httpOnly cookie for refresh token
+      res.cookie('refresh_token', result.refreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+        path: '/',
+        domain:
+          process.env.NODE_ENV === 'production'
+            ? process.env.COOKIE_DOMAIN
+            : 'localhost',
+      });
+
+      // Return user info without tokens
+      return {
+        requires2FA: false,
+        user: result.user,
+      };
+    }
+
+    return result;
   }
 
   @Post('2fa/verify')
@@ -54,11 +104,89 @@ export class AuthController {
   async verify2FA(
     @Body() body: { userId: string; token: string },
     @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
   ) {
-    const ipAddress = req.ip
-    const userAgent = req.headers['user-agent']
+    const ipAddress = req.ip;
+    const userAgent = req.headers['user-agent'];
 
-    return this.authService.verify2FA(body.userId, body.token, ipAddress, userAgent)
+    const result = await this.authService.verify2FA(
+      body.userId,
+      body.token,
+      ipAddress,
+      userAgent,
+    );
+
+    // Set httpOnly cookies
+    res.cookie('session_token', result.sessionToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 15 * 60 * 1000, // 15 minutes
+      path: '/',
+      domain:
+        process.env.NODE_ENV === 'production'
+          ? process.env.COOKIE_DOMAIN
+          : 'localhost',
+    });
+
+    res.cookie('refresh_token', result.refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+      path: '/',
+      domain:
+        process.env.NODE_ENV === 'production'
+          ? process.env.COOKIE_DOMAIN
+          : 'localhost',
+    });
+
+    // Return user info without tokens
+    return {
+      user: result.user,
+    };
+  }
+
+  @Post('refresh')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Refresh access token using refresh token' })
+  @ApiResponse({ status: 200, description: 'Token refreshed successfully' })
+  @ApiResponse({ status: 401, description: 'Invalid or expired refresh token' })
+  async refresh(
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const ipAddress = req.ip;
+    const userAgent = req.headers['user-agent'];
+    const refreshToken = req.cookies?.refresh_token;
+
+    if (!refreshToken) {
+      throw new UnauthorizedException('No refresh token provided');
+    }
+
+    const result = await this.authService.refreshToken(
+      refreshToken,
+      ipAddress,
+      userAgent,
+    );
+
+    // Update session token cookie
+    res.cookie('session_token', result.sessionToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 15 * 60 * 1000, // 15 minutes
+      path: '/',
+      domain:
+        process.env.NODE_ENV === 'production'
+          ? process.env.COOKIE_DOMAIN
+          : 'localhost',
+    });
+
+    // Return user info without tokens
+    return {
+      user: result.user,
+    };
   }
 
   @Post('2fa/setup')
@@ -67,7 +195,7 @@ export class AuthController {
   @ApiOperation({ summary: 'Setup 2FA for user' })
   @ApiResponse({ status: 200, description: '2FA setup initiated' })
   async setup2FA(@Req() req: any) {
-    return this.authService.setup2FA(req.user.id)
+    return this.authService.setup2FA(req.user.id);
   }
 
   @Post('2fa/enable')
@@ -76,11 +204,8 @@ export class AuthController {
   @ApiOperation({ summary: 'Enable 2FA' })
   @ApiResponse({ status: 200, description: '2FA enabled successfully' })
   @ApiResponse({ status: 401, description: 'Invalid 2FA token' })
-  async enable2FA(
-    @Body() body: { token: string },
-    @Req() req: any,
-  ) {
-    return this.authService.enable2FA(req.user.id, body.token)
+  async enable2FA(@Body() body: { token: string }, @Req() req: any) {
+    return this.authService.enable2FA(req.user.id, body.token);
   }
 
   @Post('2fa/disable')
@@ -89,11 +214,8 @@ export class AuthController {
   @ApiOperation({ summary: 'Disable 2FA' })
   @ApiResponse({ status: 200, description: '2FA disabled successfully' })
   @ApiResponse({ status: 401, description: 'Invalid 2FA token' })
-  async disable2FA(
-    @Body() body: { token: string },
-    @Req() req: any,
-  ) {
-    return this.authService.disable2FA(req.user.id, body.token)
+  async disable2FA(@Body() body: { token: string }, @Req() req: any) {
+    return this.authService.disable2FA(req.user.id, body.token);
   }
 
   @Get('session')
@@ -105,7 +227,7 @@ export class AuthController {
     return {
       user: req.user,
       session: req.session,
-    }
+    };
   }
 
   @Get('sessions')
@@ -114,7 +236,7 @@ export class AuthController {
   @ApiOperation({ summary: 'Get all user sessions' })
   @ApiResponse({ status: 200, description: 'Sessions retrieved' })
   async getSessions(@Req() req: any) {
-    return this.authService.getUserSessions(req.user.id)
+    return this.authService.getUserSessions(req.user.id);
   }
 
   @Delete('session/:sessionId')
@@ -123,11 +245,8 @@ export class AuthController {
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Revoke a specific session' })
   @ApiResponse({ status: 204, description: 'Session revoked' })
-  async revokeSession(
-    @Req() req: any,
-    @Body() body: { sessionId: string },
-  ) {
-    return this.authService.revokeSession(req.user.id, body.sessionId)
+  async revokeSession(@Req() req: any, @Body() body: { sessionId: string }) {
+    return this.authService.revokeSession(req.user.id, body.sessionId);
   }
 
   @Delete('sessions')
@@ -137,7 +256,7 @@ export class AuthController {
   @ApiOperation({ summary: 'Revoke all sessions except current' })
   @ApiResponse({ status: 204, description: 'All sessions revoked' })
   async revokeAllSessions(@Req() req: any) {
-    return this.authService.revokeAllSessions(req.user.id, req.session.id)
+    return this.authService.revokeAllSessions(req.user.id, req.session.id);
   }
 
   @Post('logout')
@@ -146,8 +265,32 @@ export class AuthController {
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Logout current session' })
   @ApiResponse({ status: 204, description: 'Logged out successfully' })
-  async logout(@Headers('authorization') auth: string) {
-    const sessionToken = auth?.replace('Bearer ', '')
-    return this.authService.logout(sessionToken)
+  async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    // Get session token from cookie or Authorization header
+    const sessionToken =
+      req.cookies?.session_token ||
+      req.headers.authorization?.replace('Bearer ', '');
+
+    if (sessionToken) {
+      await this.authService.logout(sessionToken);
+    }
+
+    // Clear cookies
+    res.clearCookie('session_token', {
+      path: '/',
+      domain:
+        process.env.NODE_ENV === 'production'
+          ? process.env.COOKIE_DOMAIN
+          : 'localhost',
+    });
+    res.clearCookie('refresh_token', {
+      path: '/',
+      domain:
+        process.env.NODE_ENV === 'production'
+          ? process.env.COOKIE_DOMAIN
+          : 'localhost',
+    });
+
+    return { success: true };
   }
 }
