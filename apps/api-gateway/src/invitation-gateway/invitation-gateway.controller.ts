@@ -78,6 +78,18 @@ export class InvitationGatewayController {
         );
       }
 
+      // Prevent inviting someone as OWNER (there can only be one owner)
+      if (body.role === 'OWNER') {
+        throw new HttpException(
+          {
+            statusCode: 400,
+            message: 'Cannot invite someone as OWNER. There can only be one workspace owner.',
+            error: 'Bad Request',
+          },
+          400,
+        );
+      }
+
       // Check if user with this email exists in the API Gateway database
       const existingUser = await this.prisma.user.findUnique({
         where: { email: body.email.toLowerCase() },

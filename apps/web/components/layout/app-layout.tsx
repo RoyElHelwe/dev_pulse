@@ -28,6 +28,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   const [workspace, setWorkspace] = useState<WorkspaceInfo | null>(null)
   const [workspaceLoading, setWorkspaceLoading] = useState(true)
   const initializedRef = useRef(false)
+  const [isRoleChecked, setIsRoleChecked] = useState(false)
 
   useEffect(() => {
     // Prevent running multiple times using ref (doesn't cause re-render)
@@ -75,7 +76,6 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   // Check role-based access for current route
   const pathname = usePathname()
-  const permissions = workspace ? getRolePermissions(workspace.role) : null
 
   // Role-based route protection
   useEffect(() => {
@@ -90,6 +90,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     if (pathname.startsWith('/team/invite') && !permissions.canInviteMembers) {
       router.push('/team')
     }
+    setIsRoleChecked(true)
   }, [pathname, workspace, workspaceLoading, router])
 
   // Show loading while checking auth or workspace
@@ -102,7 +103,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   }
 
   // Not authenticated
-  if (!isAuthenticated || !user) {
+  if (!isAuthenticated || !user || !isRoleChecked) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <LoadingSpinner message="Redirecting..." />

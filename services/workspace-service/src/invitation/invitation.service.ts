@@ -49,6 +49,14 @@ export class InvitationService {
   async createInvitation(dto: CreateInvitationDto) {
     const { workspaceId, email, role = 'MEMBER', createdById } = dto;
 
+    // Prevent creating invitations with OWNER role (only one owner per workspace)
+    if (role === 'OWNER') {
+      throw new RpcException({ 
+        statusCode: 400, 
+        message: 'Cannot invite someone as OWNER. There can only be one workspace owner.' 
+      });
+    }
+
     // Check if workspace exists
     const workspace = await this.prisma.workspace.findUnique({
       where: { id: workspaceId },
