@@ -68,7 +68,7 @@ export default function TeamPage() {
   const fetchData = async () => {
     try {
       // Get workspace info
-      const statusRes = await fetch('http://localhost:4000/workspaces/status', {
+      const statusRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/workspaces/status`, {
         credentials: 'include',
       })
       
@@ -85,7 +85,7 @@ export default function TeamPage() {
 
       // Fetch members
       const membersRes = await fetch(
-        `http://localhost:4000/workspaces/${statusData.workspace.id}/members`,
+        `${process.env.NEXT_PUBLIC_API_URL}/workspaces/${statusData.workspace.id}/members`,
         { credentials: 'include' }
       )
       if (membersRes.ok) {
@@ -96,7 +96,7 @@ export default function TeamPage() {
       // Fetch pending invitations (owner only)
       if (statusData.isOwner || statusData.role === 'OWNER') {
         const invitesRes = await fetch(
-          `http://localhost:4000/invitations/workspace/${statusData.workspace.id}`,
+          `${process.env.NEXT_PUBLIC_API_URL}/invitations/workspace/${statusData.workspace.id}`,
           { credentials: 'include' }
         )
         if (invitesRes.ok) {
@@ -113,7 +113,7 @@ export default function TeamPage() {
 
   const cancelInvitation = async (invitationId: string) => {
     try {
-      const res = await fetch(`http://localhost:4000/invitations/${invitationId}`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/invitations/${invitationId}`, {
         method: 'DELETE',
         credentials: 'include',
       })

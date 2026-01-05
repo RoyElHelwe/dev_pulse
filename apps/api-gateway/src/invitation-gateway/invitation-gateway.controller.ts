@@ -83,7 +83,8 @@ export class InvitationGatewayController {
         throw new HttpException(
           {
             statusCode: 400,
-            message: 'Cannot invite someone as OWNER. There can only be one workspace owner.',
+            message:
+              'Cannot invite someone as OWNER. There can only be one workspace owner.',
             error: 'Bad Request',
           },
           400,

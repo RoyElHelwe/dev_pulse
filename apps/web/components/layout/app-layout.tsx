@@ -45,7 +45,7 @@ export function AppLayout({ children }: AppLayoutProps) {
 
       // Fetch workspace info
       try {
-        const res = await fetch('http://localhost:4000/workspaces/status', {
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/workspaces/status`, {
           credentials: 'include',
         })
         

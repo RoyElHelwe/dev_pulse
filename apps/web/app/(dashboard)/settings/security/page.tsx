@@ -107,14 +107,26 @@ export default function SecuritySettingsPage() {
     }
   }
 
-  const handleRevokeSession = async (sessionId: string) => {
-    if (!confirm('Are you sure you want to revoke this session?')) {
-      return
+  const handleRevokeSession = async (sessionId: string, isCurrent: boolean) => {
+    if (isCurrent) {
+      if (!confirm('Are you sure you want to revoke your current session? You will be logged out immediately.')) {
+        return
+      }
+    } else {
+      if (!confirm('Are you sure you want to revoke this session?')) {
+        return
+      }
     }
 
     try {
       await authService.revokeSession(sessionId)
-      await loadSessions()
+      
+      if (isCurrent) {
+        // Redirect to login page after revoking current session
+        window.location.href = '/login'
+      } else {
+        await loadSessions()
+      }
     } catch (error: any) {
       setSessionError(error.message || 'Failed to revoke session')
     }
@@ -276,15 +288,13 @@ export default function SecuritySettingsPage() {
                         Expires: {new Date(session.expiresAt).toLocaleString()}
                       </p>
                     </div>
-                    {!session.isCurrent && (
-                      <Button
-                        onClick={() => handleRevokeSession(session.id)}
-                        variant="outline"
-                        size="sm"
-                      >
-                        Revoke
-                      </Button>
-                    )}
+                    <Button
+                      onClick={() => handleRevokeSession(session.id, session.isCurrent)}
+                      variant={session.isCurrent ? "destructive" : "outline"}
+                      size="sm"
+                    >
+                      {session.isCurrent ? 'Logout' : 'Revoke'}
+                    </Button>
                   </div>
                 </div>
               ))}

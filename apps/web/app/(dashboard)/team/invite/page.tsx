@@ -47,7 +47,7 @@ export default function InvitePage() {
 
   const checkOwnership = async () => {
     try {
-      const res = await fetch('http://localhost:4000/workspaces/status', {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/workspaces/status`, {
         credentials: 'include',
       })
 
@@ -88,7 +88,7 @@ export default function InvitePage() {
     setSending(true)
 
     try {
-      const res = await fetch(`http://localhost:4000/invitations/${workspace?.id}`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/invitations/${workspace?.id}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',

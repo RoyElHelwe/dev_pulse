@@ -34,7 +34,7 @@ export default function RegisterPage() {
   // If there's an invitation token, fetch the workspace info
   useEffect(() => {
     if (invitationToken) {
-      fetch(`http://localhost:4000/invitations/validate/${invitationToken}`)
+      fetch(`${process.env.NEXT_PUBLIC_API_URL}/invitations/validate/${invitationToken}`)
         .then(res => res.json())
         .then(data => {
           if (data.valid && data.invitation?.workspace) {

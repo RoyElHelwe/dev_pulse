@@ -80,7 +80,7 @@ export default function OnboardingPage() {
       if (roleInputs.managers > 0) roles.push({ role: 'Manager', count: roleInputs.managers })
       if (roleInputs.others > 0) roles.push({ role: 'Other', count: roleInputs.others })
 
-      const response = await fetch('http://localhost:4000/workspaces', {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/workspaces`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

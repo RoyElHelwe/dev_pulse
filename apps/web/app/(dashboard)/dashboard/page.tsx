@@ -54,7 +54,7 @@ export default function DashboardPage() {
     const fetchData = async () => {
       try {
         // Fetch workspace status
-        const statusRes = await fetch('http://localhost:4000/workspaces/status', {
+        const statusRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/workspaces/status`, {
           credentials: 'include',
         })
         
@@ -81,7 +81,7 @@ export default function DashboardPage() {
 
             // Fetch members
             const membersRes = await fetch(
-              `http://localhost:4000/workspaces/${statusData.workspace.id}/members`,
+              `${process.env.NEXT_PUBLIC_API_URL}/workspaces/${statusData.workspace.id}/members`,
               { credentials: 'include' }
             )
             if (membersRes.ok) {
