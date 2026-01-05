@@ -4,6 +4,9 @@ import type { NextRequest } from 'next/server'
 // Define public routes that don't require authentication
 const publicRoutes = ['/', '/login', '/register']
 
+// Routes that should not redirect authenticated users to dashboard
+const noRedirectRoutes = ['/invite/']
+
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
@@ -16,15 +19,17 @@ export function middleware(request: NextRequest) {
     return NextResponse.next()
   }
 
-  // Allow public routes
-  const isPublicRoute = publicRoutes.includes(pathname)
+  // Allow public routes and invite routes
+  const isPublicRoute = publicRoutes.includes(pathname) || pathname.startsWith('/invite/')
+  const shouldNotRedirectToDashboard = noRedirectRoutes.some(route => pathname.startsWith(route))
 
   // Check for session token and refresh token
   const sessionToken = request.cookies.get('session_token')?.value
   const refreshToken = request.cookies.get('refresh_token')?.value
 
-  // If on public route and authenticated, redirect to dashboard
-  if (isPublicRoute && sessionToken && pathname !== '/') {
+  // If on public route (but NOT invite) and authenticated, redirect to dashboard
+  // We want authenticated users to be able to access /invite/* to accept invitations
+  if (isPublicRoute && sessionToken && pathname !== '/' && !shouldNotRedirectToDashboard) {
     return NextResponse.redirect(new URL('/dashboard', request.url))
   }
 

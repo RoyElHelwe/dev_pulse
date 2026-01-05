@@ -1,0 +1,2 @@
+docker compose up -d --build
+docker-compose exec workspace-service sh -c "cd /app/services/workspace-service && pnpm prisma migrate dev --name init"

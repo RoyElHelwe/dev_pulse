@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { authService } from '@/lib/auth-service'
 import { useAuth } from '@/lib/hooks/use-auth'
 import type { UserSession } from '@/lib/types'
-import DashboardLayout from '@/components/layout/dashboard-layout'
+import { AppLayout } from '@/components/layout/app-layout'
 import { Card } from '@/components/ui/card'
 import { LoadingSpinner } from '@/components/ui/loading-spinner'
 import { FormInputField } from '@/components/ui/form-field'
@@ -27,18 +27,15 @@ export default function SecuritySettingsPage() {
   const [sessions, setSessions] = useState<UserSession[]>([])
   const [sessionsLoading, setSessionsLoading] = useState(false)
   const [sessionError, setSessionError] = useState('')
+  const [sessionsLoaded, setSessionsLoaded] = useState(false)
 
+  // Load sessions once when authenticated
   useEffect(() => {
-    if (!isAuthenticated && !isLoading) {
-      router.push('/login')
-    }
-  }, [isAuthenticated, isLoading, router])
-
-  useEffect(() => {
-    if (isAuthenticated) {
+    if (isAuthenticated && !sessionsLoaded) {
+      setSessionsLoaded(true)
       loadSessions()
     }
-  }, [isAuthenticated])
+  }, [isAuthenticated, sessionsLoaded])
 
   const loadSessions = async () => {
     try {
@@ -152,7 +149,7 @@ export default function SecuritySettingsPage() {
   }
 
   return (
-    <DashboardLayout>
+    <AppLayout>
       <div className="max-w-4xl">
         <h2 className="text-3xl font-bold text-foreground mb-8">Security Settings</h2>
 
@@ -302,6 +299,6 @@ export default function SecuritySettingsPage() {
           )}
         </Card>
       </div>
-    </DashboardLayout>
+    </AppLayout>
   )
 }

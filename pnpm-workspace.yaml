@@ -1,6 +1,5 @@
-# Workspace disabled - each app manages its own dependencies
-# packages:
-#   - 'apps/*'
-#   - 'packages/frontend'
-#   - 'packages/backend'
-#   - 'packages/config/*'
+packages:
+  - 'apps/*'
+  - 'services/*'
+  - 'packages/config/*'
+

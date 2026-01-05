@@ -11,7 +11,9 @@ import {
   HttpCode,
   HttpStatus,
   UnauthorizedException,
+  Inject,
 } from '@nestjs/common';
+import { ClientProxy } from '@nestjs/microservices';
 import {
   ApiTags,
   ApiOperation,
@@ -21,11 +23,15 @@ import {
 import { AuthService } from './auth.service';
 import { AuthGuard } from './guards/auth.guard';
 import { Request, Response } from 'express';
+import { firstValueFrom } from 'rxjs';
 
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
-  constructor(private authService: AuthService) {}
+  constructor(
+    private authService: AuthService,
+    @Inject('WORKSPACE_SERVICE') private workspaceClient: ClientProxy,
+  ) {}
 
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
@@ -33,9 +39,91 @@ export class AuthController {
   @ApiResponse({ status: 201, description: 'User created successfully' })
   @ApiResponse({ status: 400, description: 'Bad request' })
   async register(
-    @Body() body: { email: string; password: string; name?: string },
+    @Body()
+    body: {
+      email: string;
+      password: string;
+      name?: string;
+      invitationToken?: string;
+    },
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
   ) {
-    return this.authService.register(body.email, body.password, body.name);
+    const result = await this.authService.register(
+      body.email,
+      body.password,
+      body.name,
+    );
+
+    // If there's an invitation token, automatically log in and accept the invitation
+    if (body.invitationToken) {
+      try {
+        // Auto-login the user
+        const ipAddress = req.ip;
+        const userAgent = req.headers['user-agent'];
+        const loginResult = await this.authService.login(
+          body.email,
+          body.password,
+          ipAddress,
+          userAgent,
+        );
+
+        // Set session cookies
+        if (loginResult.sessionToken && loginResult.refreshToken) {
+          res.cookie('session_token', loginResult.sessionToken, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'lax',
+            maxAge: 15 * 60 * 1000, // 15 minutes
+            path: '/',
+            domain:
+              process.env.NODE_ENV === 'production'
+                ? process.env.COOKIE_DOMAIN
+                : 'localhost',
+          });
+
+          res.cookie('refresh_token', loginResult.refreshToken, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'lax',
+            maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+            path: '/',
+            domain:
+              process.env.NODE_ENV === 'production'
+                ? process.env.COOKIE_DOMAIN
+                : 'localhost',
+          });
+
+          // Accept the invitation
+          await firstValueFrom(
+            this.workspaceClient.send(
+              { cmd: 'accept_invitation' },
+              { token: body.invitationToken, userId: result.id },
+            ),
+          );
+
+          return {
+            ...result,
+            user: loginResult.user,
+            message:
+              'Registration successful. You have been added to the workspace.',
+          };
+        }
+      } catch (error) {
+        // If auto-login or invitation acceptance fails, still return success for registration
+        console.error('Failed to auto-accept invitation:', error);
+        return {
+          ...result,
+          message:
+            'Registration successful, but failed to auto-accept invitation. Please login and try again.',
+        };
+      }
+    }
+
+    return {
+      ...result,
+      message: 'Registration successful',
+    };
   }
 
   @Post('login')
@@ -48,6 +136,11 @@ export class AuthController {
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ) {
+    // Validate required fields
+    if (!body.email || !body.password) {
+      throw new UnauthorizedException('Email and password are required');
+    }
+
     const ipAddress = req.ip;
     const userAgent = req.headers['user-agent'];
 
@@ -216,6 +309,18 @@ export class AuthController {
   @ApiResponse({ status: 401, description: 'Invalid 2FA token' })
   async disable2FA(@Body() body: { token: string }, @Req() req: any) {
     return this.authService.disable2FA(req.user.id, body.token);
+  }
+
+  @Get('me')
+  @UseGuards(AuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get current authenticated user' })
+  @ApiResponse({ status: 200, description: 'User retrieved' })
+  @ApiResponse({ status: 401, description: 'Not authenticated' })
+  async getCurrentUser(@Req() req: any) {
+    return {
+      user: req.user,
+    };
   }
 
   @Get('session')

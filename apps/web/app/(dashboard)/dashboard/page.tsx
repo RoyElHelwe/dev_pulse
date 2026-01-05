@@ -1,120 +1,290 @@
 'use client'
 
-import { useEffect } from 'react'
-import { useRouter } from 'next/navigation'
-import { Button } from '@/components/ui/button'
-import { useAuth } from '@/lib/hooks/use-auth'
-import DashboardLayout from '@/components/layout/dashboard-layout'
+import { useEffect, useState } from 'react'
+import { AppLayout } from '@/components/layout/app-layout'
 import { Card } from '@/components/ui/card'
-import { LoadingSpinner } from '@/components/ui/loading-spinner'
+import { Button } from '@/components/ui/button'
+import { Avatar, AvatarGroup } from '@/components/ui/avatar'
+import { Badge } from '@/components/ui/badge'
+import { useAuth } from '@/lib/hooks/use-auth'
+import { UsersIcon, UserPlusIcon, CheckCircleIcon, ClockIcon } from '@/components/ui/icons'
+import Link from 'next/link'
+
+interface WorkspaceData {
+  id: string
+  name: string
+  description?: string
+  memberCount: number
+  pendingInvitations: number
+  role: string
+  isOwner: boolean
+}
+
+interface MemberData {
+  id: string
+  userId: string
+  role: string
+  status: string
+  user?: {
+    name: string
+    email: string
+  }
+}
 
 export default function DashboardPage() {
-  const router = useRouter()
-  const { user, isAuthenticated, isLoading, checkAuth } = useAuth()
+  const { user } = useAuth()
+  const [workspace, setWorkspace] = useState<WorkspaceData | null>(null)
+  const [members, setMembers] = useState<MemberData[]>([])
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // Always check auth on mount - this will trigger refresh if needed
-    const verifyAuth = async () => {
+    const fetchData = async () => {
       try {
-        await checkAuth()
+        // Fetch workspace status
+        const statusRes = await fetch('http://localhost:4000/workspaces/status', {
+          credentials: 'include',
+        })
+        
+        if (statusRes.ok) {
+          const statusData = await statusRes.json()
+          if (statusData.hasWorkspace) {
+            setWorkspace({
+              id: statusData.workspace.id,
+              name: statusData.workspace.name,
+              description: statusData.workspace.description,
+              memberCount: statusData.workspace.memberCount || 1,
+              pendingInvitations: statusData.workspace.pendingInvitations || 0,
+              role: statusData.role,
+              isOwner: statusData.isOwner || statusData.role === 'OWNER',
+            })
+
+            // Fetch members
+            const membersRes = await fetch(
+              `http://localhost:4000/workspaces/${statusData.workspace.id}/members`,
+              { credentials: 'include' }
+            )
+            if (membersRes.ok) {
+              const membersData = await membersRes.json()
+              setMembers(membersData.slice(0, 5)) // Show top 5 members
+            }
+          }
+        }
       } catch (error) {
-        console.error('Failed to verify auth:', error)
-        // Only redirect after checkAuth fails (including refresh attempts)
-        router.push('/login')
+        console.error('Failed to fetch dashboard data:', error)
+      } finally {
+        setLoading(false)
       }
     }
-    verifyAuth()
+
+    fetchData()
   }, [])
 
-  console.log('Dashboard state:', { user, isAuthenticated, isLoading })
-
-  // Show loading while checking auth or loading user
-  if (isLoading || (!isAuthenticated && !user)) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <LoadingSpinner message="Loading..." />
-      </div>
-    )
-  }
-
-  // Only redirect to login if explicitly not authenticated after loading completes
-  if (!isAuthenticated || !user) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <LoadingSpinner message="Redirecting..." />
-      </div>
-    )
-  }
-
   return (
-    <DashboardLayout title={`Welcome back, ${user.name}!`}>
-      <p className="text-muted-foreground mb-8">This is your protected dashboard.</p>
-
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {/* Profile Card */}
-        <Card title="Profile">
-          <div className="space-y-2">
-            <p className="text-sm text-muted-foreground">
-              <span className="font-medium text-foreground">Name:</span> {user.name}
-            </p>
-            <p className="text-sm text-muted-foreground">
-              <span className="font-medium text-foreground">Email:</span> {user.email}
-            </p>
-            <p className="text-sm text-muted-foreground">
-              <span className="font-medium text-foreground">2FA:</span>{' '}
-              {user.twoFactorEnabled ? (
-                <span className="text-green-600">✓ Enabled</span>
-              ) : (
-                <span className="text-yellow-600">✗ Disabled</span>
-              )}
-            </p>
-          </div>
-          <Button
-            className="mt-4 w-full"
-            variant="outline"
-            onClick={() => router.push('/settings/security')}
-          >
-            Security Settings
-          </Button>
-        </Card>
+    <AppLayout>
+      <div className="space-y-8">
+        {/* Welcome Header */}
+        <div>
+          <h1 className="text-3xl font-bold">
+            Welcome back, {user?.name?.split(' ')[0]}! 👋
+          </h1>
+          <p className="text-muted-foreground mt-2">
+            Here's what's happening in your workspace today
+          </p>
+        </div>
 
         {/* Quick Stats */}
-        <Card title="Quick Stats">
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">Active Projects</span>
-              <span className="font-semibold text-primary">0</span>
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+          <Card className="p-6">
+            <div className="flex items-center gap-4">
+              <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center">
+                <UsersIcon className="h-6 w-6 text-primary" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold">{workspace?.memberCount || 0}</p>
+                <p className="text-sm text-muted-foreground">Team Members</p>
+              </div>
             </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">Tasks Completed</span>
-              <span className="font-semibold text-primary">0</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">Active Sessions</span>
-              <span className="font-semibold text-primary">1</span>
-            </div>
-          </div>
-        </Card>
+          </Card>
 
-        {/* Actions */}
-        <Card title="Quick Actions">
-          <div className="space-y-2">
-            <Button className="w-full" disabled>
-              New Project
-            </Button>
-            <Button className="w-full" variant="outline" disabled>
-              New Task
-            </Button>
-            <Button
-              className="w-full"
-              variant="outline"
-              onClick={() => router.push('/settings/security')}
-            >
-              Manage Sessions
+          <Card className="p-6">
+            <div className="flex items-center gap-4">
+              <div className="h-12 w-12 rounded-xl bg-yellow-500/10 flex items-center justify-center">
+                <ClockIcon className="h-6 w-6 text-yellow-600" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold">{workspace?.pendingInvitations || 0}</p>
+                <p className="text-sm text-muted-foreground">Pending Invites</p>
+              </div>
+            </div>
+          </Card>
+
+          <Card className="p-6">
+            <div className="flex items-center gap-4">
+              <div className="h-12 w-12 rounded-xl bg-green-500/10 flex items-center justify-center">
+                <CheckCircleIcon className="h-6 w-6 text-green-600" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold">0</p>
+                <p className="text-sm text-muted-foreground">Tasks Complete</p>
+              </div>
+            </div>
+          </Card>
+
+          <Card className="p-6">
+            <div className="flex items-center gap-4">
+              <div className="h-12 w-12 rounded-xl bg-purple-500/10 flex items-center justify-center">
+                <span className="text-xl">🏢</span>
+              </div>
+              <div>
+                <p className="text-2xl font-bold">1</p>
+                <p className="text-sm text-muted-foreground">Active Projects</p>
+              </div>
+            </div>
+          </Card>
+        </div>
+
+        {/* Main Content Grid */}
+        <div className="grid gap-6 lg:grid-cols-3">
+          {/* Team Overview */}
+          <Card className="lg:col-span-2 p-6">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h2 className="text-lg font-semibold">Team Members</h2>
+                <p className="text-sm text-muted-foreground">
+                  People in your workspace
+                </p>
+              </div>
+              {workspace?.isOwner && (
+                <Link href="/team/invite">
+                  <Button size="sm">
+                    <UserPlusIcon className="h-4 w-4 mr-2" />
+                    Invite
+                  </Button>
+                </Link>
+              )}
+            </div>
+
+            {members.length > 0 ? (
+              <div className="space-y-4">
+                {members.map((member) => (
+                  <div
+                    key={member.id}
+                    className="flex items-center justify-between p-4 rounded-lg bg-accent/50"
+                  >
+                    <div className="flex items-center gap-3">
+                      <Avatar 
+                        name={member.user?.name || 'User'} 
+                        size="md"
+                        showStatus
+                        status={member.status === 'ONLINE' ? 'online' : 'offline'}
+                      />
+                      <div>
+                        <p className="font-medium">{member.user?.name || 'Unknown'}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {member.user?.email}
+                        </p>
+                      </div>
+                    </div>
+                    <Badge variant={member.role === 'OWNER' ? 'default' : 'secondary'}>
+                      {member.role}
+                    </Badge>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <UsersIcon className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
+                <p className="text-muted-foreground">No team members yet</p>
+                {workspace?.isOwner && (
+                  <Link href="/team/invite">
+                    <Button variant="outline" size="sm" className="mt-4">
+                      Invite your first team member
+                    </Button>
+                  </Link>
+                )}
+              </div>
+            )}
+
+            {members.length > 0 && (
+              <div className="mt-4 pt-4 border-t">
+                <Link href="/team">
+                  <Button variant="ghost" className="w-full">
+                    View all team members
+                  </Button>
+                </Link>
+              </div>
+            )}
+          </Card>
+
+          {/* Quick Actions */}
+          <Card className="p-6">
+            <h2 className="text-lg font-semibold mb-4">Quick Actions</h2>
+            
+            <div className="space-y-3">
+              <Link href="/workspace" className="block">
+                <div className="flex items-center gap-3 p-4 rounded-lg hover:bg-accent transition-colors cursor-pointer">
+                  <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                    🏢
+                  </div>
+                  <div>
+                    <p className="font-medium">Enter Office</p>
+                    <p className="text-xs text-muted-foreground">Open 2D virtual office</p>
+                  </div>
+                </div>
+              </Link>
+
+              {workspace?.isOwner && (
+                <Link href="/team/invite" className="block">
+                  <div className="flex items-center gap-3 p-4 rounded-lg hover:bg-accent transition-colors cursor-pointer">
+                    <div className="h-10 w-10 rounded-lg bg-green-500/10 flex items-center justify-center">
+                      <UserPlusIcon className="h-5 w-5 text-green-600" />
+                    </div>
+                    <div>
+                      <p className="font-medium">Invite Team</p>
+                      <p className="text-xs text-muted-foreground">Add new members</p>
+                    </div>
+                  </div>
+                </Link>
+              )}
+
+              <Link href="/settings" className="block">
+                <div className="flex items-center gap-3 p-4 rounded-lg hover:bg-accent transition-colors cursor-pointer">
+                  <div className="h-10 w-10 rounded-lg bg-purple-500/10 flex items-center justify-center">
+                    ⚙️
+                  </div>
+                  <div>
+                    <p className="font-medium">Settings</p>
+                    <p className="text-xs text-muted-foreground">Account & security</p>
+                  </div>
+                </div>
+              </Link>
+            </div>
+
+            {/* Your Role */}
+            <div className="mt-6 pt-6 border-t">
+              <p className="text-sm text-muted-foreground mb-2">Your Role</p>
+              <Badge variant={workspace?.isOwner ? 'default' : 'secondary'} size="md">
+                {workspace?.role || 'Member'}
+              </Badge>
+            </div>
+          </Card>
+        </div>
+
+        {/* Coming Soon Features */}
+        <Card className="p-6 bg-gradient-to-r from-primary/5 to-chart-3/5 border-primary/20">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-semibold">🎮 2D Virtual Office Coming Soon!</h2>
+              <p className="text-sm text-muted-foreground mt-1">
+                Walk around, voice chat with proximity audio, and collaborate in real-time.
+              </p>
+            </div>
+            <Button variant="outline" disabled>
+              Coming Soon
             </Button>
           </div>
         </Card>
       </div>
-    </DashboardLayout>
+    </AppLayout>
   )
 }

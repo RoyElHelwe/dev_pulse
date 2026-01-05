@@ -1,10 +1,12 @@
-import { Module } from '@nestjs/common'
-import { ConfigModule } from '@nestjs/config'
-import { ThrottlerModule } from '@nestjs/throttler'
-import { AppController } from './app.controller'
-import { AppService } from './app.service'
-import { WebsocketModule } from './websocket/websocket.module'
-import { AuthModule } from './auth/auth.module'
+import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
+import { ThrottlerModule } from '@nestjs/throttler';
+import { AppController } from './app.controller';
+import { AppService } from './app.service';
+import { WebsocketModule } from './websocket/websocket.module';
+import { AuthModule } from './auth/auth.module';
+import { WorkspaceGatewayModule } from './workspace-gateway/workspace-gateway.module';
+import { InvitationGatewayModule } from './invitation-gateway/invitation-gateway.module';
 
 @Module({
   imports: [
@@ -27,6 +29,12 @@ import { AuthModule } from './auth/auth.module'
 
     // WebSocket gateway
     WebsocketModule,
+
+    // Workspace Gateway (Microservice client)
+    WorkspaceGatewayModule,
+
+    // Invitation Gateway
+    InvitationGatewayModule,
   ],
   controllers: [AppController],
   providers: [AppService],

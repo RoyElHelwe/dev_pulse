@@ -79,6 +79,7 @@ services:
     volumes:
       - ./apps/api-gateway/src:/app/apps/api-gateway/src
       - ./apps/api-gateway/prisma:/app/apps/api-gateway/prisma
+      - ./packages:/app/packages
     environment:
       - NODE_ENV=development
       - DATABASE_URL=postgresql://dev:dev@postgres:5432/ft_trans?schema=public
@@ -90,6 +91,37 @@ services:
       postgres:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      nats:
+        condition: service_started
+      workspace-service:
+        condition: service_started
+    networks:
+      - ft_trans_network
+
+  # Workspace Service (Microservice)
+  workspace-service:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.workspace
+    container_name: ft_trans_workspace_service
+    restart: unless-stopped
+    ports:
+      - '3001:3001'
+    volumes:
+      - ./services/workspace-service/src:/app/services/workspace-service/src
+      - ./services/workspace-service/prisma:/app/services/workspace-service/prisma
+      - ./packages:/app/packages
+    environment:
+      - NODE_ENV=development
+      - DATABASE_URL=postgresql://dev:dev@postgres:5432/ft_trans?schema=workspace
+      - NATS_URL=nats://nats:4222
+      - PORT=3001
+      - RESEND_API_KEY=re_6mEgpVsA_MWPE891Syc988VkcU5TJNEQ4
+      - EMAIL_FROM=FT Transcendence <onboarding@resend.dev>
+      - APP_URL=http://localhost:3000
+    depends_on:
+      postgres:
         condition: service_healthy
       nats:
         condition: service_started
@@ -110,6 +142,7 @@ services:
       - ./apps/web/components:/app/apps/web/components
       - ./apps/web/lib:/app/apps/web/lib
       - ./apps/web/public:/app/apps/web/public
+      - ./packages:/app/packages
     environment:
       - NODE_ENV=development
       - NEXT_PUBLIC_API_URL=http://localhost:4000

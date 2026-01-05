@@ -25,6 +25,7 @@ export interface RegisterRequest {
   email: string
   password: string
   name?: string
+  invitationToken?: string
 }
 
 export interface RegisterResponse {
