@@ -66,7 +66,7 @@ export function Header({ workspaceName }: HeaderProps) {
               <DropdownTrigger asChild>
                 <button className="flex items-center gap-2 rounded-full p-1 hover:bg-accent transition-colors">
                   <Avatar 
-                    name={user.name} 
+                    name={user.name || ""} 
                     size="sm" 
                     showStatus 
                     status="online"

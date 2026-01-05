@@ -1,6 +1,6 @@
 'use client'
 
-import { ReactNode, useEffect, useState } from 'react'
+import { ReactNode, useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { Header } from './header'
 import { Sidebar, MobileNav } from './sidebar'
@@ -25,15 +25,14 @@ export function AppLayout({ children }: AppLayoutProps) {
   const { user, isAuthenticated, isLoading, checkAuth } = useAuth()
   const [workspace, setWorkspace] = useState<WorkspaceInfo | null>(null)
   const [workspaceLoading, setWorkspaceLoading] = useState(true)
-  const [initialized, setInitialized] = useState(false)
+  const initializedRef = useRef(false)
 
   useEffect(() => {
-    // Prevent running multiple times
-    if (initialized) return
+    // Prevent running multiple times using ref (doesn't cause re-render)
+    if (initializedRef.current) return
+    initializedRef.current = true
 
     const init = async () => {
-      setInitialized(true)
-      
       try {
         await checkAuth()
       } catch (error) {
@@ -70,7 +69,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     }
 
     init()
-  }, [initialized])
+  }, [])
 
   // Show loading while checking auth or workspace
   if (isLoading || workspaceLoading) {

@@ -17,6 +17,7 @@ interface AuthState {
   setError: (error: string | null) => void
   checkAuth: () => Promise<void>
   logout: () => Promise<void>
+  refreshSession: () => Promise<void>
 }
 
 export const useAuth = create<AuthState>()(
@@ -76,6 +77,28 @@ export const useAuth = create<AuthState>()(
             isAuthenticated: false,
             error: null,
           })
+        }
+      },
+
+      refreshSession: async () => {
+        try {
+          set({ isLoading: true, error: null })
+          const sessionInfo = await authService.refresh()
+          set({
+            user: sessionInfo.user,
+            isAuthenticated: true,
+            isLoading: false,
+            error: null,
+          })
+        } catch (error) {
+          console.error('Session refresh failed:', error)
+          set({
+            user: null,
+            isAuthenticated: false,
+            isLoading: false,
+            error: error instanceof Error ? error.message : 'Session refresh failed',
+          })
+          throw error
         }
       },
     }),

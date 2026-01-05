@@ -1,7 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { authService } from '@/lib/auth-service'
 import { useAuth } from '@/lib/hooks/use-auth'
@@ -12,8 +11,7 @@ import { LoadingSpinner } from '@/components/ui/loading-spinner'
 import { FormInputField } from '@/components/ui/form-field'
 
 export default function SecuritySettingsPage() {
-  const router = useRouter()
-  const { user, isAuthenticated, isLoading, checkAuth } = useAuth()
+  const { user, checkAuth, isAuthenticated } = useAuth()
   
   // 2FA State
   const [qrCode, setQrCode] = useState<string>('')
@@ -27,17 +25,9 @@ export default function SecuritySettingsPage() {
   const [sessions, setSessions] = useState<UserSession[]>([])
   const [sessionsLoading, setSessionsLoading] = useState(false)
   const [sessionError, setSessionError] = useState('')
-  const [sessionsLoaded, setSessionsLoaded] = useState(false)
+  const sessionsLoadedRef = useRef(false)
 
-  // Load sessions once when authenticated
-  useEffect(() => {
-    if (isAuthenticated && !sessionsLoaded) {
-      setSessionsLoaded(true)
-      loadSessions()
-    }
-  }, [isAuthenticated, sessionsLoaded])
-
-  const loadSessions = async () => {
+  const loadSessions = useCallback(async () => {
     try {
       setSessionsLoading(true)
       setSessionError('')
@@ -48,7 +38,15 @@ export default function SecuritySettingsPage() {
     } finally {
       setSessionsLoading(false)
     }
-  }
+  }, [])
+
+  // Load sessions once when authenticated
+  useEffect(() => {
+    if (isAuthenticated && !sessionsLoadedRef.current) {
+      sessionsLoadedRef.current = true
+      loadSessions()
+    }
+  }, [isAuthenticated, loadSessions])
 
   const handleSetup2FA = async () => {
     try {
@@ -136,16 +134,16 @@ export default function SecuritySettingsPage() {
     }
   }
 
-  if (isLoading) {
+  // AppLayout handles authentication and loading states
+  // If we reach here without a user, AppLayout will handle redirect
+  if (!user) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
-        <LoadingSpinner message="Loading..." />
-      </div>
+      <AppLayout>
+        <div className="flex items-center justify-center py-8">
+          <LoadingSpinner message="Loading..." />
+        </div>
+      </AppLayout>
     )
-  }
-
-  if (!isAuthenticated || !user) {
-    return null
   }
 
   return (
