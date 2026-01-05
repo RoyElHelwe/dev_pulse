@@ -1,6 +1,5 @@
 'use client'
 
-import { AppLayout } from '@/components/layout/app-layout'
 import { Card } from '@/components/ui/card'
 import { ShieldIcon, UsersIcon, SettingsIcon } from '@/components/ui/icons'
 import Link from 'next/link'
@@ -16,8 +15,7 @@ const settingsItems = [
 
 export default function SettingsPage() {
   return (
-    <AppLayout>
-      <div className="max-w-4xl">
+    <div className="max-w-4xl">
         <h1 className="text-3xl font-bold mb-2">Settings</h1>
         <p className="text-muted-foreground mb-8">
           Manage your account and workspace settings
@@ -43,6 +41,5 @@ export default function SettingsPage() {
           ))}
         </div>
       </div>
-    </AppLayout>
   )
 }

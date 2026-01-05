@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { AppLayout } from '@/components/layout/app-layout'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarGroup } from '@/components/ui/avatar'
@@ -10,6 +9,7 @@ import { Badge } from '@/components/ui/badge'
 import { useAuth } from '@/lib/hooks/use-auth'
 import { UsersIcon, UserPlusIcon, CheckCircleIcon, ClockIcon } from '@/components/ui/icons'
 import { getRolePermissions } from '@/lib/types'
+import { useOnlineStatusContext } from '@/lib/contexts/online-status-context'
 import Link from 'next/link'
 
 interface WorkspaceData {
@@ -36,9 +36,19 @@ interface MemberData {
 export default function DashboardPage() {
   const router = useRouter()
   const { user } = useAuth()
+  const { isUserOnline, onlineUserIds, isConnected } = useOnlineStatusContext()
   const [workspace, setWorkspace] = useState<WorkspaceData | null>(null)
   const [members, setMembers] = useState<MemberData[]>([])
   const [loading, setLoading] = useState(true)
+
+  // Debug logging
+  useEffect(() => {
+    console.log('[Dashboard] 🔄 Online status:', {
+      connected: isConnected,
+      onlineCount: onlineUserIds.length,
+      users: onlineUserIds
+    })
+  }, [onlineUserIds, isConnected])
 
   useEffect(() => {
     const fetchData = async () => {
@@ -91,8 +101,7 @@ export default function DashboardPage() {
   }, [])
 
   return (
-    <AppLayout>
-      <div className="space-y-8">
+    <div className="space-y-8">
         {/* Welcome Header */}
         <div>
           <h1 className="text-3xl font-bold">
@@ -119,24 +128,24 @@ export default function DashboardPage() {
 
           <Card className="p-6">
             <div className="flex items-center gap-4">
-              <div className="h-12 w-12 rounded-xl bg-yellow-500/10 flex items-center justify-center">
-                <ClockIcon className="h-6 w-6 text-yellow-600" />
+              <div className="h-12 w-12 rounded-xl bg-green-500/10 flex items-center justify-center">
+                <span className="text-xl">🟢</span>
               </div>
               <div>
-                <p className="text-2xl font-bold">{workspace?.pendingInvitations || 0}</p>
-                <p className="text-sm text-muted-foreground">Pending Invites</p>
+                <p className="text-2xl font-bold">{onlineUserIds.length}</p>
+                <p className="text-sm text-muted-foreground">Online Now</p>
               </div>
             </div>
           </Card>
 
           <Card className="p-6">
             <div className="flex items-center gap-4">
-              <div className="h-12 w-12 rounded-xl bg-green-500/10 flex items-center justify-center">
-                <CheckCircleIcon className="h-6 w-6 text-green-600" />
+              <div className="h-12 w-12 rounded-xl bg-yellow-500/10 flex items-center justify-center">
+                <ClockIcon className="h-6 w-6 text-yellow-600" />
               </div>
               <div>
-                <p className="text-2xl font-bold">0</p>
-                <p className="text-sm text-muted-foreground">Tasks Complete</p>
+                <p className="text-2xl font-bold">{workspace?.pendingInvitations || 0}</p>
+                <p className="text-sm text-muted-foreground">Pending Invites</p>
               </div>
             </div>
           </Card>
@@ -187,10 +196,15 @@ export default function DashboardPage() {
                         name={member.user?.name || 'User'} 
                         size="md"
                         showStatus
-                        status={member.status === 'ONLINE' ? 'online' : 'offline'}
+                        status={isUserOnline(member.userId) ? 'online' : 'offline'}
                       />
                       <div>
-                        <p className="font-medium">{member.user?.name || 'Unknown'}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium">{member.user?.name || 'Unknown'}</p>
+                          {isUserOnline(member.userId) && (
+                            <span className="text-xs text-green-500">● Online</span>
+                          )}
+                        </div>
                         <p className="text-sm text-muted-foreground">
                           {member.user?.email}
                         </p>
@@ -296,6 +310,5 @@ export default function DashboardPage() {
           </div>
         </Card>
       </div>
-    </AppLayout>
   )
 }

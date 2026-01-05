@@ -5,7 +5,6 @@ import { Button } from '@/components/ui/button'
 import { authService } from '@/lib/auth-service'
 import { useAuth } from '@/lib/hooks/use-auth'
 import type { UserSession } from '@/lib/types'
-import { AppLayout } from '@/components/layout/app-layout'
 import { Card } from '@/components/ui/card'
 import { LoadingSpinner } from '@/components/ui/loading-spinner'
 import { FormInputField } from '@/components/ui/form-field'
@@ -134,21 +133,17 @@ export default function SecuritySettingsPage() {
     }
   }
 
-  // AppLayout handles authentication and loading states
-  // If we reach here without a user, AppLayout will handle redirect
+  // If user data hasn't loaded yet
   if (!user) {
     return (
-      <AppLayout>
-        <div className="flex items-center justify-center py-8">
-          <LoadingSpinner message="Loading..." />
-        </div>
-      </AppLayout>
+      <div className="flex items-center justify-center py-8">
+        <LoadingSpinner message="Loading..." />
+      </div>
     )
   }
 
   return (
-    <AppLayout>
-      <div className="max-w-4xl">
+    <div className="max-w-4xl">
         <h2 className="text-3xl font-bold text-foreground mb-8">Security Settings</h2>
 
         {/* Two-Factor Authentication Section */}
@@ -297,6 +292,5 @@ export default function SecuritySettingsPage() {
           )}
         </Card>
       </div>
-    </AppLayout>
   )
 }

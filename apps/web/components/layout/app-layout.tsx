@@ -7,6 +7,7 @@ import { Sidebar, MobileNav } from './sidebar'
 import { useAuth } from '@/lib/hooks/use-auth'
 import { LoadingSpinner } from '@/components/ui/loading-spinner'
 import { ToastProvider } from '@/components/ui/toast'
+import { OnlineStatusProvider } from '@/lib/contexts/online-status-context'
 import { type WorkspaceRole, getRolePermissions } from '@/lib/types'
 
 interface AppLayoutProps {
@@ -111,23 +112,25 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   return (
     <ToastProvider>
-      <div className="min-h-screen bg-background">
-        <Header workspaceName={workspace?.name} />
-        <Sidebar role={workspace?.role} workspaceId={workspace?.id} />
-        
-        {/* Main content with sidebar offset */}
-        <main className="md:pl-64">
-          <div className="container mx-auto max-w-6xl px-4 py-6 md:px-8 md:py-8">
-            {children}
-          </div>
-        </main>
+      <OnlineStatusProvider userId={user.id} workspaceId={workspace?.id}>
+        <div className="min-h-screen bg-background">
+          <Header workspaceName={workspace?.name} />
+          <Sidebar role={workspace?.role} workspaceId={workspace?.id} />
+          
+          {/* Main content with sidebar offset */}
+          <main className="md:pl-64">
+            <div className="container mx-auto max-w-6xl px-4 py-6 md:px-8 md:py-8">
+              {children}
+            </div>
+          </main>
 
-        {/* Mobile navigation */}
-        <MobileNav role={workspace?.role} />
-        
-        {/* Bottom padding for mobile nav */}
-        <div className="h-20 md:hidden" />
-      </div>
+          {/* Mobile navigation */}
+          <MobileNav role={workspace?.role} />
+          
+          {/* Bottom padding for mobile nav */}
+          <div className="h-20 md:hidden" />
+        </div>
+      </OnlineStatusProvider>
     </ToastProvider>
   )
 }

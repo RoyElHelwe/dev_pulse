@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { AppLayout } from '@/components/layout/app-layout'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Avatar } from '@/components/ui/avatar'
@@ -15,6 +14,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { UserPlusIcon, ChevronDownIcon, TrashIcon, ShieldIcon } from '@/components/ui/icons'
 import { LoadingSpinner } from '@/components/ui/loading-spinner'
+import { useOnlineStatusContext } from '@/lib/contexts/online-status-context'
 import Link from 'next/link'
 
 interface Member {
@@ -51,6 +51,15 @@ export default function TeamPage() {
   const [invitations, setInvitations] = useState<Invitation[]>([])
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<'members' | 'pending'>('members')
+  const { isUserOnline, onlineUserIds, isConnected } = useOnlineStatusContext()
+
+  // Debug logging - track changes
+  useEffect(() => {
+    console.log('[TeamPage] 🔄 Context updated:')
+    console.log('  - Connected:', isConnected)
+    console.log('  - Online users:', onlineUserIds)
+    console.log('  - Online count:', onlineUserIds.length)
+  }, [onlineUserIds, isConnected])
 
   useEffect(() => {
     fetchData()
@@ -126,7 +135,12 @@ export default function TeamPage() {
     }
   }
 
-  const getStatusColor = (status: string) => {
+  const getStatusColor = (status: string, userId: string) => {
+    // Check real-time online status first
+    if (isUserOnline(userId)) {
+      return 'online'
+    }
+    // Fall back to stored status
     switch (status) {
       case 'ONLINE': return 'online'
       case 'AWAY': return 'away'
@@ -137,23 +151,29 @@ export default function TeamPage() {
 
   if (loading) {
     return (
-      <AppLayout>
-        <div className="flex items-center justify-center py-20">
-          <LoadingSpinner message="Loading team..." />
-        </div>
-      </AppLayout>
+      <div className="flex items-center justify-center py-20">
+        <LoadingSpinner message="Loading team..." />
+      </div>
     )
   }
 
   return (
-    <AppLayout>
-      <div className="space-y-8">
+    <div className="space-y-8">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold">Team</h1>
             <p className="text-muted-foreground mt-1">
               Manage your workspace members
+            </p>
+            {/* Debug: Connection status */}
+            <p className="text-xs mt-1">
+              <span className={isConnected ? 'text-green-500' : 'text-red-500'}>
+                {isConnected ? '● Connected' : '○ Disconnected'}
+              </span>
+              <span className="text-muted-foreground ml-2">
+                ({onlineUserIds.length} online)
+              </span>
             </p>
           </div>
           
@@ -197,7 +217,11 @@ export default function TeamPage() {
         {activeTab === 'members' && (
           <Card className="divide-y divide-border">
             {members.length > 0 ? (
-              members.map((member) => (
+              members.map((member) => {
+                const isOnline = isUserOnline(member.userId)
+                console.log(`[TeamPage] Member ${member.user?.name} (${member.userId}): ${isOnline ? 'ONLINE' : 'OFFLINE'}`)
+                
+                return (
                 <div
                   key={member.id}
                   className="flex items-center justify-between p-4 hover:bg-accent/50 transition-colors"
@@ -207,10 +231,15 @@ export default function TeamPage() {
                       name={member.user?.name || 'User'}
                       size="md"
                       showStatus
-                      status={getStatusColor(member.status)}
+                      status={getStatusColor(member.status, member.userId)}
                     />
                     <div>
-                      <p className="font-medium">{member.user?.name || 'Unknown'}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="font-medium">{member.user?.name || 'Unknown'}</p>
+                        {isOnline && (
+                          <span className="text-xs text-green-500 font-bold">● Online</span>
+                        )}
+                      </div>
                       <p className="text-sm text-muted-foreground">
                         {member.user?.email}
                       </p>
@@ -244,7 +273,8 @@ export default function TeamPage() {
                     )}
                   </div>
                 </div>
-              ))
+                )
+              })
             ) : (
               <div className="p-8 text-center">
                 <p className="text-muted-foreground">No team members found</p>
@@ -298,6 +328,5 @@ export default function TeamPage() {
           </Card>
         )}
       </div>
-    </AppLayout>
   )
 }

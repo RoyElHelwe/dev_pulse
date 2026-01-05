@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { AppLayout } from '@/components/layout/app-layout'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -133,17 +132,14 @@ export default function InvitePage() {
 
   if (loading) {
     return (
-      <AppLayout>
-        <div className="flex items-center justify-center py-20">
-          <LoadingSpinner message="Loading..." />
-        </div>
-      </AppLayout>
+      <div className="flex items-center justify-center py-20">
+        <LoadingSpinner message="Loading..." />
+      </div>
     )
   }
 
   return (
-    <AppLayout>
-      <div className="max-w-2xl mx-auto space-y-8">
+    <div className="max-w-2xl mx-auto space-y-8">
         {/* Breadcrumb */}
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Link href="/team" className="hover:text-foreground">
@@ -309,6 +305,5 @@ export default function InvitePage() {
           </Link>
         </div>
       </div>
-    </AppLayout>
   )
 }
