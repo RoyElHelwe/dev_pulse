@@ -127,6 +127,8 @@ services:
       - PORT=${AUTH_PORT}
       - COOKIE_DOMAIN=${COOKIE_DOMAIN}
       - FRONTEND_URL=${FRONTEND_URL}
+      - RESEND_API_KEY=${RESEND_API_KEY}
+      - EMAIL_FROM=${EMAIL_FROM}
     depends_on:
       postgres:
         condition: service_healthy

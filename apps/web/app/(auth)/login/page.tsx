@@ -90,6 +90,7 @@ export default function LoginPage() {
         }
       }
     } catch (error: any) {
+      console.error('Login error:', error)
       if (error.errors) {
         const fieldErrors: Record<string, string> = {}
         error.errors.forEach((err: any) => {
@@ -97,9 +98,8 @@ export default function LoginPage() {
         })
         setErrors(fieldErrors)
       } else {
-        setGlobalError(error.message || 'Login failed. Please try again.')
+        setGlobalError(error.message || 'Invalid email or password. Please try again.')
       }
-    } finally {
       setIsLoading(false)
     }
   }

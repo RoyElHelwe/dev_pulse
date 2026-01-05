@@ -33,6 +33,7 @@
     "otpauth": "^9.3.5",
     "qrcode": "^1.5.4",
     "cookie-parser": "^1.4.7",
+    "resend": "^6.6.0",
     "reflect-metadata": "^0.2.2"
   },
   "devDependencies": {

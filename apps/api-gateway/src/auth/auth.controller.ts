@@ -6,6 +6,7 @@ import {
   Body,
   Req,
   Res,
+  Param,
   UseGuards,
   HttpCode,
   HttpStatus,
@@ -397,5 +398,32 @@ export class AuthController {
     });
 
     return { success: true };
+  }
+
+  @Post('forgot-password')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Request password reset' })
+  @ApiResponse({ status: 200, description: 'Password reset email sent' })
+  @ApiResponse({ status: 404, description: 'User not found' })
+  async forgotPassword(@Body() body: { email: string }) {
+    return this.authProxyService.forgotPassword(body.email);
+  }
+
+  @Get('verify-reset-token/:token')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Verify password reset token' })
+  @ApiResponse({ status: 200, description: 'Token is valid' })
+  @ApiResponse({ status: 400, description: 'Invalid or expired token' })
+  async verifyResetToken(@Param('token') token: string) {
+    return this.authProxyService.verifyResetToken(token);
+  }
+
+  @Post('reset-password')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Reset password with token' })
+  @ApiResponse({ status: 200, description: 'Password reset successfully' })
+  @ApiResponse({ status: 400, description: 'Invalid or expired token' })
+  async resetPassword(@Body() body: { token: string; newPassword: string }) {
+    return this.authProxyService.resetPassword(body.token, body.newPassword);
   }
 }

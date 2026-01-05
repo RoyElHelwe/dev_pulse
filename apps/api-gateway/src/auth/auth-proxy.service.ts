@@ -217,4 +217,27 @@ export class AuthProxyService {
       this.authClient.send({ cmd: 'get_user_by_id' }, { userId }),
     );
   }
+
+  async forgotPassword(email: string) {
+    const response = await axios.post(
+      `${this.authServiceUrl}/auth/forgot-password`,
+      { email },
+    );
+    return response.data;
+  }
+
+  async verifyResetToken(token: string) {
+    const response = await axios.get(
+      `${this.authServiceUrl}/auth/verify-reset-token/${token}`,
+    );
+    return response.data;
+  }
+
+  async resetPassword(token: string, newPassword: string) {
+    const response = await axios.post(
+      `${this.authServiceUrl}/auth/reset-password`,
+      { token, newPassword },
+    );
+    return response.data;
+  }
 }

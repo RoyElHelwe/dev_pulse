@@ -24,6 +24,7 @@ model User {
   // Relations
   accounts      Account[]
   sessions      Session[]
+  passwordResets PasswordReset[]
   
   // 2FA fields
   twoFactorEnabled Boolean  @default(false)
@@ -76,4 +77,17 @@ model VerificationToken {
 
   @@unique([identifier, token])
   @@map("verification_tokens")
+}
+
+model PasswordReset {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String
+  used      Boolean  @default(false)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("password_resets")
 }

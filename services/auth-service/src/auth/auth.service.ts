@@ -2,15 +2,21 @@ import {
   Injectable,
   UnauthorizedException,
   BadRequestException,
+  NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { EmailService } from '../email/email.service';
 import * as bcrypt from 'bcryptjs';
 import * as OTPAuth from 'otpauth';
 import * as QRCode from 'qrcode';
+import { randomBytes } from 'crypto';
 
 @Injectable()
 export class AuthService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private emailService: EmailService,
+  ) {}
 
   async register(email: string, password: string, name?: string) {
     // Check if user exists
@@ -433,4 +439,153 @@ export class AuthService {
       refreshToken: updatedSession.refreshToken,
     };
   }
+
+  /**
+   * Request password reset
+   */
+  async requestPasswordReset(email: string): Promise<{ resetToken: string }> {
+    // Find user
+    const user = await this.prisma.user.findUnique({
+      where: { email },
+    });
+
+    if (!user) {
+      // Don't reveal if user exists or not for security
+      throw new NotFoundException('If this email exists, a reset link will be sent');
+    }
+
+    // Generate reset token
+    const resetToken = randomBytes(32).toString('hex');
+    const hashedToken = await bcrypt.hash(resetToken, 10);
+
+    // Store token with expiry (1 hour)
+    const expiresAt = new Date();
+    expiresAt.setHours(expiresAt.getHours() + 1);
+
+    await this.prisma.passwordReset.create({
+      data: {
+        userId: user.id,
+        token: hashedToken,
+        expiresAt,
+      },
+    });
+
+    // Build reset URL
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const resetUrl = `${frontendUrl}/reset-password?token=${resetToken}`;
+
+    // Send email
+    await this.emailService.sendPasswordResetEmail({
+      to: user.email,
+      resetUrl,
+    });
+
+    return { resetToken };
+  }
+
+  /**
+   * Verify password reset token
+   */
+  async verifyResetToken(token: string): Promise<{ valid: boolean; email?: string }> {
+    // Find all non-expired reset tokens
+    const resetTokens = await this.prisma.passwordReset.findMany({
+      where: {
+        used: false,
+        expiresAt: {
+          gt: new Date(),
+        },
+      },
+      include: {
+        user: true,
+      },
+    });
+
+    // Check each token
+    for (const resetRecord of resetTokens) {
+      const isValid = await bcrypt.compare(token, resetRecord.token);
+      if (isValid) {
+        return {
+          valid: true,
+          email: resetRecord.user.email,
+        };
+      }
+    }
+
+    return { valid: false };
+  }
+
+  /**
+   * Reset password
+   */
+  async resetPassword(token: string, newPassword: string): Promise<{ success: boolean }> {
+    // Verify token and get user
+    const resetTokens = await this.prisma.passwordReset.findMany({
+      where: {
+        used: false,
+        expiresAt: {
+          gt: new Date(),
+        },
+      },
+      include: {
+        user: {
+          include: {
+            accounts: {
+              where: { provider: 'credentials' },
+            },
+          },
+        },
+      },
+    });
+
+    let resetRecord = null;
+    for (const record of resetTokens) {
+      const isValid = await bcrypt.compare(token, record.token);
+      if (isValid) {
+        resetRecord = record;
+        break;
+      }
+    }
+
+    if (!resetRecord) {
+      throw new BadRequestException('Invalid or expired reset token');
+    }
+
+    // Hash new password
+    const hashedPassword = await bcrypt.hash(newPassword, 12);
+
+    // Update password
+    if (resetRecord.user.accounts.length > 0) {
+      await this.prisma.account.update({
+        where: { id: resetRecord.user.accounts[0].id },
+        data: {
+          access_token: hashedPassword,
+        },
+      });
+    } else {
+      // Create account if doesn't exist
+      await this.prisma.account.create({
+        data: {
+          userId: resetRecord.user.id,
+          type: 'credentials',
+          provider: 'credentials',
+          providerAccountId: resetRecord.user.id,
+          access_token: hashedPassword,
+        },
+      });
+    }
+
+    // Mark token as used
+    await this.prisma.passwordReset.update({
+      where: { id: resetRecord.id },
+      data: { used: true },
+    });
+
+    // Invalidate all existing sessions for security
+    await this.prisma.session.deleteMany({
+      where: { userId: resetRecord.user.id },
+    });
+
+    return { success: true };
+  }
 }
+
