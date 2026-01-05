@@ -100,7 +100,7 @@ export class InvitationService {
       },
     });
 
-    const inviteUrl = `${process.env.APP_URL || 'http://localhost:3000'}/invite/${token}`;
+    const inviteUrl = `${process.env.APP_URL!}/invite/${token}`;
 
     // Send invitation email (non-blocking)
     // Note: We don't have access to user names in this microservice

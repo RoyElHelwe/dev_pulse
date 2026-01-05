@@ -16,7 +16,7 @@ import {
   ClockIcon
 } from '@/components/ui/icons'
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL!
 
 type InvitationState = 
   | 'loading'

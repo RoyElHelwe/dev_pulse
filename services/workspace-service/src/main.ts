@@ -19,17 +19,17 @@ async function bootstrap() {
   app.connectMicroservice<MicroserviceOptions>({
     transport: Transport.NATS,
     options: {
-      servers: [process.env.NATS_URL || 'nats://localhost:4222'],
+      servers: [process.env.NATS_URL!],
     },
   });
 
   await app.startAllMicroservices();
   
   // Also expose HTTP for health checks
-  await app.listen(process.env.PORT || 3001);
+  await app.listen(Number(process.env.WORKSPACE_PORT) || 3002);
   
   console.log(`Workspace Service is running on: ${await app.getUrl()}`);
-  console.log(`Connected to NATS: ${process.env.NATS_URL || 'nats://localhost:4222'}`);
+  console.log(`Connected to NATS: ${process.env.NATS_URL}`);
 }
 
 bootstrap();

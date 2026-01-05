@@ -10,27 +10,22 @@ import {
   HttpCode,
   HttpStatus,
   UnauthorizedException,
-  Inject,
 } from '@nestjs/common';
-import { ClientProxy } from '@nestjs/microservices';
+import { MessagePattern } from '@nestjs/microservices';
 import {
   ApiTags,
   ApiOperation,
   ApiResponse,
   ApiBearerAuth,
 } from '@nestjs/swagger';
-import { AuthProxyService } from './auth-proxy.service';
+import { AuthService } from './auth.service';
 import { AuthGuard } from './guards/auth.guard';
 import { Request, Response } from 'express';
-import { firstValueFrom } from 'rxjs';
 
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
-  constructor(
-    private authProxyService: AuthProxyService,
-    @Inject('WORKSPACE_SERVICE') private workspaceClient: ClientProxy,
-  ) {}
+  constructor(private authService: AuthService) {}
 
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
@@ -43,78 +38,13 @@ export class AuthController {
       email: string;
       password: string;
       name?: string;
-      invitationToken?: string;
     },
-    @Req() req: Request,
-    @Res({ passthrough: true }) res: Response,
   ) {
-    const result = await this.authProxyService.register(
+    const result = await this.authService.register(
       body.email,
       body.password,
       body.name,
     );
-
-    // If there's an invitation token, automatically log in and accept the invitation
-    if (body.invitationToken) {
-      try {
-        // Auto-login the user
-        const ipAddress = req.ip;
-        const userAgent = req.headers['user-agent'];
-        const loginResult = await this.authProxyService.login(
-          body.email,
-          body.password,
-          ipAddress,
-          userAgent,
-        );
-
-        // Set session cookies from auth service response
-        if (loginResult.cookies) {
-          loginResult.cookies.forEach((cookie: string) => {
-            const [cookiePart] = cookie.split(';');
-            const [name, value] = cookiePart.split('=');
-            if (name === 'session_token' || name === 'refresh_token') {
-              res.cookie(name, value, {
-                httpOnly: true,
-                secure: process.env.NODE_ENV === 'production',
-                sameSite: 'lax',
-                maxAge:
-                  name === 'session_token'
-                    ? 15 * 60 * 1000
-                    : 7 * 24 * 60 * 60 * 1000,
-                path: '/',
-                domain:
-                  process.env.NODE_ENV === 'production'
-                    ? process.env.COOKIE_DOMAIN
-                    : 'localhost',
-              });
-            }
-          });
-
-          // Accept the invitation
-          await firstValueFrom(
-            this.workspaceClient.send(
-              { cmd: 'accept_invitation' },
-              { token: body.invitationToken, userId: result.id },
-            ),
-          );
-
-          return {
-            ...result,
-            user: loginResult.user,
-            message:
-              'Registration successful. You have been added to the workspace.',
-          };
-        }
-      } catch (error) {
-        // If auto-login or invitation acceptance fails, still return success for registration
-        console.error('Failed to auto-accept invitation:', error);
-        return {
-          ...result,
-          message:
-            'Registration successful, but failed to auto-accept invitation. Please login and try again.',
-        };
-      }
-    }
 
     return {
       ...result,
@@ -140,36 +70,42 @@ export class AuthController {
     const ipAddress = req.ip;
     const userAgent = req.headers['user-agent'];
 
-    const result = await this.authProxyService.login(
+    const result = await this.authService.login(
       body.email,
       body.password,
       ipAddress,
       userAgent,
     );
 
-    // Set cookies from auth service response
-    if (!result.requires2FA && result.cookies) {
-      result.cookies.forEach((cookie: string) => {
-        const [cookiePart] = cookie.split(';');
-        const [name, value] = cookiePart.split('=');
-        if (name === 'session_token' || name === 'refresh_token') {
-          res.cookie(name, value, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: 'lax',
-            maxAge:
-              name === 'session_token'
-                ? 15 * 60 * 1000
-                : 7 * 24 * 60 * 60 * 1000,
-            path: '/',
-            domain:
-              process.env.NODE_ENV === 'production'
-                ? process.env.COOKIE_DOMAIN
-                : 'localhost',
-          });
-        }
+    // Set cookies if not 2FA
+    if (!result.requires2FA && result.sessionToken && result.refreshToken) {
+      // Set httpOnly cookie for session token
+      res.cookie('session_token', result.sessionToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 15 * 60 * 1000, // 15 minutes
+        path: '/',
+        domain:
+          process.env.NODE_ENV === 'production'
+            ? process.env.COOKIE_DOMAIN
+            : 'localhost',
       });
 
+      // Set httpOnly cookie for refresh token
+      res.cookie('refresh_token', result.refreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+        path: '/',
+        domain:
+          process.env.NODE_ENV === 'production'
+            ? process.env.COOKIE_DOMAIN
+            : 'localhost',
+      });
+
+      // Return user info without tokens
       return {
         requires2FA: false,
         user: result.user,
@@ -192,37 +128,39 @@ export class AuthController {
     const ipAddress = req.ip;
     const userAgent = req.headers['user-agent'];
 
-    const result = await this.authProxyService.verify2FA(
+    const result = await this.authService.verify2FA(
       body.userId,
       body.token,
       ipAddress,
       userAgent,
     );
 
-    // Set cookies from auth service response
-    if (result.cookies) {
-      result.cookies.forEach((cookie: string) => {
-        const [cookiePart] = cookie.split(';');
-        const [name, value] = cookiePart.split('=');
-        if (name === 'session_token' || name === 'refresh_token') {
-          res.cookie(name, value, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: 'lax',
-            maxAge:
-              name === 'session_token'
-                ? 15 * 60 * 1000
-                : 7 * 24 * 60 * 60 * 1000,
-            path: '/',
-            domain:
-              process.env.NODE_ENV === 'production'
-                ? process.env.COOKIE_DOMAIN
-                : 'localhost',
-          });
-        }
-      });
-    }
+    // Set httpOnly cookies
+    res.cookie('session_token', result.sessionToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 15 * 60 * 1000, // 15 minutes
+      path: '/',
+      domain:
+        process.env.NODE_ENV === 'production'
+          ? process.env.COOKIE_DOMAIN
+          : 'localhost',
+    });
 
+    res.cookie('refresh_token', result.refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+      path: '/',
+      domain:
+        process.env.NODE_ENV === 'production'
+          ? process.env.COOKIE_DOMAIN
+          : 'localhost',
+    });
+
+    // Return user info without tokens
     return {
       user: result.user,
     };
@@ -245,34 +183,29 @@ export class AuthController {
       throw new UnauthorizedException('No refresh token provided');
     }
 
-    const result = await this.authProxyService.refreshToken(
+    const result = await this.authService.refreshToken(
       refreshToken,
       ipAddress,
       userAgent,
     );
 
-    // Set new session token cookie
-    if (result.cookies) {
-      result.cookies.forEach((cookie: string) => {
-        const [cookiePart] = cookie.split(';');
-        const [name, value] = cookiePart.split('=');
-        if (name === 'session_token') {
-          res.cookie(name, value, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: 'lax',
-            maxAge: 15 * 60 * 1000,
-            path: '/',
-            domain:
-              process.env.NODE_ENV === 'production'
-                ? process.env.COOKIE_DOMAIN
-                : 'localhost',
-          });
-        }
-      });
-    }
+    // Update session token cookie
+    res.cookie('session_token', result.sessionToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 15 * 60 * 1000, // 15 minutes
+      path: '/',
+      domain:
+        process.env.NODE_ENV === 'production'
+          ? process.env.COOKIE_DOMAIN
+          : 'localhost',
+    });
 
-    return { success: true, user: result.user };
+    // Return user info without tokens
+    return {
+      user: result.user,
+    };
   }
 
   @Post('2fa/setup')
@@ -281,8 +214,7 @@ export class AuthController {
   @ApiOperation({ summary: 'Setup 2FA for user' })
   @ApiResponse({ status: 200, description: '2FA setup initiated' })
   async setup2FA(@Req() req: any) {
-    const sessionToken = req.cookies?.session_token;
-    return this.authProxyService.setup2FA(sessionToken);
+    return this.authService.setup2FA(req.user.id);
   }
 
   @Post('2fa/enable')
@@ -292,8 +224,7 @@ export class AuthController {
   @ApiResponse({ status: 200, description: '2FA enabled successfully' })
   @ApiResponse({ status: 401, description: 'Invalid 2FA token' })
   async enable2FA(@Body() body: { token: string }, @Req() req: any) {
-    const sessionToken = req.cookies?.session_token;
-    return this.authProxyService.enable2FA(sessionToken, body.token);
+    return this.authService.enable2FA(req.user.id, body.token);
   }
 
   @Post('2fa/disable')
@@ -303,8 +234,7 @@ export class AuthController {
   @ApiResponse({ status: 200, description: '2FA disabled successfully' })
   @ApiResponse({ status: 401, description: 'Invalid 2FA token' })
   async disable2FA(@Body() body: { token: string }, @Req() req: any) {
-    const sessionToken = req.cookies?.session_token;
-    return this.authProxyService.disable2FA(sessionToken, body.token);
+    return this.authService.disable2FA(req.user.id, body.token);
   }
 
   @Get('me')
@@ -337,8 +267,7 @@ export class AuthController {
   @ApiOperation({ summary: 'Get all user sessions' })
   @ApiResponse({ status: 200, description: 'Sessions retrieved' })
   async getSessions(@Req() req: any) {
-    const sessionToken = req.cookies?.session_token;
-    return this.authProxyService.getUserSessions(sessionToken);
+    return this.authService.getUserSessions(req.user.id);
   }
 
   @Delete('session/:sessionId')
@@ -348,8 +277,7 @@ export class AuthController {
   @ApiOperation({ summary: 'Revoke a specific session' })
   @ApiResponse({ status: 204, description: 'Session revoked' })
   async revokeSession(@Req() req: any, @Body() body: { sessionId: string }) {
-    const sessionToken = req.cookies?.session_token;
-    return this.authProxyService.revokeSession(sessionToken, body.sessionId);
+    return this.authService.revokeSession(req.user.id, body.sessionId);
   }
 
   @Delete('sessions')
@@ -359,8 +287,7 @@ export class AuthController {
   @ApiOperation({ summary: 'Revoke all sessions except current' })
   @ApiResponse({ status: 204, description: 'All sessions revoked' })
   async revokeAllSessions(@Req() req: any) {
-    const sessionToken = req.cookies?.session_token;
-    return this.authProxyService.revokeAllSessions(sessionToken);
+    return this.authService.revokeAllSessions(req.user.id, req.session.id);
   }
 
   @Post('logout')
@@ -374,10 +301,9 @@ export class AuthController {
     const sessionToken =
       req.cookies?.session_token ||
       req.headers.authorization?.replace('Bearer ', '');
-    const refreshToken = req.cookies?.refresh_token || '';
 
     if (sessionToken) {
-      await this.authProxyService.logout(sessionToken, refreshToken);
+      await this.authService.logout(sessionToken);
     }
 
     // Clear cookies
@@ -397,5 +323,20 @@ export class AuthController {
     });
 
     return { success: true };
+  }
+
+  // ============================================
+  // NATS Message Handlers for inter-service communication
+  // ============================================
+
+  @MessagePattern({ cmd: 'validate_session' })
+  async validateSessionMessage(data: { sessionToken: string }) {
+    return this.authService.validateSession(data.sessionToken);
+  }
+
+  @MessagePattern({ cmd: 'get_user_by_id' })
+  async getUserByIdMessage(data: { userId: string }) {
+    const session = await this.authService.validateSession(data.userId);
+    return session.user;
   }
 }

@@ -4,11 +4,11 @@ import {
   ExecutionContext,
   UnauthorizedException,
 } from '@nestjs/common';
-import { AuthProxyService } from '../auth-proxy.service';
+import { AuthService } from '../auth.service';
 
 @Injectable()
 export class AuthGuard implements CanActivate {
-  constructor(private authProxyService: AuthProxyService) {}
+  constructor(private authService: AuthService) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest();
@@ -24,7 +24,7 @@ export class AuthGuard implements CanActivate {
 
     try {
       const { user, session } =
-        await this.authProxyService.validateSession(sessionToken);
+        await this.authService.validateSession(sessionToken);
       request.user = user;
       request.session = session;
       return true;

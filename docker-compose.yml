@@ -7,9 +7,9 @@ services:
     container_name: ft_trans_postgres
     restart: unless-stopped
     environment:
-      POSTGRES_DB: ft_trans
-      POSTGRES_USER: dev
-      POSTGRES_PASSWORD: dev
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     ports:
       - '5432:5432'
     volumes:
@@ -81,12 +81,18 @@ services:
       - ./apps/api-gateway/prisma:/app/apps/api-gateway/prisma
       - ./packages:/app/packages
     environment:
-      - NODE_ENV=development
-      - DATABASE_URL=postgresql://dev:dev@postgres:5432/ft_trans?schema=public
-      - REDIS_URL=redis://redis:6379
-      - NATS_URL=nats://nats:4222
-      - API_GATEWAY_PORT=4000
-      - CORS_ORIGINS=http://localhost:3000,http://web:3000
+      - NODE_ENV=${NODE_ENV}
+      - DATABASE_URL=${DATABASE_URL_DOCKER}
+      - REDIS_URL=${REDIS_URL_DOCKER}
+      - NATS_URL=${NATS_URL_DOCKER}
+      - API_GATEWAY_PORT=${API_GATEWAY_PORT}
+      - CORS_ORIGINS=${CORS_ORIGINS_DOCKER}
+      - AUTH_SERVICE_URL=${AUTH_SERVICE_URL_DOCKER}
+      - COOKIE_DOMAIN=${COOKIE_DOMAIN}
+      - GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID}
+      - GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
     depends_on:
       postgres:
         condition: service_healthy
@@ -94,7 +100,37 @@ services:
         condition: service_healthy
       nats:
         condition: service_started
+      auth-service:
+        condition: service_started
       workspace-service:
+        condition: service_started
+    networks:
+      - ft_trans_network
+
+  # Auth Service (Microservice)
+  auth-service:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.auth
+    container_name: ft_trans_auth_service
+    restart: unless-stopped
+    ports:
+      - '3001:3001'
+    volumes:
+      - ./services/auth-service/src:/app/services/auth-service/src
+      - ./services/auth-service/prisma:/app/services/auth-service/prisma
+      - ./packages:/app/packages
+    environment:
+      - NODE_ENV=${NODE_ENV}
+      - DATABASE_URL=${DATABASE_URL_DOCKER}
+      - NATS_URL=${NATS_URL_DOCKER}
+      - PORT=${AUTH_PORT}
+      - COOKIE_DOMAIN=${COOKIE_DOMAIN}
+      - FRONTEND_URL=${FRONTEND_URL}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nats:
         condition: service_started
     networks:
       - ft_trans_network
@@ -107,19 +143,19 @@ services:
     container_name: ft_trans_workspace_service
     restart: unless-stopped
     ports:
-      - '3001:3001'
+      - '3002:3002'
     volumes:
       - ./services/workspace-service/src:/app/services/workspace-service/src
       - ./services/workspace-service/prisma:/app/services/workspace-service/prisma
       - ./packages:/app/packages
     environment:
-      - NODE_ENV=development
-      - DATABASE_URL=postgresql://dev:dev@postgres:5432/ft_trans?schema=workspace
-      - NATS_URL=nats://nats:4222
-      - PORT=3001
-      - RESEND_API_KEY=re_6mEgpVsA_MWPE891Syc988VkcU5TJNEQ4
-      - EMAIL_FROM=FT Transcendence <onboarding@resend.dev>
-      - APP_URL=http://localhost:3000
+      - NODE_ENV=${NODE_ENV}
+      - DATABASE_URL=${DATABASE_URL_WORKSPACE}
+      - NATS_URL=${NATS_URL_DOCKER}
+      - PORT=${WORKSPACE_PORT}
+      - RESEND_API_KEY=${RESEND_API_KEY}
+      - EMAIL_FROM=${EMAIL_FROM}
+      - APP_URL=${APP_URL}
     depends_on:
       postgres:
         condition: service_healthy
@@ -144,9 +180,9 @@ services:
       - ./apps/web/public:/app/apps/web/public
       - ./packages:/app/packages
     environment:
-      - NODE_ENV=development
-      - NEXT_PUBLIC_API_URL=http://localhost:4000
-      - NEXT_PUBLIC_WS_URL=ws://localhost:4000
+      - NODE_ENV=${NODE_ENV}
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+      - NEXT_PUBLIC_WS_URL=${NEXT_PUBLIC_WS_URL}
     depends_on:
       - api-gateway
     networks:

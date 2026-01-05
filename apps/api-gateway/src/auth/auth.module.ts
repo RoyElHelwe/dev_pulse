@@ -1,24 +1,30 @@
-import { Module } from '@nestjs/common'
-import { ClientsModule, Transport } from '@nestjs/microservices'
-import { AuthController } from './auth.controller'
-import { AuthService } from './auth.service'
-import { AuthGuard } from './guards/auth.guard'
-import { PrismaService } from '../prisma/prisma.service'
+import { Module } from '@nestjs/common';
+import { ClientsModule, Transport } from '@nestjs/microservices';
+import { AuthController } from './auth.controller';
+import { AuthProxyService } from './auth-proxy.service';
+import { AuthGuard } from './guards/auth.guard';
 
 @Module({
   imports: [
     ClientsModule.register([
       {
+        name: 'AUTH_SERVICE',
+        transport: Transport.NATS,
+        options: {
+          servers: [process.env.NATS_URL!],
+        },
+      },
+      {
         name: 'WORKSPACE_SERVICE',
         transport: Transport.NATS,
         options: {
-          servers: [process.env.NATS_URL || 'nats://localhost:4222'],
+          servers: [process.env.NATS_URL!],
         },
       },
     ]),
   ],
   controllers: [AuthController],
-  providers: [AuthService, AuthGuard, PrismaService],
-  exports: [AuthService, AuthGuard],
+  providers: [AuthProxyService, AuthGuard],
+  exports: [AuthProxyService, AuthGuard],
 })
 export class AuthModule {}

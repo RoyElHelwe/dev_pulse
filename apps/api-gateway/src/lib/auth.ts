@@ -1,7 +1,7 @@
-import { betterAuth } from 'better-auth'
-import { PrismaClient } from '@prisma/client'
+import { betterAuth } from 'better-auth';
+import { PrismaClient } from '@prisma/client';
 
-const prisma = new PrismaClient()
+const prisma = new PrismaClient();
 
 export const auth = betterAuth({
   database: {
@@ -42,6 +42,6 @@ export const auth = betterAuth({
     enabled: true,
     issuer: 'ft_transcendence',
   },
-})
+});
 
-export type Auth = typeof auth
+export type Auth = typeof auth;

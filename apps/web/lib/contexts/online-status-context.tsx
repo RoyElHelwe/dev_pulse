@@ -4,7 +4,7 @@ import { createContext, useContext, ReactNode, useEffect, useState, useRef, useC
 import { io, Socket } from 'socket.io-client'
 
 // Use the API URL for WebSocket connection (same server)
-const SOCKET_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'
+const SOCKET_URL = process.env.NEXT_PUBLIC_API_URL!
 const HEARTBEAT_INTERVAL = 25000 // 25 seconds (less than server timeout)
 
 interface OnlineStatusContextValue {

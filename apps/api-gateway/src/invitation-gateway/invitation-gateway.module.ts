@@ -11,7 +11,7 @@ import { PrismaService } from '../prisma/prisma.service';
         name: 'WORKSPACE_SERVICE',
         transport: Transport.NATS,
         options: {
-          servers: [process.env.NATS_URL || 'nats://localhost:4222'],
+          servers: [process.env.NATS_URL!],
         },
       },
     ]),

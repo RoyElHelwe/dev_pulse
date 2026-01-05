@@ -6,7 +6,7 @@ export class EmailService {
   private resend: Resend;
 
   constructor() {
-    const apiKey = process.env.RESEND_API_KEY || 're_6mEgpVsA_MWPE891Syc988VkcU5TJNEQ4';
+    const apiKey = process.env.RESEND_API_KEY!;
     this.resend = new Resend(apiKey);
   }
 
@@ -23,7 +23,7 @@ export class EmailService {
 
     try {
       const result = await this.resend.emails.send({
-        from: process.env.EMAIL_FROM || 'FT Transcendence <onboarding@resend.dev>',
+        from: process.env.EMAIL_FROM!,
         to: [to],
         subject: `You've been invited to join ${workspaceName}`,
         html: this.getInvitationEmailTemplate({

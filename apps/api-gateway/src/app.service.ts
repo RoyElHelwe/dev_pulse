@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common'
+import { Injectable } from '@nestjs/common';
 
 @Injectable()
 export class AppService {
@@ -7,7 +7,7 @@ export class AppService {
       status: 'ok',
       service: 'api-gateway',
       timestamp: new Date().toISOString(),
-    }
+    };
   }
 
   getDetailedHealth(): object {
@@ -18,7 +18,7 @@ export class AppService {
       uptime: process.uptime(),
       memory: process.memoryUsage(),
       timestamp: new Date().toISOString(),
-      environment: process.env.NODE_ENV || 'development',
-    }
+      environment: process.env.NODE_ENV,
+    };
   }
 }
