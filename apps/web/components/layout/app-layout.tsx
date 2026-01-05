@@ -1,12 +1,13 @@
 'use client'
 
 import { ReactNode, useEffect, useState, useRef } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 import { Header } from './header'
 import { Sidebar, MobileNav } from './sidebar'
 import { useAuth } from '@/lib/hooks/use-auth'
 import { LoadingSpinner } from '@/components/ui/loading-spinner'
 import { ToastProvider } from '@/components/ui/toast'
+import { type WorkspaceRole, getRolePermissions } from '@/lib/types'
 
 interface AppLayoutProps {
   children: ReactNode
@@ -16,7 +17,7 @@ interface WorkspaceInfo {
   id: string
   name: string
   slug: string
-  role: string
+  role: WorkspaceRole
   isOwner: boolean
 }
 
@@ -53,7 +54,7 @@ export function AppLayout({ children }: AppLayoutProps) {
               id: data.workspace.id,
               name: data.workspace.name,
               slug: data.workspace.slug,
-              role: data.role,
+              role: data.role as WorkspaceRole,
               isOwner: data.isOwner || data.role === 'OWNER',
             })
           } else {
@@ -70,6 +71,25 @@ export function AppLayout({ children }: AppLayoutProps) {
 
     init()
   }, [])
+
+  // Check role-based access for current route
+  const pathname = usePathname()
+  const permissions = workspace ? getRolePermissions(workspace.role) : null
+
+  // Role-based route protection
+  useEffect(() => {
+    if (!workspace || workspaceLoading) return
+
+    const permissions = getRolePermissions(workspace.role)
+    
+    // Check if user has access to current route
+    if (pathname.startsWith('/dashboard') && !permissions.canAccessDashboard) {
+      router.push('/team') // Redirect to team page instead
+    }
+    if (pathname.startsWith('/team/invite') && !permissions.canInviteMembers) {
+      router.push('/team')
+    }
+  }, [pathname, workspace, workspaceLoading, router])
 
   // Show loading while checking auth or workspace
   if (isLoading || workspaceLoading) {
@@ -93,7 +113,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     <ToastProvider>
       <div className="min-h-screen bg-background">
         <Header workspaceName={workspace?.name} />
-        <Sidebar isOwner={workspace?.isOwner} workspaceId={workspace?.id} />
+        <Sidebar role={workspace?.role} workspaceId={workspace?.id} />
         
         {/* Main content with sidebar offset */}
         <main className="md:pl-64">
@@ -103,7 +123,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         </main>
 
         {/* Mobile navigation */}
-        <MobileNav isOwner={workspace?.isOwner} />
+        <MobileNav role={workspace?.role} />
         
         {/* Bottom padding for mobile nav */}
         <div className="h-20 md:hidden" />

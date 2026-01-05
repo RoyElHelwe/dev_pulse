@@ -10,9 +10,10 @@ import {
   UserPlusIcon,
   BuildingIcon
 } from '@/components/ui/icons'
+import { type WorkspaceRole, getRolePermissions } from '@/lib/types'
 
 interface SidebarProps {
-  isOwner?: boolean
+  role?: WorkspaceRole | string
   workspaceId?: string
 }
 
@@ -20,21 +21,25 @@ interface NavItem {
   label: string
   href: string
   icon: React.ComponentType<{ className?: string }>
-  ownerOnly?: boolean
+  permission?: keyof ReturnType<typeof getRolePermissions>
 }
 
 const navItems: NavItem[] = [
-  { label: 'Dashboard', href: '/dashboard', icon: HomeIcon },
-  { label: 'Team', href: '/team', icon: UsersIcon },
-  { label: 'Invite Members', href: '/team/invite', icon: UserPlusIcon, ownerOnly: true },
-  { label: 'Workspace', href: '/workspace', icon: BuildingIcon },
-  { label: 'Settings', href: '/settings', icon: SettingsIcon },
+  { label: 'Dashboard', href: '/dashboard', icon: HomeIcon, permission: 'canAccessDashboard' },
+  { label: 'Team', href: '/team', icon: UsersIcon, permission: 'canAccessTeam' },
+  { label: 'Invite Members', href: '/team/invite', icon: UserPlusIcon, permission: 'canInviteMembers' },
+  { label: 'Workspace', href: '/workspace', icon: BuildingIcon, permission: 'canAccessWorkspace' },
+  { label: 'Settings', href: '/settings', icon: SettingsIcon, permission: 'canAccessSettings' },
 ]
 
-export function Sidebar({ isOwner = false, workspaceId }: SidebarProps) {
+export function Sidebar({ role = 'MEMBER', workspaceId }: SidebarProps) {
   const pathname = usePathname()
+  const permissions = getRolePermissions(role)
 
-  const filteredNavItems = navItems.filter(item => !item.ownerOnly || isOwner)
+  const filteredNavItems = navItems.filter(item => {
+    if (!item.permission) return true
+    return permissions[item.permission]
+  })
 
   return (
     <aside className="fixed left-0 top-16 z-30 hidden h-[calc(100vh-4rem)] w-64 border-r border-border bg-background md:block">
@@ -65,10 +70,16 @@ export function Sidebar({ isOwner = false, workspaceId }: SidebarProps) {
 }
 
 // Mobile bottom navigation
-export function MobileNav({ isOwner = false }: { isOwner?: boolean }) {
+export function MobileNav({ role = 'MEMBER' }: { role?: string }) {
   const pathname = usePathname()
+  const permissions = getRolePermissions(role)
 
-  const mobileItems = navItems.filter(item => !item.ownerOnly || isOwner).slice(0, 5)
+  const mobileItems = navItems
+    .filter(item => {
+      if (!item.permission) return true
+      return permissions[item.permission]
+    })
+    .slice(0, 5)
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-40 border-t border-border bg-background md:hidden">

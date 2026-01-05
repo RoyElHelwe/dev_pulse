@@ -16,6 +16,7 @@ import {
   ChevronRightIcon
 } from '@/components/ui/icons'
 import { LoadingSpinner } from '@/components/ui/loading-spinner'
+import { getRolePermissions } from '@/lib/types'
 import Link from 'next/link'
 
 interface WorkspaceInfo {
@@ -52,7 +53,7 @@ export default function InvitePage() {
       })
 
       if (!res.ok) {
-        router.push('/dashboard')
+        router.push('/team')
         return
       }
 
@@ -63,8 +64,9 @@ export default function InvitePage() {
         return
       }
 
-      // Only OWNER can invite
-      if (!data.isOwner && data.role !== 'OWNER') {
+      // Check if user has permission to invite members
+      const permissions = getRolePermissions(data.role)
+      if (!permissions.canInviteMembers) {
         router.push('/team')
         return
       }
@@ -75,7 +77,7 @@ export default function InvitePage() {
         isOwner: true,
       })
     } catch (error) {
-      router.push('/dashboard')
+      router.push('/team')
     } finally {
       setLoading(false)
     }

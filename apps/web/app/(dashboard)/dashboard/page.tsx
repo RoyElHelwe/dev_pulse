@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { AppLayout } from '@/components/layout/app-layout'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -8,6 +9,7 @@ import { Avatar, AvatarGroup } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { useAuth } from '@/lib/hooks/use-auth'
 import { UsersIcon, UserPlusIcon, CheckCircleIcon, ClockIcon } from '@/components/ui/icons'
+import { getRolePermissions } from '@/lib/types'
 import Link from 'next/link'
 
 interface WorkspaceData {
@@ -32,6 +34,7 @@ interface MemberData {
 }
 
 export default function DashboardPage() {
+  const router = useRouter()
   const { user } = useAuth()
   const [workspace, setWorkspace] = useState<WorkspaceData | null>(null)
   const [members, setMembers] = useState<MemberData[]>([])
@@ -47,6 +50,14 @@ export default function DashboardPage() {
         
         if (statusRes.ok) {
           const statusData = await statusRes.json()
+          
+          // Check role-based access
+          const permissions = getRolePermissions(statusData.role)
+          if (!permissions.canAccessDashboard) {
+            router.push('/team')
+            return
+          }
+          
           if (statusData.hasWorkspace) {
             setWorkspace({
               id: statusData.workspace.id,

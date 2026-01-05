@@ -87,3 +87,66 @@ export interface ApiError {
   message: string
   error?: string
 }
+
+// ============================================
+// Role Types
+// ============================================
+
+export type WorkspaceRole = 'OWNER' | 'ADMIN' | 'MANAGER' | 'MEMBER' | 'VIEWER'
+
+export interface RolePermissions {
+  canAccessDashboard: boolean
+  canAccessTeam: boolean
+  canInviteMembers: boolean
+  canAccessSettings: boolean
+  canAccessWorkspace: boolean
+  canManageWorkspace: boolean
+}
+
+// Role hierarchy: OWNER > ADMIN > MANAGER > MEMBER > VIEWER
+export const ROLE_PERMISSIONS: Record<WorkspaceRole, RolePermissions> = {
+  OWNER: {
+    canAccessDashboard: true,
+    canAccessTeam: true,
+    canInviteMembers: true,
+    canAccessSettings: true,
+    canAccessWorkspace: true,
+    canManageWorkspace: true,
+  },
+  ADMIN: {
+    canAccessDashboard: true,
+    canAccessTeam: true,
+    canInviteMembers: true,
+    canAccessSettings: true,
+    canAccessWorkspace: true,
+    canManageWorkspace: true,
+  },
+  MANAGER: {
+    canAccessDashboard: false,
+    canAccessTeam: true,
+    canInviteMembers: true,
+    canAccessSettings: true,
+    canAccessWorkspace: true,
+    canManageWorkspace: false,
+  },
+  MEMBER: {
+    canAccessDashboard: false,
+    canAccessTeam: true,
+    canInviteMembers: false,
+    canAccessSettings: true,
+    canAccessWorkspace: true,
+    canManageWorkspace: false,
+  },
+  VIEWER: {
+    canAccessDashboard: false,
+    canAccessTeam: true,
+    canInviteMembers: false,
+    canAccessSettings: true,
+    canAccessWorkspace: true,
+    canManageWorkspace: false,
+  },
+}
+
+export function getRolePermissions(role: string): RolePermissions {
+  return ROLE_PERMISSIONS[role as WorkspaceRole] || ROLE_PERMISSIONS.MEMBER
+}

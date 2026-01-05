@@ -12,12 +12,6 @@ const settingsItems = [
     href: '/settings/security',
     icon: ShieldIcon,
   },
-  {
-    title: 'Team',
-    description: 'Manage team members and invitations',
-    href: '/settings/team',
-    icon: UsersIcon,
-  },
 ]
 
 export default function SettingsPage() {
