@@ -6,11 +6,11 @@
 
 ## Table of Contents
 
-1.  [Project Status Overview](#project-status-overview)
-2.  [Critical Changes (Must Fix)](#critical-changes-must-fix)
-3.  [High Priority Changes](#high-priority-changes)
-4.  [Recommended Enhancements](#recommended-enhancements)
-5.  [New Files to Create](#new-files-to-create)
+1. [Project Status Overview](#project-status-overview)
+2. [Architecture Clarification](#architecture-clarification)
+3. [Critical Changes (Must Fix)](#critical-changes-must-fix)
+4. [High Priority Changes](#high-priority-changes)
+5. [New Files to Create](#new-files-to-create)
 
 ---
 
@@ -20,80 +20,50 @@
 
 Based on analysis of your current codebase vs. the deployment handbook requirements:
 
-Issue
-
-Current State
-
-Required State
-
-Impact
-
-**NATS Config File**
-
-❌ No `config/` directory exists
-
-✅ `config/nats.conf` with WebSocket + token auth
-
-**BLOCKER**: NATS won't accept Cloud Run connections
-
-**NATS Token Auth**
-
-❌ Services connect without token
-
-✅ Add `token: process.env.NATS_TOKEN` to all services
-
-**BLOCKER**: Unauthorized access to message broker
-
-**Redis Adapter**
-
-❌ Not implemented in api-gateway
-
-✅ Socket.io Redis adapter needed
-
-**BLOCKER**: WebSockets fail with multiple instances
-
-**Health Endpoints**
-
-❌ No `/health` endpoints exist
-
-✅ Required for all 3 services
-
-**BLOCKER**: Cloud Run readiness checks fail
-
-**Port Configuration**
-
-❌ Uses `API_GATEWAY_PORT`, `AUTH_PORT`, `WORKSPACE_PORT`
-
-✅ Must use `process.env.PORT`
-
-**BLOCKER**: Cloud Run injects PORT, not custom vars
-
-**Next.js Standalone**
-
-❌ Missing in config
-
-✅ `output: 'standalone'` required
-
-**BLOCKER**: Docker build fails
-
-**Graceful Shutdown**
-
-❌ No SIGTERM handlers
-
-✅ Required for all services
-
-**HIGH**: Data loss on shutdown
+| Issue | Current State | Required State | Impact |
+|-------|--------------|----------------|--------|
+| **Port Configuration** | ❌ Uses `API_GATEWAY_PORT`, `AUTH_PORT`, `WORKSPACE_PORT` | ✅ Must use `process.env.PORT` | **BLOCKER**: Cloud Run injects PORT |
+| **Next.js Standalone** | ❌ Missing in config | ✅ `output: 'standalone'` required | **BLOCKER**: Docker build fails |
+| **Redis Adapter** | ❌ Not implemented in api-gateway | ✅ Socket.io Redis adapter needed | **BLOCKER**: WebSockets fail with multiple instances |
+| **NATS Token Auth** | ❌ Services connect without token | ✅ Add `token: process.env.NATS_TOKEN` | **BLOCKER**: Unauthorized access to message broker |
+| **Health Endpoints** | ⚠️ Basic `/health` exists in api-gateway | ✅ Need `/health/ready` with DB check | **HIGH**: Incomplete readiness checks |
+| **Graceful Shutdown** | ❌ No SIGTERM handlers | ✅ Required for all services | **HIGH**: Data loss on shutdown |
 
 ### 📊 Implementation Status
 
 ```
 Critical Changes:     0/4 implemented (0%)
-High Priority:        0/3 implemented (0%)
-New Files Required:   0/5 created (0%)
+High Priority:        0/2 implemented (0%)
+New Files Required:   0/3 created (0%)
 Production Ready:     NO ❌
 ```
 
 **Estimated Work**: ~3 hours to implement all changes
+
+---
+
+## Architecture Clarification
+
+### Data Ownership (Current Implementation)
+
+The actual data ownership in the codebase differs from what some documentation implies:
+
+| Service | Prisma Schema | Data Models Owned |
+|---------|---------------|-------------------|
+| **api-gateway** | `apps/api-gateway/prisma/schema.prisma` | User, Session, Account, Workspace, WorkspaceMember, Task, Sprint, Message, AuditLog |
+| **auth-service** | `services/auth-service/prisma/schema.prisma` | User, Session, Account, PasswordReset, VerificationToken |
+| **workspace-service** | `services/workspace-service/prisma/schema.prisma` | Workspace, WorkspaceMember, Invitation |
+
+### Key Insight
+
+> **api-gateway is NOT a pure gateway**. It is the main backend service that owns most application data. This is intentional and appropriate for a small team. Do not refactor into "true microservices" unless you have 5+ developers.
+
+### Why This Is Acceptable
+
+1. **Reduced inter-service calls**: Task operations don't require NATS roundtrips
+2. **Simpler transactions**: No distributed transactions needed
+3. **Easier debugging**: Most logic in one service
+4. **Lower latency**: Direct database access vs. network hops
 
 ---
 
@@ -112,36 +82,16 @@ Production Ready:     NO ❌
 **Current Code**:
 
 ```typescript
-async function bootstrap() {
-  const app = await NestFactory.create(AppModule, {
-    cors: {
-      origin: process.env.CORS_ORIGINS?.split(',') || ['http://localhost:3000'],
-      credentials: true,
-    },
-  });
-  // ... helmet, cookie-parser, validation, swagger setup ...
-  
-  const port = Number(process.env.API_GATEWAY_PORT) || 4000; // ❌ Uses API_GATEWAY_PORT, not PORT
-  await app.listen(port);
-}
+const port = Number(process.env.API_GATEWAY_PORT) || 4000;
+await app.listen(port);
 ```
 
 **Required Change**:
 
 ```typescript
-async function bootstrap() {
-  const app = await NestFactory.create(AppModule, {
-    cors: {
-      origin: process.env.CORS_ORIGINS?.split(',') || ['http://localhost:3000'],
-      credentials: true,
-    },
-  });
-  // ... existing configuration ...
-  
-  const port = process.env.PORT || 4000; // ✅ Cloud Run injects PORT
-  await app.listen(port);
-  console.log(`API Gateway listening on port ${port}`);
-}
+const port = process.env.PORT || 4000;
+await app.listen(port);
+console.log(`API Gateway listening on port ${port}`);
 ```
 
 ---
@@ -151,44 +101,15 @@ async function bootstrap() {
 **Current Code**:
 
 ```typescript
-async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
-  // ... CORS, cookie-parser, validation, swagger setup ...
-  
-  // Connect to NATS microservice
-  app.connectMicroservice<MicroserviceOptions>({
-    transport: Transport.NATS,
-    options: {
-      servers: [process.env.NATS_URL!], // ❌ Missing token authentication
-    },
-  });
-
-  await app.startAllMicroservices();
-  await app.listen(Number(process.env.AUTH_PORT) || 3001); // ❌ Uses AUTH_PORT, not PORT
-}
+await app.listen(Number(process.env.AUTH_PORT) || 3001);
 ```
 
 **Required Change**:
 
 ```typescript
-async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
-  // ... existing configuration ...
-  
-  // Connect to NATS microservice
-  app.connectMicroservice<MicroserviceOptions>({
-    transport: Transport.NATS,
-    options: {
-      servers: [process.env.NATS_URL!],
-      token: process.env.NATS_TOKEN, // ✅ Add authentication token
-    },
-  });
-
-  await app.startAllMicroservices();
-  const port = process.env.PORT || 3001; // ✅ Cloud Run injects PORT
-  await app.listen(port);
-  console.log(`Auth Service listening on port ${port}`);
-}
+const port = process.env.PORT || 3001;
+await app.listen(port);
+console.log(`Auth Service listening on port ${port}`);
 ```
 
 ---
@@ -198,44 +119,15 @@ async function bootstrap() {
 **Current Code**:
 
 ```typescript
-async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
-  // ... validation setup ...
-  
-  // Connect to NATS as microservice
-  app.connectMicroservice<MicroserviceOptions>({
-    transport: Transport.NATS,
-    options: {
-      servers: [process.env.NATS_URL!], // ❌ Missing token authentication
-    },
-  });
-
-  await app.startAllMicroservices();
-  await app.listen(Number(process.env.WORKSPACE_PORT) || 3002); // ❌ Uses WORKSPACE_PORT, not PORT
-}
+await app.listen(Number(process.env.WORKSPACE_PORT) || 3002);
 ```
 
 **Required Change**:
 
 ```typescript
-async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
-  // ... existing configuration ...
-  
-  // Connect to NATS as microservice
-  app.connectMicroservice<MicroserviceOptions>({
-    transport: Transport.NATS,
-    options: {
-      servers: [process.env.NATS_URL!],
-      token: process.env.NATS_TOKEN, // ✅ Add authentication token
-    },
-  });
-
-  await app.startAllMicroservices();
-  const port = process.env.PORT || 3002; // ✅ Cloud Run injects PORT
-  await app.listen(port);
-  console.log(`Workspace Service listening on port ${port}`);
-}
+const port = process.env.PORT || 3002;
+await app.listen(port);
+console.log(`Workspace Service listening on port ${port}`);
 ```
 
 ---
@@ -251,162 +143,62 @@ async function bootstrap() {
 **Current Code**:
 
 ```typescript
-/** @type {import('next').NextConfig} */
 const nextConfig = {
   transpilePackages: ['@ft-trans/frontend-shared'],
-  experimental: {
-    turbo: {
-      rules: {
-        '*.svg': {
-          loaders: ['@svgr/webpack'],
-          as: '*.js',
-        },
-      },
-    },
-  },
-  webpack: (config: any) => {
-    config.resolve.alias = {
-      ...config.resolve.alias,
-      phaser: 'phaser/dist/phaser.js',
-    }
-    return config
-  },
+  // ...
 }
-
-export default nextConfig
 ```
 
 **Required Change**:
 
 ```typescript
-/** @type {import('next').NextConfig} */
 const nextConfig = {
-  output: 'standalone', // ✅ CRITICAL: Required for Docker production builds
+  output: 'standalone',
   transpilePackages: ['@ft-trans/frontend-shared'],
-  experimental: {
-    turbo: {
-      rules: {
-        '*.svg': {
-          loaders: ['@svgr/webpack'],
-          as: '*.js',
-        },
-      },
-    },
-  },
-  webpack: (config: any) => {
-    config.resolve.alias = {
-      ...config.resolve.alias,
-      phaser: 'phaser/dist/phaser.js',
-    }
-    return config
-  },
+  // ...
 }
-
-export default nextConfig
 ```
 
 ---
 
-### ⚠️ 3. Graceful Shutdown Implementation
+### ⚠️ 3. NATS Token Authentication
 
-**Status**: ❌ **MISSING** - Services don't handle SIGTERM
+**Status**: ❌ **MISSING** - Services connect without token
 
-**Problem**: Cloud Run sends SIGTERM before stopping containers. Without handlers, connections are forcibly closed, causing data loss and poor UX.
+**Problem**: Production NATS requires authentication. Current code has no token, allowing unauthorized access.
 
-**Files to Update**: All three NestJS services
-
-#### `apps/api-gateway/src/main.ts`
-
-**Add Before `bootstrap()` Call**:
-
-```typescript
-async function bootstrap() {
-  const app = await NestFactory.create(AppModule, {
-    cors: {
-      origin: process.env.CORS_ORIGINS?.split(',') || ['http://localhost:3000'],
-      credentials: true,
-    },
-  });
-  
-  // ... existing configuration
-  
-  // ✅ Enable graceful shutdown
-  app.enableShutdownHooks();
-  
-  // ✅ Handle SIGTERM (Cloud Run shutdown signal)
-  process.on('SIGTERM', async () => {
-    console.log('SIGTERM received, shutting down gracefully...');
-    await app.close();
-    process.exit(0);
-  });
-  
-  const port = process.env.PORT || 4000;
-  await app.listen(port);
-  console.log(`API Gateway listening on port ${port}`);
-}
-
-bootstrap();
-```
-
----
+**Files to Update**: All NestJS services with NATS connections
 
 #### `services/auth-service/src/main.ts`
 
-**Add the Same Pattern**:
+**Current Code**:
 
 ```typescript
-async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
-  
-  // ... existing configuration
-  
-  // ✅ Enable graceful shutdown
-  app.enableShutdownHooks();
-  
-  // ✅ Handle SIGTERM
-  process.on('SIGTERM', async () => {
-    console.log('SIGTERM received, shutting down gracefully...');
-    await app.close();
-    process.exit(0);
-  });
-  
-  const port = process.env.PORT || 3001;
-  await app.listen(port);
-  console.log(`Auth Service listening on port ${port}`);
-}
+app.connectMicroservice<MicroserviceOptions>({
+  transport: Transport.NATS,
+  options: {
+    servers: [process.env.NATS_URL!],
+  },
+});
+```
 
-bootstrap();
+**Required Change**:
+
+```typescript
+app.connectMicroservice<MicroserviceOptions>({
+  transport: Transport.NATS,
+  options: {
+    servers: [process.env.NATS_URL!],
+    token: process.env.NATS_TOKEN,
+  },
+});
 ```
 
 ---
 
 #### `services/workspace-service/src/main.ts`
 
-**Add the Same Pattern**:
-
-```typescript
-async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
-  
-  // ... existing configuration
-  
-  // ✅ Enable graceful shutdown
-  app.enableShutdownHooks();
-  
-  // ✅ Handle SIGTERM
-  process.on('SIGTERM', async () => {
-    console.log('SIGTERM received, shutting down gracefully...');
-    await app.close();
-    process.exit(0);
-  });
-  
-  const port = process.env.PORT || 3002;
-  await app.listen(port);
-  console.log(`Workspace Service listening on port ${port}`);
-}
-
-bootstrap();
-```
+Apply the same change: add `token: process.env.NATS_TOKEN` to NATS options.
 
 ---
 
@@ -416,80 +208,20 @@ bootstrap();
 
 **Current State**:
 
--   WebSocket gateway likely exists at `apps/api-gateway/src/websocket/websocket.gateway.ts`
--   Uses default Socket.io in-memory adapter
--   No Redis integration
--   No graceful shutdown implementation
+- WebSocket gateway uses in-memory Maps for user tracking
+- No Redis integration
+- No graceful shutdown implementation
 
 **Problem**:
 
-1.  **Multi-Instance Failure**: Without Redis adapter, WebSocket connections are stored in memory of a single instance. When Cloud Run scales to multiple instances:
-    
-    -   Users connect to different instances randomly
-    -   Messages don't propagate between instances
-    -   Users can't see each other's real-time updates
-    -   **Result**: Virtual office features completely broken
-2.  **Memory Leaks**: Redis connections not properly closed on shutdown
-    
-    -   Causes connection pool exhaustion
-    -   Cloud Run restart delays
-    -   Potential data loss
+1. **Multi-Instance Failure**: Without Redis adapter, WebSocket connections are stored in memory of a single instance. When Cloud Run scales to multiple instances:
+   - Users connect to different instances randomly
+   - Messages don't propagate between instances
+   - Real-time features break completely
 
-**Impact**: 🔴 **DEPLOYMENT BLOCKER** - Your entire real-time collaboration feature will fail in production.
+2. **Memory Leaks**: Redis connections not properly closed on shutdown
 
-**File to Update**: `apps/api-gateway/src/websocket/websocket.gateway.ts`
-
-**Current Code** (from `apps/api-gateway/src/websocket/websocket.gateway.ts`):
-
-```typescript
-import {
-  WebSocketGateway,
-  WebSocketServer,
-  SubscribeMessage,
-  OnGatewayConnection,
-  OnGatewayDisconnect,
-  OnGatewayInit,
-  ConnectedSocket,
-  MessageBody,
-} from '@nestjs/websockets';
-import { Server, Socket } from 'socket.io';
-import { Logger } from '@nestjs/common';
-
-@WebSocketGateway({
-  cors: {
-    origin: process.env.CORS_ORIGINS?.split(',') || ['http://localhost:3000'],
-    credentials: true,
-  },
-})
-export class WebsocketGateway
-  implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect
-{
-  @WebSocketServer()
-  server: Server;
-
-  private logger: Logger = new Logger('WebsocketGateway');
-  // In-memory user tracking (only works with single instance)
-  private onlineUsers: Map<string, OnlineUser> = new Map();
-  private socketToUser: Map<string, string> = new Map();
-  private userWorkspaces: Map<string, string> = new Map();
-
-  afterInit(server: Server) {
-    this.logger.log('WebSocket Gateway initialized');
-    // ❌ No Redis adapter - user state lost when scaling
-    // ❌ No graceful shutdown - connections dropped abruptly
-  }
-
-  handleConnection(client: Socket) {
-    this.logger.log(`Client connected: ${client.id}`);
-  }
-
-  handleDisconnect(client: Socket) {
-    // ... cleanup logic using in-memory maps
-  }
-}
-```
-
-**Required Change**:
+**Impact**: 🔴 **DEPLOYMENT BLOCKER** - Real-time collaboration will fail in production.
 
 **Step 1**: Install dependencies
 
@@ -498,7 +230,7 @@ cd apps/api-gateway
 pnpm add @socket.io/redis-adapter redis
 ```
 
-**Step 2**: Update the gateway
+**Step 2**: Update `apps/api-gateway/src/websocket/websocket.gateway.ts`
 
 ```typescript
 import {
@@ -512,9 +244,9 @@ import {
   MessageBody,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
-import { Logger, OnModuleDestroy } from '@nestjs/common'; // ✅ Add OnModuleDestroy
-import { createAdapter } from '@socket.io/redis-adapter'; // ✅ Add Redis adapter
-import { createClient, RedisClientType } from 'redis'; // ✅ Add Redis client
+import { Logger, OnModuleDestroy } from '@nestjs/common';
+import { createAdapter } from '@socket.io/redis-adapter';
+import { createClient, RedisClientType } from 'redis';
 
 @WebSocketGateway({
   cors: {
@@ -523,16 +255,15 @@ import { createClient, RedisClientType } from 'redis'; // ✅ Add Redis client
   },
 })
 export class WebsocketGateway
-  implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect, OnModuleDestroy // ✅ Add OnModuleDestroy
+  implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect, OnModuleDestroy
 {
   @WebSocketServer()
   server: Server;
 
   private logger: Logger = new Logger('WebsocketGateway');
-  private pubClient: RedisClientType; // ✅ Store Redis clients
+  private pubClient: RedisClientType;
   private subClient: RedisClientType;
 
-  // ✅ Initialize Redis adapter
   async afterInit(server: Server) {
     if (process.env.REDIS_URL) {
       try {
@@ -562,7 +293,6 @@ export class WebsocketGateway
     this.logger.log(`Client disconnected: ${client.id}`);
   }
 
-  // ✅ Graceful shutdown for Redis connections
   async onModuleDestroy() {
     this.logger.log('Shutting down WebSocket gateway...');
     
@@ -582,41 +312,82 @@ export class WebsocketGateway
 
 ## High Priority Changes
 
-### 🟡 5. Health Check Endpoints
+### 🟡 5. Graceful Shutdown Implementation
 
-**Status**: ❌ **NOT IMPLEMENTED** - Critical for Cloud Run
+**Status**: ❌ **MISSING** - Services don't handle SIGTERM
 
-**Current State**:
-
--   No `/health` endpoints exist in any service
--   No `/health/ready` endpoints exist
--   Controllers likely don't have health check methods
-
-**Problem**: Cloud Run uses health checks to determine:
-
-1.  **Startup Probe**: Is the container ready to receive traffic?
-2.  **Liveness Probe**: Should the container be restarted?
-3.  **Readiness Probe**: Should traffic be routed to this instance?
-
-**Without health checks**:
-
--   ❌ Cloud Run may route traffic before service is ready
--   ❌ Unhealthy instances keep receiving requests (bad UX)
--   ❌ Failed deployments may not be detected
--   ❌ Auto-scaling decisions are less reliable
-
-**Impact**: 🟡 **HIGH** - Deployments may succeed but be unreliable. Users experience random errors.
+**Problem**: Cloud Run sends SIGTERM before stopping containers. Without handlers, connections are forcibly closed, causing data loss.
 
 **Files to Update**: All three NestJS services
 
-#### `apps/api-gateway/src/app.controller.ts`
-
-**Current State**: Likely has basic controller or doesn't exist
-
-**Add These Endpoints**:
+#### Add to `apps/api-gateway/src/main.ts`
 
 ```typescript
-import { Controller, Get, ServiceUnavailableException } from '@nestjs/common';
+async function bootstrap() {
+  const app = await NestFactory.create(AppModule, {
+    cors: {
+      origin: process.env.CORS_ORIGINS?.split(',') || ['http://localhost:3000'],
+      credentials: true,
+    },
+  });
+  
+  // ... existing configuration
+  
+  app.enableShutdownHooks();
+  
+  process.on('SIGTERM', async () => {
+    console.log('SIGTERM received, shutting down gracefully...');
+    await app.close();
+    process.exit(0);
+  });
+  
+  const port = process.env.PORT || 4000;
+  await app.listen(port);
+  console.log(`API Gateway listening on port ${port}`);
+}
+
+bootstrap();
+```
+
+Apply the same pattern to `services/auth-service/src/main.ts` and `services/workspace-service/src/main.ts`.
+
+---
+
+### 🟡 6. Health Check Endpoints
+
+**Status**: ⚠️ **PARTIALLY IMPLEMENTED** - Basic health exists, needs enhancement
+
+**Current State**:
+- `api-gateway` has `/health` and `/health` endpoints (basic, no DB check)
+- `auth-service` and `workspace-service` have no health endpoints
+
+**Problem**: Cloud Run uses health checks to determine:
+
+1. **Startup Probe**: Is the container ready to receive traffic?
+2. **Liveness Probe**: Should the container be restarted?
+3. **Readiness Probe**: Should traffic be routed to this instance?
+
+**Without health checks**:
+- ❌ Cloud Run may route traffic before service is ready
+- ❌ Unhealthy instances keep receiving requests
+- ❌ Failed deployments may not be detected
+
+**Files to Update**: All three NestJS services
+
+#### Update `apps/api-gateway/src/app.controller.ts`
+
+**Current Code** (basic health exists):
+```typescript
+@Get('health')
+getDetailedHealth(): object {
+  return this.appService.getDetailedHealth();
+}
+```
+
+**Required Change** (add DB connectivity check):
+
+```typescript
+import { Controller, Get } from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { PrismaService } from './prisma/prisma.service';
 
@@ -639,8 +410,12 @@ export class AppController {
   @ApiOperation({ summary: 'Readiness check with database connectivity' })
   async ready() {
     try {
-      // ✅ Verify database connection
-      await this.prisma.$queryRaw`SELECT 1`;
+      await Promise.race([
+        this.prisma.$queryRaw`SELECT 1`,
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Timeout')), 2000)
+        )
+      ]);
       
       return {
         status: 'ready',
@@ -649,8 +424,12 @@ export class AppController {
         timestamp: new Date().toISOString()
       };
     } catch (error) {
-      // ✅ Fail readiness if database is down
-      throw new ServiceUnavailableException('Database not ready');
+      return {
+        status: 'degraded',
+        database: 'unavailable',
+        service: 'api-gateway',
+        timestamp: new Date().toISOString()
+      };
     }
   }
 }
@@ -658,249 +437,46 @@ export class AppController {
 
 **Repeat for Other Services**:
 
--   `services/auth-service/src/app.controller.ts` (change service name to `'auth-service'`)
--   `services/workspace-service/src/app.controller.ts` (change service name to `'workspace-service'`)
-
-**Cloud Run Configuration** (will use these endpoints):
-
-```bash
-# In deployment commands
---startup-probe-http-path=/health/ready \
---liveness-probe-http-path=/health \
---readiness-probe-http-path=/health/ready
-```
-
----
-
-### 🟡 6. CORS Enhancement
-
-**Status**: ⚠️ **PARTIAL** - Basic CORS exists but needs enhancement
-
-**Problem**: Current CORS uses simple origin array. Production needs proper validation.
-
-**File to Update**: `apps/api-gateway/src/main.ts`
-
-**Current Code**:
-
-```typescript
-const app = await NestFactory.create(AppModule, {
-  cors: {
-    origin: process.env.CORS_ORIGINS?.split(',') || ['http://localhost:3000'],
-    credentials: true,
-  },
-});
-```
-
-**Required Change**:
-
-```typescript
-const allowedOrigins = process.env.CORS_ORIGINS?.split(',').filter(Boolean) || [];
-
-const app = await NestFactory.create(AppModule, {
-  cors: {
-    origin: (origin, callback) => {
-      // Allow requests with no origin (mobile apps, Postman, curl)
-      if (!origin) return callback(null, true);
-      
-      if (allowedOrigins.includes(origin)) {
-        callback(null, true);
-      } else {
-        callback(new Error('Not allowed by CORS'));
-      }
-    },
-    credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'Cookie'],
-  },
-});
-```
-
----
-
-### 🟡 7. Rate Limiting
-
-**Status**: ❌ **MISSING** - No rate limiting configured
-
-**Problem**: API is vulnerable to abuse without rate limiting.
-
-**File to Update**: `apps/api-gateway/src/app.module.ts`
-
-**Step 1**: Install dependency
-
-```bash
-cd apps/api-gateway
-pnpm add @nestjs/throttler
-```
-
-**Step 2**: Update module
-
-```typescript
-import { Module } from '@nestjs/common';
-import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler'; // ✅ Add
-import { APP_GUARD } from '@nestjs/core'; // ✅ Add
-
-@Module({
-  imports: [
-    // ✅ Add rate limiting
-    ThrottlerModule.forRoot([
-      {
-        name: 'short',
-        ttl: 1000,   // 1 second
-        limit: 10,   // 10 requests
-      },
-      {
-        name: 'long',
-        ttl: 60000,  // 1 minute
-        limit: 100,  // 100 requests
-      },
-    ]),
-    // ... other imports
-  ],
-  providers: [
-    // ✅ Apply rate limiting globally
-    {
-      provide: APP_GUARD,
-      useClass: ThrottlerGuard,
-    },
-    // ... other providers
-  ],
-})
-export class AppModule {}
-```
-
----
-
-## Recommended Enhancements
-
-### 💡 8. Structured Logging (Optional)
-
-**Status**: 📝 **RECOMMENDED** - Improves Cloud Logging experience
-
-**Install Dependencies**:
-
-```bash
-pnpm add winston nest-winston
-```
-
-**Update All Services** (`main.ts`):
-
-```typescript
-import { WinstonModule } from 'nest-winston';
-import * as winston from 'winston';
-
-async function bootstrap() {
-  const app = await NestFactory.create(AppModule, {
-    logger: WinstonModule.createLogger({
-      transports: [
-        new winston.transports.Console({
-          format: winston.format.combine(
-            winston.format.timestamp(),
-            winston.format.json() // ✅ JSON format for Cloud Logging
-          ),
-        }),
-      ],
-    }),
-  });
-  
-  // ... rest of configuration
-}
-```
+- `services/auth-service/src/app.controller.ts` (change service name to `'auth-service'`)
+- `services/workspace-service/src/app.controller.ts` (change service name to `'workspace-service'`)
 
 ---
 
 ## New Files to Create
 
-### 📄 9. NATS Configuration File
+### 📄 7. NATS Configuration File
 
 **Status**: ❌ **NOT CREATED** - Blocking NATS deployment
 
-**Current State**:
-
--   No `config/` directory exists in project root
--   `docker-compose.yml` likely uses default NATS command: `nats:latest` with no custom config
--   Development setup works because NATS doesn't need WebSocket support locally
--   **Production will fail** because Cloud Run exposes services via HTTPS only
-
-**Problem**: Cloud Run routes all traffic through HTTPS. Your NestJS services need to connect to NATS via WebSocket Secure (wss://) instead of native NATS protocol (nats://). Without WebSocket support in NATS config:
-
--   ❌ Services can't connect to NATS from Cloud Run
--   ❌ Microservice communication completely fails
--   ❌ Auth and workspace services are unreachable
--   ❌ **Result**: Application is non-functional
-
-**Impact**: 🔴 **DEPLOYMENT BLOCKER** - NATS container won't accept connections from Cloud Run services.
-
-**Required Action**:
-
-**Step 1**: Create directory structure
+**Create directory and file**:
 
 ```bash
 mkdir config
 ```
 
-**Step 2**: Create `config/nats.conf`
+**Create**: `config/nats.conf`
 
 ```conf
-# Cloud Run compatible NATS configuration
-
-# Port 4222 for internal connections
 port: 4222
 
-# HTTP monitoring endpoint (useful for debugging)
 http_port: 8222
 
-# ✅ CRITICAL: WebSocket support for Cloud Run
-# Cloud Run terminates TLS, so NATS doesn't need to handle it
-websocket {
-  port: 4222
-  no_tls: true  # Cloud Run handles TLS termination
-}
-
-# JetStream for message persistence and reliability
 jetstream {
   store_dir: /data
   max_memory_store: 256MB
   max_file_store: 1GB
 }
 
-# ✅ CRITICAL: Authentication to prevent unauthorized access
 authorization {
-  token: $NATS_TOKEN  # Environment variable injected from Secret Manager
+  token: $NATS_TOKEN
 }
 ```
 
-**Step 3**: Verify NATS Dockerfile references this file
-
-Check `docker/Dockerfile.nats`:
-
-```dockerfile
-FROM nats:latest
-
-COPY config/nats.conf /etc/nats/nats.conf
-
-EXPOSE 4222
-
-CMD ["--config", "/etc/nats/nats.conf"]
-```
-
-**Step 4**: Update service connection code
-
-All NestJS services connecting to NATS should use:
-
-```typescript
-// In main.ts or app.module.ts
-app.connectMicroservice<MicroserviceOptions>({
-  transport: Transport.NATS,
-  options: {
-    servers: [process.env.NATS_URL], // wss://ft-trans-nats-xxx.run.app:443
-    token: process.env.NATS_TOKEN,
-  },
-});
-```
+> **Note**: The `/data` directory is ephemeral in Cloud Run. JetStream messages will be lost on container restart. Design your application to handle this.
 
 ---
 
-### 📄 10. Migration Script
+### 📄 8. Migration Script
 
 **Status**: ❌ **MISSING** - Required for database migrations
 
@@ -910,15 +486,15 @@ app.connectMicroservice<MicroserviceOptions>({
 #!/bin/bash
 set -e
 
-echo "Running API Gateway migrations (DATABASE_URL_GATEWAY required)..."
+echo "Running API Gateway migrations..."
 cd /app/apps/api-gateway
 DATABASE_URL=$DATABASE_URL_GATEWAY npx prisma migrate deploy
 
-echo "Running Auth Service migrations (DATABASE_URL_AUTH required)..."
+echo "Running Auth Service migrations..."
 cd /app/services/auth-service
 DATABASE_URL=$DATABASE_URL_AUTH npx prisma migrate deploy
 
-echo "Running Workspace Service migrations (DATABASE_URL_WORKSPACE required)..."
+echo "Running Workspace Service migrations..."
 cd /app/services/workspace-service
 DATABASE_URL=$DATABASE_URL_WORKSPACE npx prisma migrate deploy
 
@@ -933,60 +509,20 @@ chmod +x scripts/migrate-all.sh
 
 ---
 
-### 📄 11. Production Dockerfiles
+### 📄 9. Production Dockerfiles
 
 **Status**: ❌ **MISSING** - Development Dockerfiles exist, production ones needed
 
 **Files to Create**:
 
--   `docker/Dockerfile.web.prod`
--   `docker/Dockerfile.gateway.prod`
--   `docker/Dockerfile.auth.prod`
--   `docker/Dockerfile.workspace.prod`
--   `docker/Dockerfile.nats`
--   `docker/Dockerfile.migrate`
+- `docker/Dockerfile.web.prod`
+- `docker/Dockerfile.gateway.prod`
+- `docker/Dockerfile.auth.prod`
+- `docker/Dockerfile.workspace.prod`
+- `docker/Dockerfile.nats`
+- `docker/Dockerfile.migrate`
 
 **Reference**: See deployment handbook Section 1.6 for complete Dockerfile contents.
-
----
-
-### 📄 12. Artifact Registry Cleanup Policy
-
-**Status**: ❌ **MISSING** - Will accumulate costs over time
-
-**Create**: `lifecycle-policy.json`
-
-```json
-{
-  "rules": [
-    {
-      "action": {"type": "Delete"},
-      "condition": {
-        "tagState": "untagged",
-        "olderThan": "7d"
-      }
-    }
-  ]
-}
-```
-
-**Apply**:
-
-```bash
-gcloud artifacts repositories set-cleanup-policies ft-trans \
-  --location=us-central1 \
-  --policy=lifecycle-policy.json
-```
-
----
-
-### 📄 13. CI/CD Pipeline Configuration
-
-**Status**: ❌ **MISSING** - Required for automated deployments
-
-**Create**: `cloudbuild.yaml`
-
-**Reference**: See deployment handbook Section "CI/CD Pipeline" for complete configuration.
 
 ---
 
@@ -994,30 +530,21 @@ gcloud artifacts repositories set-cleanup-policies ft-trans \
 
 ### Must Fix Before Deployment (Critical)
 
--    **Port Configuration**: Update all 3 NestJS `main.ts` files to use `process.env.PORT`
--    **Next.js Standalone**: Add `output: 'standalone'` to `next.config.ts`
--    **Graceful Shutdown**: Add SIGTERM handlers to all 3 NestJS services
--    **Redis Adapter**: Update WebSocket gateway with Redis adapter and graceful shutdown
+- [ ] **Port Configuration**: Update all 3 NestJS `main.ts` files to use `process.env.PORT`
+- [ ] **Next.js Standalone**: Add `output: 'standalone'` to `next.config.ts`
+- [ ] **Redis Adapter**: Update WebSocket gateway with Redis adapter and graceful shutdown
+- [ ] **NATS Token Auth**: Add token to all NATS connections
 
 ### High Priority (Should Fix)
 
--    **Health Checks**: Add health endpoints to all 3 NestJS services
--    **CORS Enhancement**: Improve CORS validation in API Gateway
--    **Rate Limiting**: Add throttler to API Gateway
--    **NATS Config**: Create `config/nats.conf` with WebSocket + token auth
--    **Migration Script**: Create `scripts/migrate-all.sh`
+- [ ] **Graceful Shutdown**: Add SIGTERM handlers to all 3 NestJS services
+- [ ] **Health Checks**: Add health endpoints to all 3 NestJS services
 
 ### New Files Needed
 
--    **Production Dockerfiles**: 5 new Dockerfiles in `docker/` directory
--    **CI/CD Config**: Create `cloudbuild.yaml`
--    **Cleanup Policy**: Create `lifecycle-policy.json`
-
-### Recommended Enhancements
-
--    **Structured Logging**: Add winston to all services
--    **Error Reporting**: Add @google-cloud/error-reporting
--    **Custom Metrics**: Add monitoring for WebSocket connections
+- [ ] **NATS Config**: Create `config/nats.conf` with token auth
+- [ ] **Migration Script**: Create `scripts/migrate-all.sh`
+- [ ] **Production Dockerfiles**: 6 new Dockerfiles in `docker/` directory
 
 ---
 
@@ -1052,19 +579,17 @@ docker build -f docker/Dockerfile.workspace.prod -t test-workspace .
 |------|------|----------|
 | Port configuration (3 files) | 15 min | Critical |
 | Next.js standalone | 2 min | Critical |
-| Graceful shutdown (3 files) | 20 min | Critical |
-| Redis adapter | 30 min | Critical |
+| Redis adapter + graceful shutdown | 30 min | Critical |
+| NATS token auth (2 files) | 10 min | Critical |
+| Graceful shutdown (3 files) | 20 min | High |
 | Health checks (3 files) | 30 min | High |
-| CORS enhancement | 10 min | High |
-| Rate limiting | 15 min | High |
-| NATS config + token auth | 10 min | High |
+| NATS config | 5 min | High |
 | Migration script | 10 min | High |
 | Production Dockerfiles | 45 min | High |
-| CI/CD config | 20 min | High |
 | **Total** | **~3 hours** | |
 
 ---
 
-> **Version**: 1.1  
+> **Version**: 2.0  
 > **Last Updated**: January 2026  
-> **Related Document**: DEPLOYMENT_HANDBOOK.md v4
+> **Related Document**: DEPLOYMENT_HANDBOOK.md

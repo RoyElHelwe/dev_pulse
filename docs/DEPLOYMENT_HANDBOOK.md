@@ -29,11 +29,13 @@
 
 | Service | Port | Technology | Purpose |
 |---------|------|-----------|---------|
-| **web** | 3000 | Next.js 16 + Phaser.js | Frontend with 2D virtual office |
-| **api-gateway** | 4000 | NestJS + Socket.io | REST API and WebSocket connections |
-| **auth-service** | 3001 | NestJS + Better Auth | Authentication, 2FA, OAuth |
-| **workspace-service** | 3002 | NestJS + Prisma | Workspace and team management |
-| **nats** | 4222 | NATS JetStream | Microservice communication |
+| **web** | 3000 | Next.js + Phaser.js | Frontend with 2D virtual office |
+| **api-gateway** | 4000 | NestJS + Socket.io + Prisma | Main backend: REST API, WebSocket, owns most data |
+| **auth-service** | 3001 | NestJS + Better Auth | Authentication, 2FA, OAuth (isolated for security) |
+| **workspace-service** | 3002 | NestJS + Prisma | Workspace CRUD, invitations, email dispatch |
+| **nats** | 4222 | NATS JetStream | Service-to-service messaging |
+
+> **Note**: Despite its name, `api-gateway` is the main backend service that owns User, Task, Sprint, Message, and AuditLog data. This is intentional for a small team.
 
 ---
 
@@ -48,7 +50,7 @@
         ┌───────────────────────┐           ┌───────────────────────────┐
         │    CLOUD RUN: WEB     │           │  CLOUD RUN: API-GATEWAY   │
         │   Port: 3000          │           │  Port: 4000               │
-        │   Next.js 16          │    ◄──────│  NestJS + Socket.io       │
+        │   Next.js             │    ◄──────│  NestJS + Socket.io       │
         │   output: standalone  │   HTTP    │  Redis Adapter            │
         │   Scale: 0-10         │           │  Scale: 1-5 (always-on)   │
         └───────────────────────┘           └─────────────┬─────────────┘
@@ -95,7 +97,7 @@
 | workspace-service | 0 | 3 | 512Mi | Yes | No | 3002 |
 | nats | 1 | 1 | 256Mi | Yes | No | 4222 |
 
-**Important**: Cloud Run uses the `$PORT` environment variable. All services must listen on this port.
+**Important**: Cloud Run injects the `$PORT` environment variable. All services must listen on `process.env.PORT`.
 
 ---
 
@@ -139,15 +141,23 @@ gcloud services enable \
 
 ### 1.2 Database Strategy & Connection Pooling
 
-We will use **Separate Databases** (Option B) for isolation and simplicity. Each service will connect to its own logical database within the Cloud SQL instance.
+We use **Separate Databases** for isolation. Each service connects to its own logical database within the Cloud SQL instance.
 
-#### Step 1: specific Connection Pooling (Required for Cloud Run)
+| Database | Service | Data Models |
+|----------|---------|-------------|
+| `ft_trans_gateway` | api-gateway | User, Session, Workspace, Task, Sprint, Message, AuditLog |
+| `ft_trans_auth` | auth-service | User, Session, Account, PasswordReset, VerificationToken |
+| `ft_trans_workspace` | workspace-service | Workspace, WorkspaceMember, Invitation |
 
-Cloud Run services can exhaust database connections quickly. Configure Prisma to handle this.
+> **Note**: User and Session appear in multiple databases. api-gateway is the main source of truth for application data. auth-service maintains its own copy for authentication isolation.
 
-**Action**: Update `schema.prisma` in **ALL** services (`api-gateway`, `auth-service`, `workspace-service`).
+> **Cost**: One Cloud SQL instance = one fixed cost (~$9/month for db-f1-micro). Stopping the instance stops all three databases.
 
-Change the `datasource` block to include `relationMode = "prisma"`:
+#### Step 1: Configure Connection Pooling
+
+Cloud Run services can exhaust database connections quickly. Connection pooling is configured via the connection string URL parameters.
+
+**Ensure `schema.prisma` in ALL services uses standard PostgreSQL configuration:**
 
 ```prisma
 datasource db {
@@ -156,7 +166,10 @@ datasource db {
 }
 ```
 
-> **Note**: Remove any `previewFeatures` or `relationMode` lines. We use standard PostgreSQL configuration. Connection pooling is handled via the connection string URL parameters.
+Connection pooling is configured in the connection string:
+```
+?connection_limit=5&pool_timeout=10
+```
 
 #### Step 2: Regenerate Prisma Clients
 
@@ -234,7 +247,6 @@ export class WebsocketGateway
     this.logger.log(`Client disconnected: ${client.id}`);
   }
 
-  // Graceful shutdown - required for Cloud Run
   async onModuleDestroy() {
     this.logger.log('Shutting down WebSocket gateway...');
     
@@ -356,7 +368,6 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
-# Include package.json for runtime
 COPY --from=builder /app/apps/web/package.json ./package.json
 COPY --from=builder /app/apps/web/public ./apps/web/public
 COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/standalone ./
@@ -390,7 +401,6 @@ FROM node:22-alpine
 WORKDIR /app
 ENV NODE_ENV=production
 
-# Include package.json for runtime
 COPY --from=builder /app/apps/api-gateway/package.json ./package.json
 COPY --from=builder /app/apps/api-gateway/dist ./dist
 COPY --from=builder /app/apps/api-gateway/prisma ./prisma
@@ -424,7 +434,6 @@ FROM node:22-alpine
 WORKDIR /app
 ENV NODE_ENV=production
 
-# Include package.json for runtime
 COPY --from=builder /app/services/auth-service/package.json ./package.json
 COPY --from=builder /app/services/auth-service/dist ./dist
 COPY --from=builder /app/services/auth-service/prisma ./prisma
@@ -457,7 +466,6 @@ FROM node:22-alpine
 WORKDIR /app
 ENV NODE_ENV=production
 
-# Include package.json for runtime
 COPY --from=builder /app/services/workspace-service/package.json ./package.json
 COPY --from=builder /app/services/workspace-service/dist ./dist
 COPY --from=builder /app/services/workspace-service/prisma ./prisma
@@ -500,7 +508,7 @@ gcloud sql instances create ft-trans-db \
   --storage-auto-increase \
   --backup-start-time=03:00
 
-# Create 3 Separate Databases (Option B)
+# Create 3 Separate Databases
 gcloud sql databases create ft_trans_gateway --instance=ft-trans-db
 gcloud sql databases create ft_trans_auth --instance=ft-trans-db
 gcloud sql databases create ft_trans_workspace --instance=ft-trans-db
@@ -528,7 +536,7 @@ DATABASE_URL="postgresql://ft_trans_user:PASSWORD@localhost/ft_trans_workspace?h
 ### 1.8 Memorystore Redis Setup
 
 ```bash
-# Create Memorystore Redis instance (Basic tier for learning)
+# Create Memorystore Redis instance (Basic tier)
 gcloud redis instances create ft-trans-redis \
   --size=1 \
   --region=us-central1 \
@@ -551,13 +559,11 @@ echo -n "redis://${REDIS_HOST}:6379" | gcloud secrets create redis-url --data-fi
 
 Cloud Run sends a SIGTERM signal to stop containers. Services must handle this to prevent data loss.
 
-**Action**: Add to `main.ts` of **ALL** services:
+**Add to `main.ts` of ALL services**:
 
 ```typescript
-// Enable shutdown hooks
 app.enableShutdownHooks();
 
-// Explicit SIGTERM handler
 process.on('SIGTERM', async () => {
   console.log('SIGTERM received, shutting down gracefully...');
   await app.close();
@@ -569,7 +575,7 @@ process.on('SIGTERM', async () => {
 
 ## Phase 2: High Priority Configuration
 
-### 2.1 VPC Connector (Cost Optimized)
+### 2.1 VPC Connector
 
 ```bash
 gcloud compute networks vpc-access connectors create ft-trans-connector \
@@ -590,15 +596,15 @@ Create `scripts/migrate-all.sh`:
 #!/bin/bash
 set -e
 
-echo "Running API Gateway migrations (DATABASE_URL_GATEWAY required)..."
+echo "Running API Gateway migrations..."
 cd /app/apps/api-gateway
 DATABASE_URL=$DATABASE_URL_GATEWAY npx prisma migrate deploy
 
-echo "Running Auth Service migrations (DATABASE_URL_AUTH required)..."
+echo "Running Auth Service migrations..."
 cd /app/services/auth-service
 DATABASE_URL=$DATABASE_URL_AUTH npx prisma migrate deploy
 
-echo "Running Workspace Service migrations (DATABASE_URL_WORKSPACE required)..."
+echo "Running Workspace Service migrations..."
 cd /app/services/workspace-service
 DATABASE_URL=$DATABASE_URL_WORKSPACE npx prisma migrate deploy
 
@@ -633,15 +639,13 @@ CMD ["./scripts/migrate-all.sh"]
 
 #### Create Migration Job
 
-After building the migration image, create the Cloud Run Job:
-
 ```bash
-# Build and push migration image first
+# Build and push migration image
 gcloud builds submit \
   --tag us-central1-docker.pkg.dev/ft-transcendence-prod/ft-trans/migrate:latest \
   -f docker/Dockerfile.migrate .
 
-# Create the migration job (run once during initial setup)
+# Create the migration job
 gcloud run jobs create ft-trans-migrate \
   --image=us-central1-docker.pkg.dev/ft-transcendence-prod/ft-trans/migrate:latest \
   --region=us-central1 \
@@ -654,13 +658,9 @@ gcloud run jobs create ft-trans-migrate \
 gcloud run jobs execute ft-trans-migrate --wait --region=us-central1
 ```
 
-> **Note**: This job should be created during initial setup. The CI/CD pipeline (cloudbuild.yaml) will update and re-execute it on subsequent deployments.
-
 ---
 
 ### 2.3 Cloud Run Service Account
-
-Create a dedicated identity for your services with minimal permissions.
 
 ```bash
 gcloud iam service-accounts create ft-trans-runner \
@@ -678,21 +678,16 @@ gcloud projects add-iam-policy-binding $PROJECT_ID \
 
 ---
 
-### 2.4 NATS Authentication & WebSockets
+### 2.4 NATS Authentication
 
-**Important for Cloud Run**: Cloud Run exposes services via HTTPS, so NATS must support WebSocket connections for external traffic.
+NATS is accessed internally via the private Cloud Run service URL using the native NATS protocol.
 
 Create `config/nats.conf`:
 
 ```conf
-# Cloud Run routes public traffic to this port
 port: 4222
 
-# Enable WebSockets for Cloud Run compatibility
-websocket {
-  port: 4222
-  no_tls: true  # Cloud Run handles TLS termination
-}
+http_port: 8222
 
 jetstream {
   store_dir: /data
@@ -705,44 +700,23 @@ authorization {
 }
 ```
 
+> **Note**: The `/data` directory is ephemeral in Cloud Run. JetStream messages will be lost on container restart.
+
 Store token in Secret Manager:
 ```bash
 openssl rand -base64 32 | gcloud secrets create nats-token --data-file=-
 ```
 
-> **Note**: Update your NATS client code to use `wss://` protocol when connecting in Cloud Run: `wss://ft-trans-nats-xxx.run.app:443`
-
----
-
-### 2.5 CORS Configuration
-
-**File**: `apps/api-gateway/src/main.ts`
-
+**Service Connection Configuration**:
 ```typescript
-const allowedOrigins = process.env.CORS_ORIGINS?.split(',').filter(Boolean) || [];
-
-const app = await NestFactory.create(AppModule, {
-  cors: {
-    origin: (origin, callback) => {
-      if (!origin) return callback(null, true);
-      if (allowedOrigins.includes(origin)) {
-        callback(null, true);
-      } else {
-        callback(new Error('Not allowed by CORS'));
-      }
-    },
-    credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'Cookie'],
-  },
-});
+NATS_URL=nats://ft-trans-nats-xxx.run.app:4222
 ```
 
 ---
 
-### 2.6 Health Check Endpoints
+### 2.5 Health Check Endpoints
 
-Add to each NestJS service:
+Add to each NestJS service with timeout handling:
 
 ```typescript
 @Controller()
@@ -757,14 +731,23 @@ export class AppController {
   @Get('health/ready')
   async ready() {
     try {
-      await this.prisma.$queryRaw`SELECT 1`;
+      await Promise.race([
+        this.prisma.$queryRaw`SELECT 1`,
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Timeout')), 2000)
+        )
+      ]);
       return { 
         status: 'ready', 
         database: 'connected', 
         timestamp: new Date().toISOString() 
       };
     } catch (error) {
-      throw new ServiceUnavailableException('Database not ready');
+      return { 
+        status: 'degraded', 
+        database: 'unavailable', 
+        timestamp: new Date().toISOString() 
+      };
     }
   }
 }
@@ -774,31 +757,7 @@ export class AppController {
 
 ## Phase 3: Optimization
 
-### 3.1 Artifact Registry Cleanup
-
-```bash
-cat > lifecycle-policy.json << 'EOF'
-{
-  "rules": [
-    {
-      "action": {"type": "Delete"},
-      "condition": {
-        "tagState": "untagged",
-        "olderThan": "7d"
-      }
-    }
-  ]
-}
-EOF
-
-gcloud artifacts repositories set-cleanup-policies ft-trans \
-  --location=us-central1 \
-  --policy=lifecycle-policy.json
-```
-
----
-
-### 3.2 Rate Limiting
+### 3.1 Rate Limiting
 
 ```bash
 cd apps/api-gateway
@@ -811,8 +770,7 @@ import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 @Module({
   imports: [
     ThrottlerModule.forRoot([
-      { name: 'short', ttl: 1000, limit: 10 },
-      { name: 'long', ttl: 60000, limit: 100 },
+      { name: 'default', ttl: 60000, limit: 100 },
     ]),
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
@@ -893,16 +851,22 @@ steps:
     args:
       - '-c'
       - |
-        gcloud run jobs update ft-trans-migrate \
+        gcloud run jobs describe ft-trans-migrate --region=us-central1 2>/dev/null || \
+        gcloud run jobs create ft-trans-migrate \
           --image=us-central1-docker.pkg.dev/$PROJECT_ID/ft-trans/migrate:$COMMIT_SHA \
           --region=us-central1 \
           --vpc-connector=ft-trans-connector \
           --add-cloudsql-instances=ft-transcendence-prod:us-central1:ft-trans-db \
           --set-secrets="DATABASE_URL_GATEWAY=database-url-gateway:latest,DATABASE_URL_AUTH=database-url-auth:latest,DATABASE_URL_WORKSPACE=database-url-workspace:latest"
+        
+        gcloud run jobs update ft-trans-migrate \
+          --image=us-central1-docker.pkg.dev/$PROJECT_ID/ft-trans/migrate:$COMMIT_SHA \
+          --region=us-central1
+        
         gcloud run jobs execute ft-trans-migrate --wait --region=us-central1
     waitFor: ['push-images']
 
-  # Deploy all services
+  # Deploy services
   - id: 'deploy-nats'
     name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     args: ['run', 'deploy', 'ft-trans-nats',
@@ -979,91 +943,40 @@ echo -n "google-client-secret" | gcloud secrets create google-oauth-secret --dat
 echo -n "resend-api-key" | gcloud secrets create resend-api-key --data-file=-
 ```
 
-### Service Environment Variables
-
-**Web Frontend**:
-| Variable | Example | Required |
-|----------|---------|----------|
-| PORT | 3000 | Yes |
-| NODE_ENV | production | Yes |
-| NEXT_PUBLIC_API_URL | https://ft-trans-api-gateway-xxx.run.app | Yes |
-| NEXT_PUBLIC_WS_URL | wss://ft-trans-api-gateway-xxx.run.app | Yes |
-
-**API Gateway**:
-| Variable | Example | Required |
-|----------|---------|----------|
-| PORT | 4000 | Yes |
-| NODE_ENV | production | Yes |
-| DATABASE_URL | (from secret) | Yes |
-| REDIS_URL | (from secret) | Yes |
-| JWT_SECRET | (from secret) | Yes |
-| NATS_URL | wss://ft-trans-nats:443 | Yes |
-| NATS_TOKEN | (from secret) | Yes |
-| CORS_ORIGINS | https://ft-trans-web-xxx.run.app | Yes |
-
-**Auth Service**:
-| Variable | Example | Required |
-|----------|---------|----------|
-| PORT | 3001 | Yes |
-| NODE_ENV | production | Yes |
-| DATABASE_URL | (from secret) | Yes |
-| NATS_URL | wss://ft-trans-nats:443 | Yes |
-| NATS_TOKEN | (from secret) | Yes |
-| FRONTEND_URL | https://ft-trans-web-xxx.run.app | Yes |
-| GITHUB_CLIENT_ID | abc123 | Yes |
-| GITHUB_CLIENT_SECRET | (from secret) | Yes |
-| GOOGLE_CLIENT_ID | abc123.apps.googleusercontent.com | Yes |
-| GOOGLE_CLIENT_SECRET | (from secret) | Yes |
-| RESEND_API_KEY | (from secret) | Yes |
-
-**Workspace Service**:
-| Variable | Example | Required |
-|----------|---------|----------|
-| PORT | 3002 | Yes |
-| NODE_ENV | production | Yes |
-| DATABASE_URL | (from secret) | Yes |
-| NATS_URL | wss://ft-trans-nats:443 | Yes |
-| NATS_TOKEN | (from secret) | Yes |
-
 ---
 
 ## Cost Summary
 
-### Revised Cost Estimate (Intermittent Usage)
+### Monthly Cost Estimate
 
-Assumptions: ~5 hours/day active usage (100 hours/month), scaling to zero when idle.
+| Service | Cost | Notes |
+|---------|------|-------|
+| Cloud Run (5 services) | $10-20 | Most scale to zero |
+| Cloud SQL db-f1-micro | $9 | Fixed cost while running |
+| VPC Connector | $41 | Fixed monthly cost |
+| Redis Memorystore | $35 | 1GB Basic tier |
+| Cloud Storage | $0-1 | Minimal usage |
+| **Total** | **$95-106** | |
 
-| Service | 24/7 Cost | Your Usage (100 hrs) | Notes |
-|---------|-----------|---------------------|-------|
-| Cloud Run - web | $15 | **~$2** | Scale to 0 when idle |
-| Cloud Run - api-gateway | $40 | **~$6** | min=1 only when active |
-| Cloud Run - auth | $8 | **~$1** | Scale to 0 |
-| Cloud Run - workspace | $8 | **~$1** | Scale to 0 |
-| Cloud Run - nats | $15 | **~$2** | |
-| Cloud SQL db-f1-micro | $9 | **~$9** | Billed while running* |
-| VPC Connector | $40 | **~$6** | Billed per hour |
-| **Memorystore Basic 1GB** | **$35** | **~$5-35** | **Option B** (Delete/Recreate) recommended |
-| **Total** | $170 | **~$32-62/month** | |
+> **Note**: VPC Connectors are billed per hour the connector exists (~$0.056/hour × 730 hours = ~$41/month).
 
-### Cost Optimization Tips
+### Cost Optimization
 
-1. **Cloud SQL**: Stop instance when not learning:
+1. **Stop Cloud SQL when not in use**:
    ```bash
    gcloud sql instances patch ft-trans-db --activation-policy=NEVER
    ```
-2. **Memorystore**: Delete instance (`gcloud redis instances delete`) when done for the day and recreate (`gcloud redis instances create`) when starting.
-3. **Budget**: Set specific budget alerts for daily spending.
 
-```bash
-gcloud billing budgets create \
-  --billing-account=YOUR_BILLING_ACCOUNT_ID \
-  --display-name="FT Trans Budget" \
-  --budget-amount=300USD \
-  --threshold-rules=percent=0.25 \
-  --threshold-rules=percent=0.5 \
-  --threshold-rules=percent=0.75 \
-  --threshold-rules=percent=0.9
-```
+2. **Set budget alerts**:
+   ```bash
+   gcloud billing budgets create \
+     --billing-account=YOUR_BILLING_ACCOUNT_ID \
+     --display-name="FT Trans Budget" \
+     --budget-amount=300USD \
+     --threshold-rules=percent=0.25 \
+     --threshold-rules=percent=0.5 \
+     --threshold-rules=percent=0.75
+   ```
 
 ---
 
@@ -1080,30 +993,6 @@ gcloud run services update-traffic ft-trans-api-gateway \
   --to-revisions=ft-trans-api-gateway-00005-abc=100 \
   --region=us-central1
 ```
-
-### Rollback Database Migrations
-
-**⚠️ CAUTION**: Database rollbacks can cause data loss. Review carefully!
-
-```bash
-# Check migration status
-cd apps/api-gateway
-npx prisma migrate status
-
-# Mark migration as rolled back (does NOT undo changes)
-npx prisma migrate resolve --rolled-back MIGRATION_NAME
-
-# For actual rollback, create a new "down" migration
-npx prisma migrate dev --name rollback_MIGRATION_NAME
-```
-
-### Emergency Rollback Procedure
-
-1. **Stop traffic**: Route all traffic to previous revision
-2. **Assess damage**: Check logs and database state
-3. **Decide**: Manual fix vs full rollback
-4. **Execute**: Apply fix or rollback migration
-5. **Verify**: Test all endpoints before restoring traffic
 
 ---
 
@@ -1146,7 +1035,7 @@ gcloud run deploy ft-trans-api-gateway \
   --timeout=3600 \
   --session-affinity \
   --no-cpu-throttling \
-  --set-env-vars="NODE_ENV=production,CORS_ORIGINS=https://ft-trans-web-xxx.run.app,NATS_URL=wss://ft-trans-nats-xxx.run.app:443" \
+  --set-env-vars="NODE_ENV=production,CORS_ORIGINS=https://ft-trans-web-xxx.run.app,NATS_URL=nats://ft-trans-nats-xxx.run.app:4222" \
   --set-secrets="DATABASE_URL=database-url-gateway:latest,REDIS_URL=redis-url:latest,JWT_SECRET=jwt-secret:latest,NATS_TOKEN=nats-token:latest"
 
 # Auth Service
@@ -1158,8 +1047,8 @@ gcloud run deploy ft-trans-auth-service \
   --min-instances=0 --max-instances=3 \
   --memory=512Mi --cpu=1 \
   --port=3001 \
-  --set-env-vars="NODE_ENV=production,FRONTEND_URL=https://ft-trans-web-xxx.run.app,GITHUB_CLIENT_ID=xxx,GOOGLE_CLIENT_ID=xxx,NATS_URL=wss://ft-trans-nats-xxx.run.app:443" \
-  --set-secrets="DATABASE_URL=database-url-auth:latest,GITHUB_CLIENT_SECRET=github-oauth-secret:latest,GOOGLE_CLIENT_SECRET=google-oauth-secret:latest,RESEND_API_KEY=resend-api-key:latest,NATS_TOKEN=nats-token:latest"
+  --set-env-vars="NODE_ENV=production,FRONTEND_URL=https://ft-trans-web-xxx.run.app,NATS_URL=nats://ft-trans-nats-xxx.run.app:4222" \
+  --set-secrets="DATABASE_URL=database-url-auth:latest,NATS_TOKEN=nats-token:latest,RESEND_API_KEY=resend-api-key:latest"
 
 # Workspace Service
 gcloud run deploy ft-trans-workspace-service \
@@ -1170,7 +1059,7 @@ gcloud run deploy ft-trans-workspace-service \
   --min-instances=0 --max-instances=3 \
   --memory=512Mi --cpu=1 \
   --port=3002 \
-  --set-env-vars="NODE_ENV=production,NATS_URL=wss://ft-trans-nats-xxx.run.app:443" \
+  --set-env-vars="NODE_ENV=production,NATS_URL=nats://ft-trans-nats-xxx.run.app:4222" \
   --set-secrets="DATABASE_URL=database-url-workspace:latest,NATS_TOKEN=nats-token:latest"
 ```
 
@@ -1193,33 +1082,30 @@ gcloud builds submit --config=cloudbuild.yaml
 
 ### Phase 1: Critical
 - [ ] Project created and APIs enabled
-- [ ] Prisma schemas configured (standard public schema, NO @@schema annotations)
+- [ ] Prisma schemas configured
 - [ ] Prisma clients regenerated
-- [ ] Three databases created: ft_trans_gateway, ft_trans_auth, ft_trans_workspace
-- [ ] Three database URL secrets created in Secret Manager
-- [ ] Prisma migrations created
-- [ ] WebSocket Redis adapter with graceful shutdown
+- [ ] Three databases created
+- [ ] Database URL secrets created
+- [ ] WebSocket Redis adapter implemented
 - [ ] `output: 'standalone'` in next.config.ts
-- [ ] Port configuration using `$PORT` variable
-- [ ] Production Dockerfiles with package.json included
+- [ ] Port configuration using `$PORT`
+- [ ] Production Dockerfiles created
 - [ ] Cloud SQL instance created
-- [ ] VPC connector created (1 min instance)
+- [ ] VPC connector created
 
 ### Phase 2: High Priority
 - [ ] Migration Dockerfile and script created
 - [ ] NATS authentication configured
-- [ ] Winthin NATS config: websockets enabled
 - [ ] All secrets stored in Secret Manager
-- [ ] CORS configured with production origins
 - [ ] Health check endpoints added
+- [ ] Graceful shutdown implemented
 
 ### Phase 3: Optimization
-- [ ] Artifact Registry cleanup policy
 - [ ] Rate limiting configured
-- [ ] Budget alerts set at 25%, 50%, 75%, 90%
-- [ ] Rollback procedure documented and tested
+- [ ] Budget alerts set
+- [ ] Rollback procedure tested
 
 ---
 
-> **Version**: 4
+> **Version**: 6  
 > **Last Updated**: January 2026
