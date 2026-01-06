@@ -8,7 +8,8 @@ import {
   UsersIcon, 
   SettingsIcon, 
   UserPlusIcon,
-  BuildingIcon
+  BuildingIcon,
+  OfficeIcon
 } from '@/components/ui/icons'
 import { type WorkspaceRole, getRolePermissions } from '@/lib/types'
 
@@ -26,6 +27,7 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { label: 'Dashboard', href: '/dashboard', icon: HomeIcon, permission: 'canAccessDashboard' },
+  { label: 'Virtual Office', href: '/office', icon: OfficeIcon },
   { label: 'Team', href: '/team', icon: UsersIcon, permission: 'canAccessTeam' },
   { label: 'Invite Members', href: '/team/invite', icon: UserPlusIcon, permission: 'canInviteMembers' },
   { label: 'Workspace', href: '/workspace', icon: BuildingIcon, permission: 'canAccessWorkspace' },

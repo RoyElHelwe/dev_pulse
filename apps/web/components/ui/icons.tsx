@@ -182,3 +182,18 @@ export function RefreshIcon({ className, size = 20 }: IconProps) {
     </svg>
   )
 }
+
+export function OfficeIcon({ className, size = 20 }: IconProps) {
+  return (
+    <svg className={className} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M2 22h20" />
+      <path d="M6 18v-7a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v7" />
+      <path d="M6 22v-4" />
+      <path d="M18 22v-4" />
+      <path d="M10 14h4" />
+      <path d="M10 18h4" />
+      <path d="M12 2v7" />
+      <circle cx="12" cy="5" r="2" />
+    </svg>
+  )
+}
