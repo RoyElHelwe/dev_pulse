@@ -28,7 +28,7 @@
 
 ### Evolution Strategy
 
-This architecture extends the existing system by adding **5 major real-time features** using only **5 services** (no new services added):
+This architecture extends the existing system by adding **5 major real-time features** using only **4 services** (reduced from 5 by removing NATS):
 
 Feature
 
@@ -40,7 +40,7 @@ Priority
 
 **2D Multiplayer Game**
 
-WebSocket + Redis
+WebSocket + Redis (Phase 2+)
 
 api-gateway
 
@@ -48,7 +48,7 @@ Phase 1
 
 **Real-time Notifications**
 
-WebSocket + NATS
+WebSocket (direct broadcast)
 
 api-gateway
 
@@ -78,13 +78,13 @@ api-gateway
 
 Phase 3
 
-### Service Count: 5 (Same as Current)
+### Service Count: 4 (Reduced from 5)
 
 Service
 
 Role
 
-Data Owned
+Data Owned (Single Owner)
 
 **web**
 
@@ -94,58 +94,64 @@ None (stateless)
 
 **api-gateway**
 
-WebSocket Hub + REST API
+Main Backend + WebSocket Hub
 
-User, Session, Workspace, Task, Sprint, Message, AuditLog
+Task, Sprint, Message, AuditLog
 
 **auth-service**
 
 Authentication (Better Auth)
 
-User, Session, Account (auth-specific copy)
+User, Session, Account, VerificationToken, PasswordReset
 
 **workspace-service**
 
-Workspace CRUD + Invitations
+Workspace Management
 
 Workspace, WorkspaceMember, Invitation
 
-**nats**
-
-Message Broker
-
-None (stateless)
-
-> **Architecture Note**: The api-gateway is not a pure gateway—it owns most application data and handles business logic. This is intentional for a small team (1-3 developers). The auth-service maintains a separate User/Session store for authentication isolation.
+> **⚠️ Single-Owner Data Model**: Each data model has exactly ONE authoritative service:
+> 
+> -   **User/Session**: auth-service is the ONLY owner. api-gateway validates tokens via HTTP calls to auth-service.
+> -   **Workspace**: workspace-service is the ONLY owner. api-gateway proxies workspace requests.
+> -   **Tasks/Messages**: api-gateway owns these directly (no proxy needed).
+> 
+> This eliminates data sync issues and conflicting schemas.
 
 ### Cost Target
 
--   **Phase 1**: $80-100/month (free tier + minimal paid usage)
--   **Phase 2**: $100-130/month (scaling optimization)
--   **Phase 3**: $130-180/month (production ready within free credit)
+-   **Phase 1**: $21-39/month (no Redis, single api-gateway instance)
+-   **Phase 2**: $77-99/month (add Redis for multi-instance scaling)
+-   **Phase 3**: $88-120/month (production ready within free credit)
 
 ### Design Principles
 
 1.  **Minimal Services**: Extend existing services, don't add new ones
 2.  **Cloud Run Native**: All services run on Cloud Run (no GKE, no always-on VMs)
 3.  **Scale to Zero**: Most services scale to zero when idle
-4.  **Shared Infrastructure**: Reuse Redis, PostgreSQL, NATS across features
+4.  **Direct HTTP**: Services communicate via HTTP calls (no message broker needed in Phase 1)
 
 ---
 
 ## System Architecture Overview
 
 ```
-┌────────────────────────────────────────────────────────────────────────────────┐│                                 INTERNET                                       │└────────────────────────────────┬───────────────────────────────────────────────┘                                 │                    ┌────────────┴────────────┐                    │                         │                    ▼                         ▼        ┌──────────────────────┐   ┌──────────────────────────┐        │   CLOUD RUN: WEB     │   │  CLOUD RUN: API-GATEWAY  │        │   Next.js 16 +       │   │  REST + WebSocket Hub    │        │   Phaser.js          │◄──┤  Game + Voice + Notif    │        │   Scale: 0-10        │   │  Scale: 1-5 (Always-On)  │        │   Memory: 512Mi      │   │  Memory: 1Gi             │        └──────────────────────┘   └────────────┬─────────────┘                                                 │                    ┌────────────────────────────┼────────────────────────────┐                    │                            │                            │                    ▼                            ▼                            ▼        ┌──────────────────────┐   ┌──────────────────────┐   ┌──────────────────────┐        │ CLOUD RUN: AUTH-SVC  │   │ CLOUD RUN: WORKSPACE │   │   CLOUD RUN: NATS    │        │ Auth + 2FA + OAuth   │   │ Workspace + Tasks +  │   │   Message Broker     │        │ HTTP Only            │   │ Whiteboard Storage   │   │   Scale: 1 (Fixed)   │        │ Scale: 0-3           │   │ Scale: 0-3           │   │   Memory: 256Mi      │        │ Memory: 512Mi        │   │ Memory: 512Mi        │   │                      │        └──────────┬───────────┘   └──────────┬───────────┘   └──────────────────────┘                   │                          │                   └──────────────────────────┼──────────────────────────────┘                                              │                    ┌─────────────────────────┼─────────────────────────┐                    │                         │                         │                    ▼                         ▼                         ▼        ┌──────────────────────┐   ┌──────────────────────┐   ┌──────────────────────┐        │   VPC CONNECTOR      │   │   SECRET MANAGER     │   │   CLOUD STORAGE      │        │  Private Networking  │   │   Credentials        │   │   Whiteboard Assets  │        └──────────┬───────────┘   └──────────────────────┘   └──────────────────────┘                   │        ┌──────────┴─────────────────────────────────────────────┐        │                                                         │        ▼                                                        ▼┌──────────────────┐                                 ┌──────────────────┐│   CLOUD SQL      │                                 │      REDIS       ││   PostgreSQL 16  │                                 │   Memorystore    ││   3 Databases    │                                 │   WebSocket Pub  ││   Scale: Fixed   │                                 │   Game State     │└──────────────────┘                                 └──────────────────┘
+┌────────────────────────────────────────────────────────────────────────────────┐│                                 INTERNET                                       │└────────────────────────────────┬───────────────────────────────────────────────┘                                 │                    ┌────────────┴────────────┐                    │                         │                    ▼                         ▼        ┌──────────────────────┐   ┌──────────────────────────┐        │   CLOUD RUN: WEB     │   │  CLOUD RUN: API-GATEWAY  │        │   Next.js 16 +       │   │  REST + WebSocket Hub    │        │   Phaser.js          │◄──┤  Game + Voice + Notif    │        │   Scale: 0-10        │   │  Scale: 1 (Phase 1)      │        │   Memory: 512Mi      │   │  Memory: 1Gi             │        └──────────────────────┘   └────────────┬─────────────┘                                                 │                    ┌────────────────────────────┼────────────────────────────┐                    │                            │                            │                    ▼                            ▼                            ▼        ┌──────────────────────┐   ┌──────────────────────┐        │ CLOUD RUN: AUTH-SVC  │   │ CLOUD RUN: WORKSPACE │        │ Auth + 2FA + OAuth   │   │ Workspace + Invites  │        │ HTTP Only            │   │ HTTP Only            │        │ Scale: 0-2           │   │ Scale: 0-2           │        │ Memory: 512Mi        │   │ Memory: 512Mi        │        └──────────┬───────────┘   └──────────┬───────────┘                   │                          │                   └──────────────────────────┼──────────────────────────────┘                                              │                    ┌─────────────────────────┼─────────────────────────┐                    │                         │                         │                    ▼                         ▼                         ▼        ┌──────────────────────┐   ┌──────────────────────┐   ┌──────────────────────┐        │   VPC CONNECTOR      │   │   SECRET MANAGER     │   │   CLOUD STORAGE      │        │  Private Networking  │   │   Credentials        │   │   Whiteboard Assets  │        └──────────┬───────────┘   └──────────────────────┘   └──────────────────────┘                   │        ┌──────────┴─────────────────────────────────────────────┐        │                                                         │        ▼                                                        ▼┌──────────────────┐                                 ┌──────────────────┐│   CLOUD SQL      │                                 │      REDIS       ││   PostgreSQL 16  │                                 │   Memorystore    ││   3 Databases    │                                 │   (Phase 2+)     ││   Scale: Fixed   │                                 │   WebSocket Pub  │└──────────────────┘                                 └──────────────────┘
 ```
 
-### Why 5 Services (Not 8)?
+### Why 4 Services (Not 8)?
 
 Concern
 
 8-Service Approach
 
-5-Service Approach (Chosen)
+4-Service Approach (Chosen)
+
+Concern
+
+8-Service Approach
+
+4-Service Approach (Chosen)
 
 **Complexity**
 
@@ -157,7 +163,7 @@ Low (extend existing services)
 
 ~$150-200/month base
 
-~$80-100/month base
+~$21-39/month (Phase 1)
 
 **Cold starts**
 
@@ -197,6 +203,12 @@ Cost-efficient, simpler architecture
 
 All real-time in one place
 
+**No NATS in Phase 1**
+
+Cloud Run HTTP-only, direct calls simpler
+
+Add Pub/Sub in Phase 2 if needed
+
 **Extend workspace-service**
 
 Reuse existing database, Prisma setup
@@ -205,27 +217,27 @@ Larger service, but simpler overall
 
 **No notification-service**
 
-NATS + api-gateway handles it
+api-gateway broadcasts directly
 
 Less separation, but fewer moving parts
 
 **No realtime-service**
 
-api-gateway handles game loop
+api-gateway handles game relay
 
-Game loop in gateway (acceptable for <100 concurrent)
+Relay logic in gateway (acceptable for <100 concurrent)
 
-**Redis for state**
+**Redis Phase 2+**
 
 Required for multi-instance WS
 
-~$35/month fixed cost
+$35/month fixed cost (deferred)
 
 ---
 
 ## Service Architecture
 
-### Service Responsibilities (5 Services Total)
+### Service Responsibilities (4 Services Total)
 
 #### 1. **web** (Frontend - Stateless)
 
@@ -256,30 +268,29 @@ Required for multi-instance WS
 **Responsibilities:**
 
 -   REST API for all application features
--   **Data ownership**: User, Workspace, Task, Sprint, Message, AuditLog
+-   **Data ownership**: Task, Sprint, Message, AuditLog
 -   **WebSocket hub** for ALL real-time features:
     -   2D game movement sync
     -   Real-time notifications
     -   Task updates (Kanban)
     -   Chat messages
-    -   Whiteboard strokes (future)
-    -   Voice call signaling (WebRTC SDP/ICE, future)
--   Game server loop (30 FPS tick rate)
+    -   Whiteboard strokes (Phase 2)
+    -   Voice call signaling (WebRTC SDP/ICE, Phase 3)
+-   Client-authoritative game state (Phase 1)
 -   Session validation (via auth-service)
 -   Rate limiting
 
-> **Note**: Despite its name, api-gateway is the main backend service. It owns most data models and handles business logic directly. This is intentional for simplicity.
+> **Note**: Despite its name, api-gateway is the main backend service. It owns task-related data models and handles business logic directly. This is intentional for simplicity.
 
 **Communication:**
 
 -   ← `web`: HTTP + WebSocket
 -   → `auth-service`: HTTP (token validation)
--   → `workspace-service`: NATS (workspace events)
--   ↔ `redis`: WebSocket pub/sub, game state
+-   → `workspace-service`: HTTP (workspace queries)
+-   ↔ `redis`: WebSocket pub/sub, game state (Phase 2+)
 -   ↔ `postgresql`: Application data
--   ↔ `nats`: Service communication
 
-**State:** Stateful (min 1 instance, session affinity enabled)
+**State:** Stateful (min 1 instance, max 1 in Phase 1, session affinity enabled)
 
 ---
 
@@ -299,7 +310,7 @@ Required for multi-instance WS
 **Communication:**
 
 -   ← `api-gateway`: HTTP (auth checks)
--   → `nats`: Email events (welcome, 2FA codes)
+-   → `resend`: Email API (welcome, 2FA codes)
 -   ↔ `postgresql`: User data, sessions
 
 **State:** Stateless (scales to zero)
@@ -319,9 +330,9 @@ Required for multi-instance WS
 
 > **Note**: Task, Sprint, and Message models are owned by api-gateway, not workspace-service. This is by design—api-gateway handles most business logic to reduce inter-service communication.
 
-**Communication:**
+### Communication
 
--   ← `api-gateway`: HTTP + NATS
+-   ← `api-gateway`: HTTP (workspace queries)
 -   ↔ `postgresql`: Workspace, Member, Invitation data
 -   → `resend`: Email delivery
 
@@ -329,17 +340,15 @@ Required for multi-instance WS
 
 ---
 
-#### 5. **nats** (Message Broker - Stateful)
+## 5. Service Communication (Direct HTTP)
 
-**Port**: 4222 | **Tech**: NATS JetStream | **Scale**: 1 (Fixed)
+Services communicate via internal Cloud Run URLs using HTTP. No message broker is needed in **Phase 1**.
 
-**Responsibilities:**
+### Internal Communication Pattern
 
--   Microservice message queue
--   Event bus between services
--   Request-reply pattern
-
-**State:** Stateful (always running, single instance)
+```typescript
+// api-gateway → auth-service (token validation)const response = await fetch(  'https://auth-service-xxx.run.app/internal/validate',  {    method: 'POST',    headers: { Authorization: `Bearer ${token}` }  });// api-gateway → workspace-service (get workspace data)const workspace = await fetch(  `https://workspace-service-xxx.run.app/internal/workspaces/${id}`);
+```
 
 ---
 
@@ -350,39 +359,77 @@ Required for multi-instance WS
 **Technology Stack:**
 
 -   **Frontend**: Phaser.js 3.x
--   **Backend**: NestJS game server
--   **State Sync**: Redis + WebSocket
+-   **Backend**: NestJS (relay server, NOT game server)
+-   **State Sync**: Client-authoritative with server relay
 -   **Protocol**: Socket.io
+
+> **⚠️ Architecture Decision**: Server-authoritative 30 FPS tick rate is incompatible with Cloud Run auto-scaling (state would split across instances). We use **client-authoritative** model instead.
 
 **Architecture:**
 
 ```
-┌──────────────┐        WebSocket         ┌──────────────────┐│   Phaser.js  │◄─────────────────────────►│  api-gateway     ││   Game Client│     Movement events       │  Game Loop (30fps)││              │◄─────────────────────────►│  State Authority │└──────────────┘    Position updates       └────────┬─────────┘                                                    │                                                    ▼                                           ┌──────────────────┐                                           │      Redis       │                                           │  Player Positions│                                           │  Game Objects    │                                           └──────────────────┘
+┌──────────────┐        WebSocket         ┌──────────────────┐│   Phaser.js  │◄─────────────────────────►│  api-gateway     ││   Game Client│     Position updates      │  RELAY SERVER    ││   (Authority)│◄─────────────────────────►│  (No game logic) │└──────────────┘    Broadcast to room      └──────────────────┘        │        ▼  Client validates  own movement
 ```
 
-**Data Flow:**
+**Data Flow (Client-Authoritative):**
 
 1.  Player presses arrow key in Phaser
-2.  Client emits `player:move` to api-gateway via WebSocket
-3.  api-gateway validates move, updates Redis
-4.  api-gateway broadcasts `player:moved` to all players in workspace room
-5.  Phaser interpolates movement on all clients
+2.  Client validates move locally (collision detection on client)
+3.  Client updates own position and emits `player:position` to server
+4.  Server broadcasts position to all players in workspace room (no validation)
+5.  Other clients render received positions with interpolation
 
-> **Note**: api-gateway handles the game loop directly. There is no separate realtime-service.
+**Why Client-Authoritative?**
+
+Aspect
+
+Server-Authoritative
+
+Client-Authoritative
+
+Auto-scaling
+
+❌ Breaks state
+
+✅ Works perfectly
+
+Latency
+
+High (round-trip)
+
+Low (immediate)
+
+Cheat prevention
+
+✅ Strong
+
+⚠️ Trust clients
+
+Complexity
+
+High
+
+Low
+
+Cost
+
+High (always-on)
+
+Low (can scale to 0)
+
+> **Acceptable for our use case**: This is a collaborative workspace, not a competitive game. Cheating is not a concern.
 
 **State Management:**
 
--   **Redis Keys**:
-    -   `game:workspace:{workspaceId}:players` (Hash of player positions)
-    -   `game:workspace:{workspaceId}:objects` (Game objects state)
--   **TTL**: 1 hour (auto-cleanup inactive sessions)
--   **Persistence**: Checkpoint to PostgreSQL every 5 minutes (optional)
+-   **In-Memory (Single Instance)**: Player positions stored in api-gateway memory
+-   **No Redis Required for Phase 1**: With `min-instances=1` + `--session-affinity`, all WebSocket connections go to same instance
+-   **PostgreSQL (Optional)**: Checkpoint positions for reconnection
 
 **Scalability:**
 
--   Game server loop runs in api-gateway
--   Shared state via Redis (required for multi-instance)
--   Rate limit: 60 move commands/second per player
+-   Phase 1: Single instance (`min-instances=1`, `max-instances=1`)
+-   Phase 2+: If scaling needed, add Redis for cross-instance pub/sub
+-   Rate limit: 20 position updates/second per player (sufficient for smooth movement)
 
 ---
 
@@ -391,14 +438,13 @@ Required for multi-instance WS
 **Technology Stack:**
 
 -   **Push**: WebSocket (Socket.io)
--   **Queue**: Cloud Pub/Sub
 -   **Email**: Resend API
 -   **Storage**: PostgreSQL (history)
 
 **Architecture:**
 
 ```
-┌──────────────┐                          ┌──────────────────┐│ Any Service  │────NATS Event───────────►│  api-gateway     ││ (Task, etc)  │   notification.created   │  Receive Event   │└──────────────┘                          └────────┬─────────┘                                                   │                        ┌──────────────────────────┼──────────────────┐                        │                          │                  │                        ▼                          ▼                  ▼              ┌──────────────────┐      ┌──────────────┐    ┌──────────────┐              │   Web Client     │      │ workspace-   │    │ workspace-   │              │ WebSocket Push   │      │ service      │    │ service      │              │ Toast Notification│      │ Resend Email │    │ Save History │              └──────────────────┘      └──────────────┘    └──────────────┘
+┌──────────────┐                          ┌──────────────────┐│ api-gateway  │────Direct Broadcast─────►│   Web Clients    ││ (Task CRUD)  │   notification.created   │   WebSocket      │└──────────────┘                          └──────────────────┘       │       ├────── Optional: Save to history (PostgreSQL)       │       └────── Optional: Send email via Resend API
 ```
 
 **Notification Types:**
@@ -471,46 +517,47 @@ WebSocket + Email
 
 **Technology Stack:**
 
--   **Frontend**: React + Canvas API (or Excalidraw)
--   **Backend**: NestJS + Redis
--   **Persistence**: PostgreSQL + Cloud Storage
--   **Sync**: Operational Transformation (OT) or CRDT
+-   **Frontend**: Excalidraw (recommended) or tldraw
+-   **Backend**: NestJS (relay only)
+-   **Sync**: Yjs CRDT (conflict-free)
+-   **Persistence**: PostgreSQL (Yjs document snapshots)
 
-**Architecture:**
+> **⚠️ Why Not Custom Canvas + Last-Write-Wins?**
+> 
+> -   Last-write-wins causes data loss when users draw simultaneously
+> -   Building collaborative editing from scratch is a 6+ month project
+> -   Excalidraw + Yjs is battle-tested and free
+
+**Recommended: Excalidraw Integration**
 
 ```
-┌──────────────┐     WebSocket        ┌──────────────────┐│ Canvas UI    │◄────────────────────►│  api-gateway     ││ Draw Stroke  │   stroke:add event   │  Broadcast Hub   ││ Excalidraw   │◄────────────────────►│  Persist to DB   │└──────────────┘   stroke:added evt   └────────┬─────────┘                                                │                        ┌───────────────────────┼────────────────────┐                        │                       │                    │                        ▼                       ▼                    ▼              ┌──────────────────┐    ┌──────────────┐    ┌──────────────┐              │      Redis       │    │ PostgreSQL   │    │Cloud Storage │              │ Active Strokes   │    │ Whiteboard   │    │ Canvas PNG   │              │ Temp Buffer      │    │ Strokes      │    │ Snapshots    │              └──────────────────┘    └──────────────┘    └──────────────┘
+┌──────────────────┐     WebSocket        ┌──────────────────┐│   Excalidraw     │◄────────────────────►│  api-gateway     ││   (Yjs built-in) │   Yjs sync protocol  │  y-websocket     ││                  │◄────────────────────►│  relay server    │└──────────────────┘                      └────────┬─────────┘                                                   │                                                   ▼                                          ┌──────────────────┐                                          │   PostgreSQL     │                                          │   Yjs snapshots  │                                          │   (BYTEA column) │                                          └──────────────────┘
 ```
 
-> **Note**: api-gateway handles whiteboard operations directly. The whiteboard tables will be added to api-gateway's Prisma schema (Phase 2 feature).
+**Implementation (Phase 2):**
+
+```typescript
+// Install: pnpm add y-websocket yjs @excalidraw/excalidraw// Backend: y-websocket server in api-gatewayimport { WebsocketProvider } from 'y-websocket';// Frontend: Excalidraw with Yjsimport { Excalidraw } from '@excalidraw/excalidraw';import * as Y from 'yjs';import { WebsocketProvider } from 'y-websocket';const ydoc = new Y.Doc();const provider = new WebsocketProvider(  'wss://api-gateway.run.app',  `whiteboard-${whiteboardId}`,  ydoc);
+```
 
 **Data Model:**
 
-**PostgreSQL (persistent):**
-
 ```sql
-CREATE TABLE whiteboards (  id UUID PRIMARY KEY,  workspace_id UUID NOT NULL,  name VARCHAR(255),  created_by UUID,  created_at TIMESTAMP,  last_modified TIMESTAMP);CREATE TABLE whiteboard_strokes (  id UUID PRIMARY KEY,  whiteboard_id UUID,  user_id UUID,  stroke_data JSONB, -- {type, points, color, width, timestamp}  created_at TIMESTAMP,  INDEX idx_whiteboard_time (whiteboard_id, created_at));
-```
-
-**Redis (real-time):**
-
-```
-whiteboard:{id}:active_users   SET      [userId1, userId2]whiteboard:{id}:cursor:{user}  STRING   {x, y, timestamp}whiteboard:{id}:lock:{object}  STRING   userId  (TTL: 30s)
+CREATE TABLE whiteboards (  id UUID PRIMARY KEY,  workspace_id UUID NOT NULL,  name VARCHAR(255),  yjs_state BYTEA, -- Yjs document state (binary)  created_by UUID,  created_at TIMESTAMP,  updated_at TIMESTAMP);
 ```
 
 **Synchronization Strategy:**
 
--   **Real-time**: All strokes broadcast via WebSocket
--   **Conflict resolution**: Last-write-wins (simple)
--   **Optimization**: Batch strokes every 100ms
--   **Persistence**: Save to PostgreSQL every 5 seconds
--   **Snapshot**: Generate PNG every 1 minute (Cloud Storage)
+-   **Real-time**: Yjs CRDT handles all conflict resolution automatically
+-   **No data loss**: CRDTs mathematically guarantee convergence
+-   **Persistence**: Snapshot Yjs state to PostgreSQL every 30 seconds
+-   **Reconnection**: Load Yjs state from DB, sync catches up automatically
 
 **Scalability:**
 
--   50 concurrent users per whiteboard
--   10 whiteboards per workspace
--   Stroke rate limit: 100/second per user
+-   Unlimited concurrent users (Yjs handles it)
+-   Stroke rate: No artificial limit needed (Yjs batches efficiently)
+-   Memory: ~1MB per active whiteboard
 
 ---
 
@@ -529,7 +576,7 @@ whiteboard:{id}:active_users   SET      [userId1, userId2]whiteboard:{id}:cursor
 ┌──────────────┐                            ┌──────────────────┐│ Kanban Board │──────HTTP POST─────────────►│  api-gateway     ││ Drag Task    │     /tasks/:id/move        │  Update Database ││              │◄───────200 OK──────────────│  (owns Task data)││              │                            └────────┬─────────┘│              │                                     ││              │                                     │ WebSocket│              │                                     ▼│              │                            ┌──────────────────┐│              │◄───WebSocket Broadcast────│  api-gateway     ││              │   task:moved event        │  Broadcast to WS │└──────────────┘                            └──────────────────┘
 ```
 
-> **Simplified Flow**: api-gateway handles task operations directly without NATS roundtrip to workspace-service. This reduces latency and complexity.
+> **Simplified Flow**: api-gateway handles task operations directly. This reduces latency and complexity.
 
 **Data Model:**
 
@@ -663,43 +710,47 @@ POST /api/tasksGET /api/workspaces/:idPUT /api/users/me
 
 ---
 
-### Pattern 3: NATS (Async Commands & Events)
+### Pattern 3: Direct HTTP (Service-to-Service)
+
+> **Phase 1**: Uses direct HTTP instead of NATS for simplicity.
 
 **Use Cases:**
 
--   Service-to-service communication
--   Event broadcasting
--   Request-reply pattern
--   Background jobs
-
-**Message Types:**
-
--   **Commands**: `{ cmd: 'create_task' }`
--   **Events**: `{ event: 'task.created' }`
--   **Replies**: `{ success: true, data: {...} }`
+-   Token validation (api-gateway → auth-service)
+-   Workspace queries (api-gateway → workspace-service)
+-   Email triggers (api-gateway → workspace-service)
 
 **Example:**
 
 ```typescript
-// api-gateway → workspace-service (command)nats.send({ cmd: 'create_task' }, data)// workspace-service → api-gateway (event)nats.publish('task.created', task)// api-gateway → auth-service (request-reply)const user = await nats.request({ cmd: 'get_user' }, { userId })
+// api-gateway → auth-service (token validation)const response = await fetch('http://auth-service/internal/validate', {  method: 'POST',  headers: { 'Authorization': `Bearer ${token}` }});// api-gateway → workspace-service (get workspace)const workspace = await fetch(  `http://workspace-service/internal/workspaces/${id}`);
 ```
+
+**Cloud Run Internal URLs:**
+
+```
+https://auth-service-xxx-uc.a.run.apphttps://workspace-service-xxx-uc.a.run.app
+```
+
+> **Phase 2+**: Add Google Cloud Pub/Sub for async events if needed.
 
 ---
 
-### Pattern 4: Redis (Shared State)
+### Pattern 4: Redis (Phase 2+ Only)
 
-**Use Cases:**
+> **Phase 1**: Not required with single api-gateway instance.**Phase 2+**: Required when api-gateway scales to 2+ instances.
 
--   WebSocket session affinity
--   Game state cache
+**Use Cases (when added):**
+
+-   WebSocket pub/sub across instances
+-   Game state synchronization
 -   Rate limiting
 -   Distributed locks
--   Cursor positions
 
 **Data Structures:**
 
 ```
-STRING: session:{sessionId}HASH: player:{userId}SET: workspace:{id}:membersZSET: leaderboard:workspace:{id}PUBSUB: workspace:{id}:events
+PUBSUB: workspace:{id}:eventsHASH: game:workspace:{id}:playersSTRING: ratelimit:{ip}:{endpoint}
 ```
 
 ---
@@ -713,7 +764,7 @@ STRING: session:{sessionId}HASH: player:{userId}SET: workspace:{id}:membersZSET:
 -   Stay under $100/month
 -   Validate architecture
 
-### Services Deployed (5 Total)
+### Services Deployed (4 Total — No NATS in Phase 1)
 
 Service
 
@@ -725,6 +776,8 @@ Memory
 
 Always-On?
 
+DB Connections
+
 web
 
 0
@@ -735,15 +788,19 @@ web
 
 No
 
+0
+
 api-gateway
 
 1
 
-3
+1
 
 1Gi
 
-Yes (min 1)
+Yes
+
+3
 
 auth-service
 
@@ -755,6 +812,8 @@ auth-service
 
 No
 
+3 per instance
+
 workspace-service
 
 0
@@ -765,15 +824,9 @@ workspace-service
 
 No
 
-nats
+3 per instance
 
-1
-
-1
-
-256Mi
-
-Yes (fixed)
+> **Phase 1 Constraint**: api-gateway is limited to `max-instances=1` to avoid Redis requirement. Scale to 3+ in Phase 2 with Redis.
 
 ### Features Enabled
 
@@ -789,17 +842,29 @@ Yes (fixed)
 
 -   Instance: db-f1-micro ($9/month)
 -   Databases: 3 (gateway, auth, workspace)
+-   **Max connections**: 25 (db-f1-micro limit)
 
-**Redis:**
+> **⚠️ Connection Limit Calculation:**
+> 
+> -   api-gateway: max 3 instances × 3 connections = 9
+> -   auth-service: max 2 instances × 3 connections = 6
+> -   workspace-service: max 2 instances × 3 connections = 6
+> -   **Total**: 21 connections (within 25 limit)
+> 
+> Use `connection_limit=3` in all DATABASE_URL strings.
 
--   Memorystore Basic 1GB ($35/month)
--   Purpose: WebSocket adapter + game state
+**Redis (Phase 1: OPTIONAL):**
+
+-   With `min-instances=1` + `max-instances=1` + `--session-affinity`, Redis is not required
+-   Add Redis in Phase 2 when scaling api-gateway beyond 1 instance
+-   Cost if added: Memorystore Basic 1GB ($35/month)
 
 **VPC Connector:**
 
--   1 min instance ($41/month fixed)
+-   e2-micro instances: ~$7/month (min 2 instances)
+-   Required for Cloud SQL private IP access
 
-### Cost Breakdown (Phase 1)
+### Cost Breakdown (Phase 1) — Corrected
 
 Item
 
@@ -807,29 +872,29 @@ Cost
 
 Notes
 
-Cloud Run (5 services)
+Cloud Run (4 services)
 
-$10-20
+$5-15
 
-Most scale to zero
+No NATS service; most scale to zero
 
-Cloud SQL
+Cloud SQL db-f1-micro
 
 $9
 
-db-f1-micro
+Shared instance, 3 databases
 
 VPC Connector
 
-$41
+$7-14
 
-Fixed cost
+e2-micro min 2 instances (~$0.01/hr each)
 
 Redis Memorystore
 
-$35
+$0
 
-1GB Basic tier
+**Not needed in Phase 1** (single instance)
 
 Cloud Storage
 
@@ -837,9 +902,17 @@ $0-1
 
 < 1GB
 
+Secret Manager
+
+$0
+
+Free tier (6 secrets)
+
 **Total**
 
-**$95-106**
+**$21-39**
+
+> **Phase 1 Optimization**: By using single-instance api-gateway with session affinity, we eliminate the $35/month Redis cost. Add Redis in Phase 2 when scaling is needed.
 
 ### Deployment Order
 
@@ -847,18 +920,17 @@ $0-1
     
     -   Enable APIs
     -   Create VPC + Connector
-    -   Create Cloud SQL instance
-    -   Create Redis instance
-    -   Create secrets
+    -   Create Cloud SQL instance (db-f1-micro)
+    -   Create secrets (no Redis in Phase 1)
 2.  **Core Services** (Day 2)
     
-    -   Deploy nats
     -   Deploy auth-service
     -   Deploy workspace-service
+    -   Run Prisma migrations
 3.  **Main Backend** (Day 3)
     
-    -   Deploy api-gateway (WebSocket + REST API + Task/Sprint tables)
-    -   Configure CORS
+    -   Deploy api-gateway (max-instances=1, WebSocket + REST API)
+    -   Configure CORS and session affinity
     -   Test WebSocket connectivity
 4.  **Frontend** (Day 4)
     
@@ -867,14 +939,14 @@ $0-1
 
 ### Validation Checklist
 
--    User can login
--    User can create workspace
--    User can create task (Kanban)
--    Task updates show real-time
--    2D game loads and shows player
--    Player movement syncs across clients
--    Notifications appear in browser
--    All services scale to zero when idle (except api-gateway, nats)
+-   User can login
+-   User can create workspace
+-   User can create task (Kanban)
+-   Task updates show real-time
+-   2D game loads and shows player
+-   Player movement syncs across clients
+-   Notifications appear in browser
+-   All services scale to zero when idle (except api-gateway min=1)
 
 ---
 
@@ -929,9 +1001,9 @@ Delta
 
 Cloud Run
 
-$20-35
+$25-40
 
-+$10-15
++$5-10
 
 Cloud SQL
 
@@ -941,15 +1013,15 @@ $0
 
 VPC Connector
 
-$41
+$7-14
 
 $0
 
-Redis
+**Redis (NEW)**
 
-$35
+**$35**
 
-$0
+**+$35**
 
 Cloud Storage
 
@@ -959,9 +1031,9 @@ $1
 
 **Total**
 
-**$106-121**
+**$77-99**
 
-**+$11-15**
+**+$41-46**
 
 ### Deployment Steps
 
@@ -989,9 +1061,9 @@ WebSocket latency
 
 < 50ms p95
 
-Game tick rate
+Player position broadcast
 
-30 FPS
+< 100ms
 
 Whiteboard stroke lag
 
@@ -1040,9 +1112,9 @@ Delta
 
 Cloud Run
 
-$25-40
+$30-50
 
-+$5
++$5-10
 
 Cloud SQL
 
@@ -1052,7 +1124,7 @@ $0
 
 VPC Connector
 
-$41
+$7-14
 
 $0
 
@@ -1076,9 +1148,9 @@ $2
 
 **Total**
 
-**$117-137**
+**$88-120**
 
-**+$11-16**
+**+$11-21**
 
 ### Deployment Steps
 
@@ -1109,7 +1181,7 @@ $2
 
 Phase
 
-Services
+Cloud Run
 
 Infrastructure
 
@@ -1117,27 +1189,29 @@ Total
 
 Phase 1
 
-$10-20
+$15-25
 
-$85
+$16-23
 
-**$95-106**
+**$21-39**
 
 Phase 2
 
-$20-35
+$25-40
 
-$86
+$52-58
 
-**$106-121**
+**$77-99**
 
 Phase 3
 
-$25-40
+$30-50
 
-$92
+$58-69
 
-**$117-137**
+**$88-120**
+
+> **Note**: Phase 1 saves ~$35/mo by deferring Redis until Phase 2.
 
 ### Why This Is Cheaper Than 8 Services
 
@@ -1145,7 +1219,7 @@ Aspect
 
 8 Services
 
-5 Services
+4 Services
 
 Savings
 
@@ -1185,7 +1259,7 @@ Deployment
 
 8 pipelines
 
-5 pipelines
+4 pipelines
 
 CI/CD cost
 
@@ -1195,17 +1269,17 @@ CI/CD cost
 
 -   auth-service: 0-2 instances
 -   workspace-service: 0-2 instances
--   Only api-gateway + nats stay warm
+-   Only api-gateway stays warm (min=1)
 
 **2. Keep Database Small:**
 
 -   Stay on db-f1-micro ($9/mo) as long as possible
 -   Upgrade only when CPU > 80% sustained
 
-**3. Redis is Fixed Cost:**
+**3. Redis is Phase 2+ Cost:**
 
--   $35/mo for Memorystore
--   Worth it for WebSocket multi-instance support
+-   $35/mo for Memorystore (added in Phase 2)
+-   Required when api-gateway scales to 2+ instances
 -   No cheaper alternative on GCP
 
 ---
@@ -1232,36 +1306,38 @@ CI/CD cost
 # Create Cloud SQL instancegcloud sql instances create ft-trans-db   --database-version=POSTGRES_16   --tier=db-f1-micro   --region=us-central1   --network=ft-trans-vpc   --no-assign-ip# Create databasesgcloud sql databases create ft_trans_gateway --instance=ft-trans-dbgcloud sql databases create ft_trans_auth --instance=ft-trans-dbgcloud sql databases create ft_trans_workspace --instance=ft-trans-dbgcloud sql databases create ft_trans_tasks --instance=ft-trans-db# Set passwordgcloud sql users set-password postgres   --instance=ft-trans-db   --password=$(openssl rand -base64 32)
 ```
 
-**Redis Setup:**
+**Redis Setup (Phase 2+ Only):**
 
 ```bash
-# Create Memorystore instancegcloud redis instances create ft-trans-redis   --size=1   --region=us-central1   --tier=BASIC   --network=ft-trans-vpc
+# Create Memorystore instance (skip for Phase 1)gcloud redis instances create ft-trans-redis   --size=1   --region=us-central1   --tier=BASIC   --network=ft-trans-vpc
 ```
 
 **Secrets Setup:**
 
 ```bash
-# Database URLsecho -n "postgresql://user:pass@/ft_trans_gateway?host=/cloudsql/$PROJECT_ID:us-central1:ft-trans-db"   | gcloud secrets create database-url-gateway --data-file=-echo -n "postgresql://user:pass@/ft_trans_auth?host=/cloudsql/$PROJECT_ID:us-central1:ft-trans-db"   | gcloud secrets create database-url-auth --data-file=-echo -n "postgresql://user:pass@/ft_trans_workspace?host=/cloudsql/$PROJECT_ID:us-central1:ft-trans-db"   | gcloud secrets create database-url-workspace --data-file=-echo -n "postgresql://user:pass@/ft_trans_tasks?host=/cloudsql/$PROJECT_ID:us-central1:ft-trans-db"   | gcloud secrets create database-url-tasks --data-file=-# Redis URLREDIS_HOST=$(gcloud redis instances describe ft-trans-redis --region=us-central1 --format="value(host)")echo -n "redis://$REDIS_HOST:6379" | gcloud secrets create redis-url --data-file=-# JWT Secretopenssl rand -base64 64 | gcloud secrets create jwt-secret --data-file=-# NATS Tokenopenssl rand -base64 32 | gcloud secrets create nats-token --data-file=-
+# Database URLsecho -n "postgresql://user:pass@/ft_trans_gateway?host=/cloudsql/$PROJECT_ID:us-central1:ft-trans-db"   | gcloud secrets create database-url-gateway --data-file=-echo -n "postgresql://user:pass@/ft_trans_auth?host=/cloudsql/$PROJECT_ID:us-central1:ft-trans-db"   | gcloud secrets create database-url-auth --data-file=-echo -n "postgresql://user:pass@/ft_trans_workspace?host=/cloudsql/$PROJECT_ID:us-central1:ft-trans-db"   | gcloud secrets create database-url-workspace --data-file=-# JWT Secretopenssl rand -base64 64 | gcloud secrets create jwt-secret --data-file=-# Phase 2+: Add Redis URL after creating Memorystore# REDIS_HOST=$(gcloud redis instances describe ft-trans-redis --region=us-central1 --format="value(host)")# echo -n "redis://$REDIS_HOST:6379" | gcloud secrets create redis-url --data-file=-
 ```
 
 ### Service Deployment Commands
 
-**NATS:**
+**API Gateway (Phase 1: max-instances=1):**
 
 ```bash
-gcloud run deploy ft-trans-nats   --image=us-central1-docker.pkg.dev/$PROJECT_ID/ft-trans/nats:latest   --region=us-central1   --allow-unauthenticated   --min-instances=1 --max-instances=1   --memory=256Mi --cpu=0.5   --port=4222   --set-secrets="NATS_TOKEN=nats-token:latest"
+gcloud run deploy ft-trans-api-gateway   --image=us-central1-docker.pkg.dev/$PROJECT_ID/ft-trans/api-gateway:latest   --region=us-central1   --allow-unauthenticated   --vpc-connector=ft-trans-connector   --add-cloudsql-instances=$PROJECT_ID:us-central1:ft-trans-db   --min-instances=1 --max-instances=1   --memory=1Gi --cpu=1   --port=4000   --timeout=3600   --session-affinity   --no-cpu-throttling   --set-env-vars="NODE_ENV=production"   --set-secrets="DATABASE_URL=database-url-gateway:latest,JWT_SECRET=jwt-secret:latest"
 ```
 
-**API Gateway:**
-
-```bash
-gcloud run deploy ft-trans-api-gateway   --image=us-central1-docker.pkg.dev/$PROJECT_ID/ft-trans/api-gateway:latest   --region=us-central1   --allow-unauthenticated   --vpc-connector=ft-trans-connector   --add-cloudsql-instances=$PROJECT_ID:us-central1:ft-trans-db   --min-instances=1 --max-instances=5   --memory=1Gi --cpu=1   --port=4000   --timeout=3600   --session-affinity   --no-cpu-throttling   --set-env-vars="NODE_ENV=production,NATS_URL=nats://ft-trans-nats:4222"   --set-secrets="DATABASE_URL=database-url-gateway:latest,REDIS_URL=redis-url:latest,JWT_SECRET=jwt-secret:latest,NATS_TOKEN=nats-token:latest"
-```
+> **Phase 2+**: Increase `--max-instances=5` and add `REDIS_URL=redis-url:latest` secret.
 
 **Workspace Service:**
 
 ```bash
-gcloud run deploy ft-trans-workspace-service   --image=us-central1-docker.pkg.dev/$PROJECT_ID/ft-trans/workspace-service:latest   --region=us-central1   --vpc-connector=ft-trans-connector   --add-cloudsql-instances=$PROJECT_ID:us-central1:ft-trans-db   --min-instances=0 --max-instances=3   --memory=512Mi --cpu=1   --port=3002   --set-env-vars="NODE_ENV=production,NATS_URL=nats://ft-trans-nats:4222"   --set-secrets="DATABASE_URL=database-url-workspace:latest,NATS_TOKEN=nats-token:latest,RESEND_API_KEY=resend-api-key:latest"
+gcloud run deploy ft-trans-workspace-service   --image=us-central1-docker.pkg.dev/$PROJECT_ID/ft-trans/workspace-service:latest   --region=us-central1   --vpc-connector=ft-trans-connector   --add-cloudsql-instances=$PROJECT_ID:us-central1:ft-trans-db   --min-instances=0 --max-instances=2   --memory=512Mi --cpu=1   --port=3002   --set-env-vars="NODE_ENV=production"   --set-secrets="DATABASE_URL=database-url-workspace:latest,RESEND_API_KEY=resend-api-key:latest"
+```
+
+**Auth Service:**
+
+```bash
+gcloud run deploy ft-trans-auth-service   --image=us-central1-docker.pkg.dev/$PROJECT_ID/ft-trans/auth-service:latest   --region=us-central1   --vpc-connector=ft-trans-connector   --add-cloudsql-instances=$PROJECT_ID:us-central1:ft-trans-db   --min-instances=0 --max-instances=2   --memory=512Mi --cpu=1   --port=3001   --set-env-vars="NODE_ENV=production"   --set-secrets="DATABASE_URL=database-url-auth:latest,JWT_SECRET=jwt-secret:latest"
 ```
 
 ### CI/CD Pipeline
@@ -1281,7 +1357,7 @@ steps:  # Build web  - name: 'gcr.io/cloud-builders/docker'    args: ['build', '
 **All Services:**
 
 ```typescript
-@Controller()export class AppController {  @Get('health')  health() {    return { status: 'healthy', timestamp: new Date() }  }  @Get('health/ready')  async ready() {    // Check dependencies    await this.checkDatabase()    await this.checkRedis()    return { status: 'ready' }  }}
+@Controller()export class AppController {  @Get('health')  health() {    return { status: 'healthy', timestamp: new Date() }  }  @Get('health/ready')  async ready() {    // Check dependencies    await this.checkDatabase()    // Phase 2+: await this.checkRedis()    return { status: 'ready' }  }}
 ```
 
 **Cloud Run Configuration:**
@@ -1301,7 +1377,7 @@ import { Logger } from '@nestjs/common'const logger = new Logger('WebSocketGatew
 **Log Queries:**
 
 ```
-# WebSocket errorsresource.type="cloud_run_revision"resource.labels.service_name="ft-trans-api-gateway"severity>=ERROR# Slow queriesresource.type="cloud_run_revision"jsonPayload.duration_ms>1000# Game server tick rateresource.type="cloud_run_revision"jsonPayload.game_tick_duration_ms>33
+# WebSocket errorsresource.type="cloud_run_revision"resource.labels.service_name="ft-trans-api-gateway"severity>=ERROR# Slow queriesresource.type="cloud_run_revision"jsonPayload.duration_ms>1000# Player position broadcastsresource.type="cloud_run_revision"jsonPayload.message="Player moved"
 ```
 
 ### Metrics
@@ -1309,7 +1385,7 @@ import { Logger } from '@nestjs/common'const logger = new Logger('WebSocketGatew
 **Custom Metrics:**
 
 ```typescript
-import { Counter, Histogram } from 'prom-client'const wsConnectionsTotal = new Counter({  name: 'websocket_connections_total',  help: 'Total WebSocket connections'})const gameTickDuration = new Histogram({  name: 'game_tick_duration_seconds',  help: 'Game server tick duration'})
+import { Counter, Histogram } from 'prom-client';const wsConnectionsTotal = new Counter({  name: 'websocket_connections_total',  help: 'Total WebSocket connections'});const positionBroadcastDuration = new Histogram({  name: 'position_broadcast_duration_seconds',  help: 'Time to broadcast player position'});
 ```
 
 ### Alerts
@@ -1318,29 +1394,29 @@ import { Counter, Histogram } from 'prom-client'const wsConnectionsTotal = new C
 
 1.  API Gateway down (5xx > 10%)
 2.  Database connections exhausted
-3.  Redis memory > 90%
+3.  Redis memory > 90% (Phase 2+)
 4.  WebSocket disconnect rate > 20%
 
 **Warning Alerts:**
 
 1.  Cloud Run cold starts > 10/min
 2.  Database CPU > 70%
-3.  Game tick lag > 50ms
-4.  NATS message queue > 1000
+3.  Player broadcast lag > 100ms
+4.  HTTP errors to internal services > 5%
 
 ---
 
 ## Conclusion
 
-This architecture provides a **production-ready, cost-efficient deployment** for ft_transcendence on Google Cloud Run, extending the existing system with 5 major real-time features while staying within the $300 free credit budget.
+This architecture provides a **production-ready, cost-efficient deployment** for ft_transcendence on Google Cloud Run, extending the existing system with real-time features while staying within the $300 free credit budget.
 
 ### Key Achievements
 
-✅ **Cost-Efficient:** $100-220/month across 3 phases  
+✅ **Cost-Efficient:** $21-120/month across 3 phases  
 ✅ **Scalable:** Auto-scales from 0 to handle spikes  
-✅ **Real-Time:** WebSocket, WebRTC, and Pub/Sub integration  
+✅ **Real-Time:** WebSocket and WebRTC integration  
 ✅ **Cloud-Native:** 100% Cloud Run, no VMs or GKE  
-✅ **Maintainable:** Clear service boundaries, NATS for async
+✅ **Maintainable:** Clear service boundaries, direct HTTP for service communication
 
 ### Next Steps
 
