@@ -24,16 +24,24 @@ interface WorkspaceInfo {
 
 export function AppLayout({ children }: AppLayoutProps) {
   const router = useRouter()
+  const pathname = usePathname()
   const { user, isAuthenticated, isLoading, checkAuth } = useAuth()
   const [workspace, setWorkspace] = useState<WorkspaceInfo | null>(null)
   const [workspaceLoading, setWorkspaceLoading] = useState(true)
   const initializedRef = useRef(false)
   const [isRoleChecked, setIsRoleChecked] = useState(false)
 
+  // Skip workspace checks on onboarding page
+  const isOnboarding = pathname === '/onboarding'
+
   useEffect(() => {
-    // Prevent running multiple times using ref (doesn't cause re-render)
-    if (initializedRef.current) return
-    initializedRef.current = true
+    // Allow re-initialization when navigating away from onboarding
+    if (initializedRef.current && isOnboarding) return
+    
+    // Reset initialization when leaving onboarding
+    if (!isOnboarding && !initializedRef.current) {
+      initializedRef.current = true
+    }
 
     const init = async () => {
       try {
@@ -43,7 +51,14 @@ export function AppLayout({ children }: AppLayoutProps) {
         return
       }
 
+      // Skip workspace fetch on onboarding page
+      if (isOnboarding) {
+        setWorkspaceLoading(false)
+        return
+      }
+
       // Fetch workspace info
+      setWorkspaceLoading(true)
       try {
         const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/workspaces/status`, {
           credentials: 'include',
@@ -72,14 +87,11 @@ export function AppLayout({ children }: AppLayoutProps) {
     }
 
     init()
-  }, [])
-
-  // Check role-based access for current route
-  const pathname = usePathname()
+  }, [pathname, isOnboarding])
 
   // Role-based route protection
   useEffect(() => {
-    if (!workspace || workspaceLoading) return
+    if (!workspace || workspaceLoading || isOnboarding) return
 
     const permissions = getRolePermissions(workspace.role)
     
@@ -91,10 +103,10 @@ export function AppLayout({ children }: AppLayoutProps) {
       router.push('/team')
     }
     setIsRoleChecked(true)
-  }, [pathname, workspace, workspaceLoading, router])
+  }, [pathname, workspace, workspaceLoading, router, isOnboarding])
 
-  // Show loading while checking auth or workspace
-  if (isLoading || workspaceLoading) {
+  // Show loading while checking auth (but not on onboarding page)
+  if (isLoading || (workspaceLoading && !isOnboarding)) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <LoadingSpinner message="Loading your workspace..." />
@@ -103,10 +115,30 @@ export function AppLayout({ children }: AppLayoutProps) {
   }
 
   // Not authenticated
-  if (!isAuthenticated || !user || !isRoleChecked) {
+  if (!isAuthenticated || !user) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <LoadingSpinner message="Redirecting..." />
+      </div>
+    )
+  }
+
+  // On onboarding page, show minimal layout
+  if (isOnboarding) {
+    return (
+      <ToastProvider>
+        <div className="min-h-screen bg-background">
+          {children}
+        </div>
+      </ToastProvider>
+    )
+  }
+
+  // Regular layout with sidebar (requires workspace and role check)
+  if (!isRoleChecked) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <LoadingSpinner message="Loading..." />
       </div>
     )
   }

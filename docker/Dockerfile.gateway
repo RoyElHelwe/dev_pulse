@@ -29,8 +29,8 @@ WORKDIR /app
 RUN echo '#!/bin/sh' > /entrypoint.sh && \
     echo 'set -e' >> /entrypoint.sh && \
     echo 'cd /app/apps/api-gateway' >> /entrypoint.sh && \
-    echo 'echo "Running Prisma migrations..."' >> /entrypoint.sh && \
-    echo 'pnpm prisma migrate deploy || echo "Migrations failed or already applied"' >> /entrypoint.sh && \
+    echo 'echo "Syncing database schema..."' >> /entrypoint.sh && \
+    echo 'pnpm prisma db push --accept-data-loss || echo "Schema sync failed"' >> /entrypoint.sh && \
     echo 'echo "Starting API Gateway..."' >> /entrypoint.sh && \
     echo 'exec pnpm run dev' >> /entrypoint.sh && \
     chmod +x /entrypoint.sh
