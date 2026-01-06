@@ -186,7 +186,12 @@ export class OfficeScene extends Phaser.Scene {
   
   public addRemotePlayer(playerData: PlayerData): void {
     if (playerData.id === this.config.localPlayer.id) return
-    if (this.remotePlayers.has(playerData.id)) return
+    if (this.remotePlayers.has(playerData.id)) {
+      console.log('[OfficeScene] Player already exists:', playerData.id)
+      return
+    }
+    
+    console.log('[OfficeScene] Creating remote player at:', playerData.position)
     
     const player = new Player(
       this,
@@ -196,7 +201,11 @@ export class OfficeScene extends Phaser.Scene {
       false
     )
     
+    // Set depth so remote players render above floor
+    player.setDepth(10)
+    
     this.remotePlayers.set(playerData.id, player)
+    console.log('[OfficeScene] Remote players count:', this.remotePlayers.size)
   }
   
   public updateRemotePlayer(playerId: string, data: Partial<PlayerData>): void {
@@ -225,6 +234,8 @@ export class OfficeScene extends Phaser.Scene {
   }
   
   public syncPlayers(players: PlayerData[]): void {
+    console.log('[OfficeScene] syncPlayers called with:', players.length, 'players')
+    
     // Add or update players
     players.forEach(playerData => {
       if (playerData.id === this.config.localPlayer.id) return
@@ -232,6 +243,7 @@ export class OfficeScene extends Phaser.Scene {
       if (this.remotePlayers.has(playerData.id)) {
         this.updateRemotePlayer(playerData.id, playerData)
       } else {
+        console.log('[OfficeScene] Adding remote player:', playerData.name)
         this.addRemotePlayer(playerData)
       }
     })
@@ -240,6 +252,7 @@ export class OfficeScene extends Phaser.Scene {
     const currentIds = new Set(players.map(p => p.id))
     this.remotePlayers.forEach((player, id) => {
       if (!currentIds.has(id)) {
+        console.log('[OfficeScene] Removing player:', id)
         this.removeRemotePlayer(id)
       }
     })

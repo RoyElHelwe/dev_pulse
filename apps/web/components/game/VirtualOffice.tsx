@@ -11,6 +11,7 @@ interface VirtualOfficeProps {
   username: string
   email: string
   workspaceId: string
+  players?: PlayerData[]  // Remote players to display
   onPlayerMove?: (position: Position, direction: PlayerDirection) => void
   onReady?: () => void
   className?: string
@@ -21,6 +22,7 @@ export function VirtualOffice({
   username,
   email,
   workspaceId,
+  players = [],
   onPlayerMove,
   onReady,
   className = '',
@@ -30,6 +32,19 @@ export function VirtualOffice({
   const sceneRef = useRef<OfficeScene | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  
+  // Use refs for callbacks to avoid re-initializing the game
+  const onPlayerMoveRef = useRef(onPlayerMove)
+  const onReadyRef = useRef(onReady)
+  
+  // Update refs when callbacks change
+  useEffect(() => {
+    onPlayerMoveRef.current = onPlayerMove
+  }, [onPlayerMove])
+  
+  useEffect(() => {
+    onReadyRef.current = onReady
+  }, [onReady])
   
   const initGame = useCallback(() => {
     if (!containerRef.current || gameRef.current) return
@@ -51,11 +66,11 @@ export function VirtualOffice({
       const sceneConfig: OfficeSceneConfig = {
         localPlayer,
         onPlayerMove: (position, direction) => {
-          onPlayerMove?.(position, direction)
+          onPlayerMoveRef.current?.(position, direction)
         },
         onReady: () => {
           setIsLoading(false)
-          onReady?.()
+          onReadyRef.current?.()
         },
       }
       
@@ -96,21 +111,25 @@ export function VirtualOffice({
       
       gameRef.current = new Phaser.Game(config)
       
-      // Store scene reference when ready
-      gameRef.current.events.once('ready', () => {
+      // Store scene reference when ready - poll for scene availability
+      const checkScene = () => {
         const scene = gameRef.current?.scene.getScene('OfficeScene') as OfficeScene
-        if (scene) {
+        if (scene && scene.scene.isActive()) {
           sceneRef.current = scene
+        } else {
+          setTimeout(checkScene, 100)
         }
-      })
+      }
+      setTimeout(checkScene, 200)
       
     } catch (err) {
       console.error('Failed to initialize game:', err)
       setError('Failed to load virtual office. Please refresh the page.')
       setIsLoading(false)
     }
-  }, [userId, username, email, workspaceId, onPlayerMove, onReady])
+  }, [userId, username, email, workspaceId]) // Removed onPlayerMove and onReady from deps
   
+  // Initialize game once on mount
   useEffect(() => {
     // Delay initialization to ensure DOM is ready
     const timer = setTimeout(initGame, 100)
@@ -123,7 +142,33 @@ export function VirtualOffice({
         sceneRef.current = null
       }
     }
-  }, [initGame])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId, workspaceId]) // Only reinit if user or workspace changes
+  
+  // Store players in ref for initial sync
+  const playersRef = useRef(players)
+  useEffect(() => {
+    playersRef.current = players
+  }, [players])
+  
+  // Sync players whenever they change
+  useEffect(() => {
+    if (sceneRef.current && players.length > 0) {
+      console.log('[VirtualOffice] Syncing players:', players)
+      sceneRef.current.syncPlayers(players)
+    } else if (!sceneRef.current && players.length > 0) {
+      // Scene not ready yet, poll for it
+      const checkAndSync = () => {
+        if (sceneRef.current) {
+          console.log('[VirtualOffice] Scene ready, syncing players:', playersRef.current)
+          sceneRef.current.syncPlayers(playersRef.current)
+        } else {
+          setTimeout(checkAndSync, 200)
+        }
+      }
+      checkAndSync()
+    }
+  }, [players])
   
   // Public API for parent components
   const addRemotePlayer = useCallback((playerData: PlayerData) => {
