@@ -11,6 +11,7 @@ import {
   HttpCode,
   HttpStatus,
   UnauthorizedException,
+  BadRequestException,
   Inject,
 } from '@nestjs/common';
 import { ClientProxy } from '@nestjs/microservices';
@@ -49,11 +50,20 @@ export class AuthController {
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ) {
-    const result = await this.authProxyService.register(
-      body.email,
-      body.password,
-      body.name,
-    );
+    let result;
+    try {
+      result = await this.authProxyService.register(
+        body.email,
+        body.password,
+        body.name,
+      );
+    } catch (error: any) {
+      // Re-throw as appropriate NestJS exception
+      if (error.statusCode === 400) {
+        throw new BadRequestException(error.message || 'Registration failed');
+      }
+      throw error;
+    }
 
     // If there's an invitation token, automatically log in and accept the invitation
     if (body.invitationToken) {
@@ -141,12 +151,21 @@ export class AuthController {
     const ipAddress = req.ip;
     const userAgent = req.headers['user-agent'];
 
-    const result = await this.authProxyService.login(
-      body.email,
-      body.password,
-      ipAddress,
-      userAgent,
-    );
+    let result;
+    try {
+      result = await this.authProxyService.login(
+        body.email,
+        body.password,
+        ipAddress,
+        userAgent,
+      );
+    } catch (error: any) {
+      // Re-throw as appropriate NestJS exception
+      if (error.statusCode === 401) {
+        throw new UnauthorizedException(error.message || 'Invalid credentials');
+      }
+      throw error;
+    }
 
     // Set cookies from auth service response
     if (!result.requires2FA && result.cookies) {
@@ -193,12 +212,21 @@ export class AuthController {
     const ipAddress = req.ip;
     const userAgent = req.headers['user-agent'];
 
-    const result = await this.authProxyService.verify2FA(
-      body.userId,
-      body.token,
-      ipAddress,
-      userAgent,
-    );
+    let result;
+    try {
+      result = await this.authProxyService.verify2FA(
+        body.userId,
+        body.token,
+        ipAddress,
+        userAgent,
+      );
+    } catch (error: any) {
+      // Re-throw as appropriate NestJS exception
+      if (error.statusCode === 401) {
+        throw new UnauthorizedException(error.message || 'Invalid 2FA token');
+      }
+      throw error;
+    }
 
     // Set cookies from auth service response
     if (result.cookies) {

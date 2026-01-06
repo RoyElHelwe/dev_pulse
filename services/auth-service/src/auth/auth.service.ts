@@ -302,20 +302,48 @@ export class AuthService {
     return { success: true };
   }
 
-  async getUserSessions(userId: string) {
+  async getUserSessions(userId: string, currentSessionToken?: string) {
     const sessions = await this.prisma.session.findMany({
       where: { userId },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { lastActivityAt: 'desc' },
     });
 
-    return sessions.map((session) => ({
-      id: session.id,
-      ipAddress: session.ipAddress,
-      userAgent: session.userAgent,
-      createdAt: session.createdAt,
-      expires: session.expires,
-      isCurrent: false, // Will be determined by comparing sessionToken
-    }));
+    return sessions.map((session) => {
+      const deviceInfo = this.parseUserAgent(session.userAgent || 'Unknown');
+      
+      return {
+        id: session.id,
+        ipAddress: session.ipAddress || 'Unknown',
+        userAgent: session.userAgent,
+        deviceInfo,
+        createdAt: session.createdAt,
+        lastActivityAt: session.lastActivityAt,
+        expiresAt: session.expires,
+        isCurrent: currentSessionToken ? session.sessionToken === currentSessionToken : false,
+      };
+    });
+  }
+
+  private parseUserAgent(userAgent: string): string {
+    // Simple user agent parsing
+    const ua = userAgent.toLowerCase();
+    
+    // Browser detection
+    let browser = 'Unknown Browser';
+    if (ua.includes('edg/')) browser = 'Edge';
+    else if (ua.includes('chrome/')) browser = 'Chrome';
+    else if (ua.includes('firefox/')) browser = 'Firefox';
+    else if (ua.includes('safari/') && !ua.includes('chrome')) browser = 'Safari';
+    
+    // OS detection
+    let os = 'Unknown OS';
+    if (ua.includes('windows')) os = 'Windows';
+    else if (ua.includes('mac')) os = 'macOS';
+    else if (ua.includes('linux')) os = 'Linux';
+    else if (ua.includes('android')) os = 'Android';
+    else if (ua.includes('ios') || ua.includes('iphone') || ua.includes('ipad')) os = 'iOS';
+    
+    return `${browser} on ${os}`;
   }
 
   async revokeSession(userId: string, sessionId: string) {

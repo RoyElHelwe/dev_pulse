@@ -268,7 +268,9 @@ export class AuthController {
   @ApiOperation({ summary: 'Get all user sessions' })
   @ApiResponse({ status: 200, description: 'Sessions retrieved' })
   async getSessions(@Req() req: any) {
-    return this.authService.getUserSessions(req.user.id);
+    const currentSessionToken = req.cookies?.session_token || 
+                                req.headers.authorization?.replace('Bearer ', '');
+    return this.authService.getUserSessions(req.user.id, currentSessionToken);
   }
 
   @Delete('session/:sessionId')

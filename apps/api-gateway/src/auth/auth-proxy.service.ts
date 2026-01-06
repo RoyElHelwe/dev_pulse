@@ -14,12 +14,23 @@ export class AuthProxyService {
 
   // HTTP proxy methods for REST endpoints
   async register(email: string, password: string, name?: string) {
-    const response = await axios.post(`${this.authServiceUrl}/auth/register`, {
-      email,
-      password,
-      name,
-    });
-    return response.data;
+    try {
+      const response = await axios.post(`${this.authServiceUrl}/auth/register`, {
+        email,
+        password,
+        name,
+      });
+      return response.data;
+    } catch (error) {
+      if (axios.isAxiosError(error) && error.response) {
+        const statusCode = error.response.status;
+        const message = error.response.data?.message || error.response.statusText;
+        const errorToThrow = new Error(message);
+        (errorToThrow as any).statusCode = statusCode;
+        throw errorToThrow;
+      }
+      throw error;
+    }
   }
 
   async login(
@@ -29,21 +40,33 @@ export class AuthProxyService {
     userAgent?: string,
     cookies?: any,
   ) {
-    const response = await axios.post(
-      `${this.authServiceUrl}/auth/login`,
-      { email, password },
-      {
-        headers: {
-          'X-Forwarded-For': ipAddress,
-          'User-Agent': userAgent,
+    try {
+      const response = await axios.post(
+        `${this.authServiceUrl}/auth/login`,
+        { email, password },
+        {
+          headers: {
+            'X-Forwarded-For': ipAddress,
+            'User-Agent': userAgent,
+          },
+          withCredentials: true,
         },
-        withCredentials: true,
-      },
-    );
-    return {
-      ...response.data,
-      cookies: response.headers['set-cookie'],
-    };
+      );
+      return {
+        ...response.data,
+        cookies: response.headers['set-cookie'],
+      };
+    } catch (error) {
+      if (axios.isAxiosError(error) && error.response) {
+        // Forward the error from auth service with original status code
+        const statusCode = error.response.status;
+        const message = error.response.data?.message || error.response.statusText;
+        const errorToThrow = new Error(message);
+        (errorToThrow as any).statusCode = statusCode;
+        throw errorToThrow;
+      }
+      throw error;
+    }
   }
 
   async verify2FA(
@@ -52,21 +75,32 @@ export class AuthProxyService {
     ipAddress?: string,
     userAgent?: string,
   ) {
-    const response = await axios.post(
-      `${this.authServiceUrl}/auth/2fa/verify`,
-      { userId, token },
-      {
-        headers: {
-          'X-Forwarded-For': ipAddress,
-          'User-Agent': userAgent,
+    try {
+      const response = await axios.post(
+        `${this.authServiceUrl}/auth/2fa/verify`,
+        { userId, token },
+        {
+          headers: {
+            'X-Forwarded-For': ipAddress,
+            'User-Agent': userAgent,
+          },
+          withCredentials: true,
         },
-        withCredentials: true,
-      },
-    );
-    return {
-      ...response.data,
-      cookies: response.headers['set-cookie'],
-    };
+      );
+      return {
+        ...response.data,
+        cookies: response.headers['set-cookie'],
+      };
+    } catch (error) {
+      if (axios.isAxiosError(error) && error.response) {
+        const statusCode = error.response.status;
+        const message = error.response.data?.message || error.response.statusText;
+        const errorToThrow = new Error(message);
+        (errorToThrow as any).statusCode = statusCode;
+        throw errorToThrow;
+      }
+      throw error;
+    }
   }
 
   async refreshToken(
@@ -74,22 +108,33 @@ export class AuthProxyService {
     ipAddress?: string,
     userAgent?: string,
   ) {
-    const response = await axios.post(
-      `${this.authServiceUrl}/auth/refresh`,
-      {},
-      {
-        headers: {
-          'X-Forwarded-For': ipAddress,
-          'User-Agent': userAgent,
-          Cookie: `refresh_token=${refreshToken}`,
+    try {
+      const response = await axios.post(
+        `${this.authServiceUrl}/auth/refresh`,
+        {},
+        {
+          headers: {
+            'X-Forwarded-For': ipAddress,
+            'User-Agent': userAgent,
+            Cookie: `refresh_token=${refreshToken}`,
+          },
+          withCredentials: true,
         },
-        withCredentials: true,
-      },
-    );
-    return {
-      ...response.data,
-      cookies: response.headers['set-cookie'],
-    };
+      );
+      return {
+        ...response.data,
+        cookies: response.headers['set-cookie'],
+      };
+    } catch (error) {
+      if (axios.isAxiosError(error) && error.response) {
+        const statusCode = error.response.status;
+        const message = error.response.data?.message || error.response.statusText;
+        const errorToThrow = new Error(message);
+        (errorToThrow as any).statusCode = statusCode;
+        throw errorToThrow;
+      }
+      throw error;
+    }
   }
 
   async setup2FA(sessionToken: string) {

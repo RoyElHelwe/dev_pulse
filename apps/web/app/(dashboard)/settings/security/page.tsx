@@ -267,34 +267,66 @@ export default function SecuritySettingsPage() {
           ) : sessions.length === 0 ? (
             <p className="text-sm text-muted-foreground">No active sessions found.</p>
           ) : (
-            <div className="space-y-4">
+            <div className="space-y-3">
               {sessions.map((session) => (
-                <div key={session.id} className="border border-border rounded-(--radius) p-4">
+                <div 
+                  key={session.id} 
+                  className={`border rounded-lg p-4 transition-colors ${
+                    session.isCurrent 
+                      ? 'border-green-500 bg-green-50/50 dark:bg-green-950/20' 
+                      : 'border-border'
+                  }`}
+                >
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-2">
-                        <span className="font-medium text-foreground">{session.deviceInfo || 'Unknown Device'}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg">
+                            {session.deviceInfo?.includes('Windows') ? '🖥️' :
+                             session.deviceInfo?.includes('macOS') ? '💻' :
+                             session.deviceInfo?.includes('Linux') ? '🐧' :
+                             session.deviceInfo?.includes('Android') ? '📱' :
+                             session.deviceInfo?.includes('iOS') || session.deviceInfo?.includes('iPhone') ? '📱' : '🌐'}
+                          </span>
+                          <span className="font-medium text-foreground">
+                            {session.deviceInfo || 'Unknown Device'}
+                          </span>
+                        </div>
                         {session.isCurrent && (
-                          <span className="text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded-(--radius)">
-                            Current
+                          <span className="text-xs bg-green-500 text-white px-2 py-1 rounded-md font-medium">
+                            This device
                           </span>
                         )}
                       </div>
-                      <p className="text-sm text-muted-foreground">IP: {session.ipAddress}</p>
-                      <p className="text-sm text-muted-foreground">
-                        Last active: {new Date(session.lastActivityAt).toLocaleString()}
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        Expires: {new Date(session.expiresAt).toLocaleString()}
-                      </p>
+                      <div className="space-y-1 text-sm text-muted-foreground">
+                        <p className="flex items-center gap-2">
+                          <span className="font-medium text-foreground">IP:</span>
+                          <span>{session.ipAddress}</span>
+                        </p>
+                        <p className="flex items-center gap-2">
+                          <span className="font-medium text-foreground">Last active:</span>
+                          <span>{new Date(session.lastActivityAt).toLocaleString()}</span>
+                        </p>
+                        <p className="flex items-center gap-2">
+                          <span className="font-medium text-foreground">Expires:</span>
+                          <span>{new Date(session.expiresAt).toLocaleString()}</span>
+                        </p>
+                        <p className="flex items-center gap-2">
+                          <span className="font-medium text-foreground">Created:</span>
+                          <span>{new Date(session.createdAt).toLocaleString()}</span>
+                        </p>
+                      </div>
                     </div>
-                    <Button
-                      onClick={() => handleRevokeSession(session.id, session.isCurrent)}
-                      variant={session.isCurrent ? "destructive" : "outline"}
-                      size="sm"
-                    >
-                      {session.isCurrent ? 'Logout' : 'Revoke'}
-                    </Button>
+                    {!session.isCurrent && (
+                      <Button
+                        onClick={() => handleRevokeSession(session.id, session.isCurrent)}
+                        variant="outline"
+                        size="sm"
+                        className="ml-4"
+                      >
+                        Revoke
+                      </Button>
+                    )}
                   </div>
                 </div>
               ))}

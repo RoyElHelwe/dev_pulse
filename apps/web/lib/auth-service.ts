@@ -64,8 +64,8 @@ class AuthService {
           return this.handleResponse<T>(retryResponse, true)
         } catch (refreshError) {
           console.error('Refresh failed:', refreshError)
-          // If refresh fails, redirect to login
-          if (typeof window !== 'undefined') {
+          // If refresh fails, redirect to login (but not if already on login page)
+          if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
             window.location.href = '/login'
           }
           throw new Error('Session expired. Please login again.')
@@ -101,7 +101,7 @@ class AuthService {
       body: JSON.stringify(data),
     })
 
-    return this.handleResponse<RegisterResponse>(response)
+    return this.handleResponse<RegisterResponse>(response, true)
   }
 
   // Login
@@ -113,7 +113,7 @@ class AuthService {
       body: JSON.stringify(data),
     })
 
-    return this.handleResponse<LoginResponse>(response)
+    return this.handleResponse<LoginResponse>(response, true)
   }
 
   // Verify 2FA
