@@ -14,7 +14,6 @@ export default function OfficePage() {
   const [workspaceId, setWorkspaceId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [chatInput, setChatInput] = useState('')
-  const [sidebarOpen, setSidebarOpen] = useState(false)
   const [showMobileChat, setShowMobileChat] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
   const chatEndRef = useRef<HTMLDivElement>(null)
@@ -150,40 +149,22 @@ export default function OfficePage() {
   }
   
   return (
-    <div className="fixed inset-0 bg-gray-900 overflow-hidden">
-      {/* Top Bar - Compact on mobile */}
-      <header className="absolute top-0 left-0 right-0 z-30 bg-gray-900/80 backdrop-blur-sm border-b border-gray-700/50">
-        <div className="flex items-center justify-between px-3 py-2 md:px-6 md:py-3">
-          {/* Left: Menu button + Status */}
-          <div className="flex items-center gap-2 md:gap-4">
-            <button
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="p-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 transition-colors"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-              </svg>
-            </button>
-            
-            <div className="hidden sm:block">
-              <h1 className="text-sm md:text-base font-semibold text-white">Virtual Office</h1>
-            </div>
-            
+    <div className="fixed left-0 right-0 top-16 bottom-0 bg-gray-900 overflow-hidden z-20">
+      {/* Compact status bar - only on mobile */}
+      {isMobile && (
+        <div className="absolute top-0 left-0 right-0 z-30 bg-gray-900/80 backdrop-blur-sm border-b border-gray-700/50">
+          <div className="flex items-center justify-between px-3 py-2">
             {/* Connection status */}
             <div className={`flex items-center gap-1.5 px-2 py-1 rounded-full text-xs ${
               isConnected ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'
             }`}>
               <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500 animate-pulse' : 'bg-yellow-500'}`}></span>
-              <span className="hidden sm:inline">{isConnected ? `${players.size + 1} online` : 'Connecting...'}</span>
-              <span className="sm:hidden">{players.size + 1}</span>
+              <span>{isConnected ? `${players.size + 1} online` : 'Connecting...'}</span>
             </div>
-          </div>
-          
-          {/* Right: Status + User */}
-          <div className="flex items-center gap-2 md:gap-4">
+            
             {/* Status selector */}
             <select
-              className="px-2 py-1.5 md:px-3 md:py-2 bg-gray-800 border border-gray-700 rounded-lg text-xs md:text-sm text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="px-2 py-1.5 bg-gray-800 border border-gray-700 rounded-lg text-xs text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
               defaultValue="available"
               onChange={(e) => sendStatus(e.target.value)}
             >
@@ -192,64 +173,61 @@ export default function OfficePage() {
               <option value="away">🟡 Away</option>
               <option value="dnd">⛔ DND</option>
             </select>
-            
-            {/* User avatar */}
-            <div className="flex items-center gap-2">
+          </div>
+        </div>
+      )}
+      
+      {/* Desktop status bar */}
+      {!isMobile && (
+        <div className="absolute top-2 left-2 z-30 flex items-center gap-3">
+          <div className={`flex items-center gap-2 px-3 py-2 rounded-lg backdrop-blur-md ${
+            isConnected ? 'bg-green-500/20 border border-green-500/30' : 'bg-yellow-500/20 border border-yellow-500/30'
+          }`}>
+            <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500 animate-pulse' : 'bg-yellow-500'}`}></span>
+            <span className={`text-sm font-medium ${isConnected ? 'text-green-400' : 'text-yellow-400'}`}>
+              {isConnected ? `${players.size + 1} online` : 'Connecting...'}
+            </span>
+          </div>
+          
+          <select
+            className="px-3 py-2 bg-gray-800/90 backdrop-blur-md border border-gray-700 rounded-lg text-sm text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            defaultValue="available"
+            onChange={(e) => sendStatus(e.target.value)}
+          >
+            <option value="available">🟢 Available</option>
+            <option value="busy">🔴 Busy</option>
+            <option value="away">🟡 Away</option>
+            <option value="dnd">⛔ DND</option>
+          </select>
+        </div>
+      )}
+      
+      {/* Online Players Panel - Floating */}
+      <div className="absolute top-20 right-4 z-30 w-64 bg-gray-900/95 backdrop-blur-md border border-gray-700/50 rounded-lg shadow-xl hidden md:block">
+        <div className="p-4">
+          <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">
+            Online ({players.size + 1})
+          </h2>
+          
+          {/* Current user */}
+          <div className="flex items-center gap-3 p-2 rounded-lg bg-blue-500/20 border border-blue-500/30 mb-2">
+            <div className="relative flex-shrink-0">
               <div 
-                className="w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-medium"
+                className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-medium"
                 style={{ backgroundColor: avatarColor }}
               >
                 {user.name?.charAt(0) || user.email.charAt(0)}
               </div>
-              <span className="hidden md:block text-sm font-medium text-gray-300 max-w-[120px] truncate">
-                {user.name || user.email}
-              </span>
+              <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-gray-900"></span>
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-medium text-white truncate">{user.name || user.email}</p>
+              <p className="text-xs text-gray-400">You</p>
             </div>
           </div>
-        </div>
-      </header>
-      
-      {/* Sidebar - Slide over on mobile */}
-      <aside className={`
-        fixed top-0 left-0 h-full z-40 bg-gray-900/95 backdrop-blur-md border-r border-gray-700/50
-        transform transition-transform duration-300 ease-in-out
-        w-72 md:w-64
-        ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
-      `}>
-        <div className="h-full flex flex-col pt-16 md:pt-14">
-          {/* Close button - mobile only */}
-          <button
-            onClick={() => setSidebarOpen(false)}
-            className="absolute top-3 right-3 p-2 rounded-lg hover:bg-gray-800 text-gray-400 md:hidden"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
           
-          <div className="flex-1 overflow-y-auto p-4">
-            <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
-              Online ({players.size + 1})
-            </h2>
-            
-            {/* Current user */}
-            <div className="flex items-center gap-3 p-2 rounded-lg bg-blue-500/20 border border-blue-500/30 mb-2">
-              <div className="relative flex-shrink-0">
-                <div 
-                  className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-medium"
-                  style={{ backgroundColor: avatarColor }}
-                >
-                  {user.name?.charAt(0) || user.email.charAt(0)}
-                </div>
-                <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 rounded-full border-2 border-gray-900"></span>
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-white truncate">{user.name || user.email}</p>
-                <p className="text-xs text-gray-400">You</p>
-              </div>
-            </div>
-            
-            {/* Other users */}
+          {/* Other users - scrollable */}
+          <div className="max-h-48 overflow-y-auto space-y-1">
             {playerList.map((player) => (
               <div 
                 key={player.id} 
@@ -257,13 +235,13 @@ export default function OfficePage() {
               >
                 <div className="relative flex-shrink-0">
                   <div 
-                    className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-medium"
+                    className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-medium"
                     style={{ backgroundColor: player.avatarColor || '#6366f1' }}
                   >
                     {player.name.charAt(0)}
                   </div>
                   <span 
-                    className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-gray-900 ${
+                    className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-gray-900 ${
                       player.status === 'available' ? 'bg-green-500' :
                       player.status === 'busy' ? 'bg-red-500' :
                       player.status === 'away' ? 'bg-yellow-500' :
@@ -272,36 +250,21 @@ export default function OfficePage() {
                   ></span>
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-white truncate">{player.name}</p>
+                  <p className="text-xs font-medium text-white truncate">{player.name}</p>
                   <p className="text-xs text-gray-400 capitalize">{player.status || 'Available'}</p>
                 </div>
               </div>
             ))}
             
             {playerList.length === 0 && (
-              <p className="text-sm text-gray-500 text-center py-4">No other users online</p>
+              <p className="text-xs text-gray-500 text-center py-2">No other users online</p>
             )}
           </div>
-          
-          {/* Sidebar footer */}
-          <div className="p-4 border-t border-gray-700/50">
-            <p className="text-xs text-gray-500 text-center">
-              Use {isMobile ? 'joystick' : 'WASD'} to move
-            </p>
-          </div>
         </div>
-      </aside>
-      
-      {/* Sidebar backdrop - mobile */}
-      {sidebarOpen && (
-        <div 
-          className="fixed inset-0 bg-black/50 z-35 md:hidden"
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
+      </div>
       
       {/* Game Container - Full screen */}
-      <main className="absolute inset-0 pt-12 md:pt-14">
+      <main className={`absolute ${isMobile ? 'inset-0 top-14' : 'inset-0'}`}>
         <VirtualOffice
           ref={virtualOfficeRef}
           userId={user.id}

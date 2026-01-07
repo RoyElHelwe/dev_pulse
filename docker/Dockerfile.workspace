@@ -29,8 +29,10 @@ WORKDIR /app
 RUN echo '#!/bin/sh' > /entrypoint.sh && \
     echo 'set -e' >> /entrypoint.sh && \
     echo 'cd /app/services/workspace-service' >> /entrypoint.sh && \
+    echo 'echo "Waiting for database to be ready..."' >> /entrypoint.sh && \
+    echo 'sleep 5' >> /entrypoint.sh && \
     echo 'echo "Syncing database schema..."' >> /entrypoint.sh && \
-    echo 'pnpm prisma db push --accept-data-loss || echo "Schema sync failed"' >> /entrypoint.sh && \
+    echo 'pnpm prisma db push --accept-data-loss' >> /entrypoint.sh && \
     echo 'echo "Starting Workspace Service..."' >> /entrypoint.sh && \
     echo 'exec pnpm start:dev' >> /entrypoint.sh && \
     chmod +x /entrypoint.sh

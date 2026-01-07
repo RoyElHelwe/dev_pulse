@@ -30,11 +30,29 @@ export function AppLayout({ children }: AppLayoutProps) {
   const [workspaceLoading, setWorkspaceLoading] = useState(true)
   const initializedRef = useRef(false)
   const [isRoleChecked, setIsRoleChecked] = useState(false)
+  const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [isMobile, setIsMobile] = useState(false)
 
   // Skip workspace checks on onboarding page
   const isOnboarding = pathname === '/onboarding'
-  // Office page has its own fullscreen layout
   const isOfficePage = pathname === '/office'
+
+  // Detect mobile device
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768)
+    }
+    checkMobile()
+    window.addEventListener('resize', checkMobile)
+    return () => window.removeEventListener('resize', checkMobile)
+  }, [])
+
+  // Auto-collapse sidebar on mobile
+  useEffect(() => {
+    if (isMobile) {
+      setSidebarOpen(false)
+    }
+  }, [pathname, isMobile])
 
   useEffect(() => {
     // Allow re-initialization when navigating away from onboarding
@@ -136,19 +154,8 @@ export function AppLayout({ children }: AppLayoutProps) {
     )
   }
 
-  // Office page has its own fullscreen layout
-  if (isOfficePage) {
-    return (
-      <ToastProvider>
-        <OnlineStatusProvider userId={user.id} workspaceId={workspace?.id}>
-          {children}
-        </OnlineStatusProvider>
-      </ToastProvider>
-    )
-  }
-
   // Regular layout with sidebar (requires workspace and role check)
-  if (!isRoleChecked) {
+  if (!isRoleChecked && !isOfficePage) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <LoadingSpinner message="Loading..." />
@@ -160,21 +167,30 @@ export function AppLayout({ children }: AppLayoutProps) {
     <ToastProvider>
       <OnlineStatusProvider userId={user.id} workspaceId={workspace?.id}>
         <div className="min-h-screen bg-background">
-          <Header workspaceName={workspace?.name} />
-          <Sidebar role={workspace?.role} workspaceId={workspace?.id} />
+          <Header workspaceName={workspace?.name} sidebarOpen={sidebarOpen} onToggleSidebar={() => setSidebarOpen(!sidebarOpen)} />
+          <Sidebar 
+            role={workspace?.role} 
+            workspaceId={workspace?.id} 
+            isOpen={sidebarOpen}
+            onClose={() => setSidebarOpen(false)}
+          />
           
-          {/* Main content with sidebar offset */}
-          <main className="md:pl-64">
-            <div className="container mx-auto max-w-6xl px-4 py-6 md:px-8 md:py-8">
-              {children}
-            </div>
+          {/* Main content with sidebar offset - fullscreen for office page */}
+          <main className={isOfficePage ? "" : `transition-all duration-300 ${sidebarOpen && !isMobile ? 'md:pl-64' : ''}`}>
+            {isOfficePage ? (
+              children
+            ) : (
+              <div className="container mx-auto max-w-6xl px-4 py-6 md:px-8 md:py-8">
+                {children}
+              </div>
+            )}
           </main>
 
-          {/* Mobile navigation */}
-          <MobileNav role={workspace?.role} />
+          {/* Mobile navigation - hide on office page */}
+          {!isOfficePage && <MobileNav role={workspace?.role} />}
           
           {/* Bottom padding for mobile nav */}
-          <div className="h-20 md:hidden" />
+          {!isOfficePage && <div className="h-20 md:hidden" />}
         </div>
       </OnlineStatusProvider>
     </ToastProvider>

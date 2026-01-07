@@ -17,14 +17,17 @@ import {
   LogOutIcon, 
   ChevronDownIcon, 
   ShieldIcon,
-  BuildingIcon
+  BuildingIcon,
+  MenuIcon
 } from '@/components/ui/icons'
 
 interface HeaderProps {
   workspaceName?: string
+  sidebarOpen?: boolean
+  onToggleSidebar?: () => void
 }
 
-export function Header({ workspaceName }: HeaderProps) {
+export function Header({ workspaceName, sidebarOpen, onToggleSidebar }: HeaderProps) {
   const pathname = usePathname()
   const router = useRouter()
   const { user, logout } = useAuth()
@@ -39,6 +42,17 @@ export function Header({ workspaceName }: HeaderProps) {
       <div className="flex h-16 items-center justify-between px-6">
         {/* Logo & Workspace */}
         <div className="flex items-center gap-4">
+          {/* Sidebar toggle button */}
+          {onToggleSidebar && (
+            <button
+              onClick={onToggleSidebar}
+              className="p-2 rounded-lg hover:bg-accent text-muted-foreground transition-colors"
+              aria-label="Toggle sidebar"
+            >
+              <MenuIcon className="h-5 w-5" />
+            </button>
+          )}
+          
           <Link href="/dashboard" className="flex items-center gap-2">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
               <span className="text-lg font-bold text-primary-foreground">ft</span>

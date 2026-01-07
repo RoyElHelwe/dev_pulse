@@ -54,8 +54,10 @@ RUN pnpm prisma generate
 RUN echo '#!/bin/sh' > /entrypoint.sh && \
     echo 'set -e' >> /entrypoint.sh && \
     echo 'cd /app/services/auth-service' >> /entrypoint.sh && \
+    echo 'echo "Waiting for database to be ready..."' >> /entrypoint.sh && \
+    echo 'sleep 5' >> /entrypoint.sh && \
     echo 'echo "Syncing database schema..."' >> /entrypoint.sh && \
-    echo 'pnpm prisma db push --skip-generate --accept-data-loss || echo "Schema sync failed, continuing..."' >> /entrypoint.sh && \
+    echo 'pnpm prisma db push --accept-data-loss' >> /entrypoint.sh && \
     echo 'echo "Starting Auth Service..."' >> /entrypoint.sh && \
     echo 'exec node dist/main.js' >> /entrypoint.sh && \
     chmod +x /entrypoint.sh

@@ -233,9 +233,9 @@ export function VirtualOffice({
   }
   
   return (
-    <div className={`relative ${className}`}>
+    <div className="absolute inset-0">
       {isLoading && (
-        <div className="absolute inset-0 flex items-center justify-center bg-gray-100 rounded-lg z-10">
+        <div className="absolute inset-0 flex items-center justify-center bg-gray-900 z-10">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
             <p className="text-gray-600">Loading Virtual Office...</p>
@@ -244,8 +244,8 @@ export function VirtualOffice({
       )}
       <div 
         ref={containerRef} 
-        className="w-full h-full rounded-lg overflow-hidden"
-        style={{ minHeight: '600px' }}
+        className="w-full h-full"
+        style={{ position: 'absolute', inset: 0 }}
       />
     </div>
   )

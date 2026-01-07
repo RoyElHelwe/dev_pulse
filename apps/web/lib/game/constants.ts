@@ -1,9 +1,9 @@
 // Game Constants
 
 export const GAME_CONFIG = {
-  // Canvas size
-  WIDTH: 1200,
-  HEIGHT: 800,
+  // Canvas size - large enough for most screens
+  WIDTH: 2400,
+  HEIGHT: 1600,
   
   // Tile size for grid
   TILE_SIZE: 32,
