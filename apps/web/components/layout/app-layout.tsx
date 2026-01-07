@@ -33,6 +33,8 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   // Skip workspace checks on onboarding page
   const isOnboarding = pathname === '/onboarding'
+  // Office page has its own fullscreen layout
+  const isOfficePage = pathname === '/office'
 
   useEffect(() => {
     // Allow re-initialization when navigating away from onboarding
@@ -91,7 +93,7 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   // Role-based route protection
   useEffect(() => {
-    if (!workspace || workspaceLoading || isOnboarding) return
+    if (!workspace || workspaceLoading || isOnboarding || isOfficePage) return
 
     const permissions = getRolePermissions(workspace.role)
     
@@ -103,10 +105,10 @@ export function AppLayout({ children }: AppLayoutProps) {
       router.push('/team')
     }
     setIsRoleChecked(true)
-  }, [pathname, workspace, workspaceLoading, router, isOnboarding])
+  }, [pathname, workspace, workspaceLoading, router, isOnboarding, isOfficePage])
 
-  // Show loading while checking auth (but not on onboarding page)
-  if (isLoading || (workspaceLoading && !isOnboarding)) {
+  // Show loading while checking auth (but not on onboarding or office page)
+  if (isLoading || (workspaceLoading && !isOnboarding && !isOfficePage)) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <LoadingSpinner message="Loading your workspace..." />
@@ -130,6 +132,17 @@ export function AppLayout({ children }: AppLayoutProps) {
         <div className="min-h-screen bg-background">
           {children}
         </div>
+      </ToastProvider>
+    )
+  }
+
+  // Office page has its own fullscreen layout
+  if (isOfficePage) {
+    return (
+      <ToastProvider>
+        <OnlineStatusProvider userId={user.id} workspaceId={workspace?.id}>
+          {children}
+        </OnlineStatusProvider>
       </ToastProvider>
     )
   }

@@ -50,6 +50,16 @@ WORKDIR /app/services/auth-service
 # Generate Prisma client
 RUN pnpm prisma generate
 
+# Create entrypoint script for database sync and startup
+RUN echo '#!/bin/sh' > /entrypoint.sh && \
+    echo 'set -e' >> /entrypoint.sh && \
+    echo 'cd /app/services/auth-service' >> /entrypoint.sh && \
+    echo 'echo "Syncing database schema..."' >> /entrypoint.sh && \
+    echo 'pnpm prisma db push --skip-generate --accept-data-loss || echo "Schema sync failed, continuing..."' >> /entrypoint.sh && \
+    echo 'echo "Starting Auth Service..."' >> /entrypoint.sh && \
+    echo 'exec node dist/main.js' >> /entrypoint.sh && \
+    chmod +x /entrypoint.sh
+
 EXPOSE 3001
 
-CMD ["sh", "-c", "pnpm prisma db push --accept-data-loss && node dist/main.js"]
+ENTRYPOINT ["/entrypoint.sh"]

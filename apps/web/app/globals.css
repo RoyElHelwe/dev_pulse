@@ -161,3 +161,54 @@
 .animate-fade-in {
   animation: fade-in 0.3s ease-out;
 }
+
+/* Virtual Office Fullscreen Styles */
+.office-fullscreen {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+}
+
+/* Z-index layering for office */
+.z-35 {
+  z-index: 35;
+}
+
+/* Mobile-friendly touch targets */
+@media (max-width: 768px) {
+  .touch-target {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+
+/* Hide scrollbar but allow scrolling */
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Smooth transitions for sidebar */
+.sidebar-transition {
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Game canvas fullscreen */
+.game-canvas-container canvas {
+  width: 100% !important;
+  height: 100% !important;
+  display: block;
+}
+
+/* Safe area insets for mobile notch/home indicator */
+@supports (padding: max(0px)) {
+  .safe-area-inset-bottom {
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  }
+  .safe-area-inset-top {
+    padding-top: max(0.5rem, env(safe-area-inset-top));
+  }
+}

@@ -25,6 +25,12 @@ export class OfficeScene extends Phaser.Scene {
   private moveThrottle: number = 50 // ms
   private lastMoveEmit: number = 0
   
+  // Mobile joystick input
+  private mobileInput: { direction: PlayerDirection | null; velocity: { x: number; y: number } } = {
+    direction: null,
+    velocity: { x: 0, y: 0 }
+  }
+  
   constructor() {
     super({ key: 'OfficeScene' })
   }
@@ -93,13 +99,36 @@ export class OfficeScene extends Phaser.Scene {
       S: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.S),
       D: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.D),
     }
+    
+    // Listen for mobile joystick events
+    if (typeof window !== 'undefined') {
+      window.addEventListener('mobile-joystick', ((e: CustomEvent) => {
+        this.mobileInput = e.detail
+      }) as EventListener)
+    }
   }
   
   private setupCamera(): void {
-    // Camera follows player
-    this.cameras.main.startFollow(this.localPlayer, true, 0.1, 0.1)
+    // Camera follows player with responsive lerp for mobile
+    this.cameras.main.startFollow(this.localPlayer, true, 0.2, 0.2)
     this.cameras.main.setZoom(1)
-    this.cameras.main.setBounds(0, 0, GAME_CONFIG.WIDTH, GAME_CONFIG.HEIGHT)
+    
+    // Set large bounds to allow camera to follow anywhere
+    // Using 2x the design dimensions to give plenty of room
+    this.cameras.main.setBounds(0, 0, GAME_CONFIG.WIDTH * 2, GAME_CONFIG.HEIGHT * 2)
+    
+    // Update camera bounds on resize (important for RESIZE scale mode)
+    this.scale.on('resize', (gameSize: Phaser.Structs.Size) => {
+      const width = gameSize.width
+      const height = gameSize.height
+      // Ensure bounds are at least as large as the viewport
+      this.cameras.main.setBounds(
+        0, 
+        0, 
+        Math.max(width * 1.5, GAME_CONFIG.WIDTH), 
+        Math.max(height * 1.5, GAME_CONFIG.HEIGHT)
+      )
+    })
   }
   
   private addInstructions(): void {
@@ -128,26 +157,34 @@ export class OfficeScene extends Phaser.Scene {
     let velocityY = 0
     let direction = this.localPlayer.direction
     
-    // Check input
+    // Check keyboard input
     const up = this.cursors.up.isDown || this.wasd.W.isDown
     const down = this.cursors.down.isDown || this.wasd.S.isDown
     const left = this.cursors.left.isDown || this.wasd.A.isDown
     const right = this.cursors.right.isDown || this.wasd.D.isDown
     
-    if (up) {
-      velocityY = -speed
+    // Check mobile joystick input
+    const mobileActive = this.mobileInput.direction !== null
+    
+    if (up || (mobileActive && this.mobileInput.velocity.y < -0.3)) {
+      velocityY = mobileActive ? this.mobileInput.velocity.y * speed : -speed
       direction = 'up'
-    } else if (down) {
-      velocityY = speed
+    } else if (down || (mobileActive && this.mobileInput.velocity.y > 0.3)) {
+      velocityY = mobileActive ? this.mobileInput.velocity.y * speed : speed
       direction = 'down'
     }
     
-    if (left) {
-      velocityX = -speed
+    if (left || (mobileActive && this.mobileInput.velocity.x < -0.3)) {
+      velocityX = mobileActive ? this.mobileInput.velocity.x * speed : -speed
       direction = 'left'
-    } else if (right) {
-      velocityX = speed
+    } else if (right || (mobileActive && this.mobileInput.velocity.x > 0.3)) {
+      velocityX = mobileActive ? this.mobileInput.velocity.x * speed : speed
       direction = 'right'
+    }
+    
+    // Use mobile direction if joystick is active
+    if (mobileActive && this.mobileInput.direction) {
+      direction = this.mobileInput.direction
     }
     
     // Normalize diagonal movement
