@@ -71,6 +71,13 @@ export const ROOM_DEFAULTS: Record<RoomType, {
     defaultSize: { width: 80, height: 80 },
     equipment: [],
   },
+  phone: {
+    color: 0xfce4ec,
+    borderColor: 0xe91e63,
+    defaultCapacity: 1,
+    defaultSize: { width: 80, height: 80 },
+    equipment: [],
+  },
   focus: {
     color: 0xeceff1,
     borderColor: 0x607d8b,
@@ -98,6 +105,13 @@ export const ROOM_DEFAULTS: Record<RoomType, {
     defaultCapacity: 2,
     defaultSize: { width: 150, height: 120 },
     equipment: [],
+  },
+  huddle: {
+    color: 0xf3e5f5,
+    borderColor: 0x9c27b0,
+    defaultCapacity: 4,
+    defaultSize: { width: 120, height: 120 },
+    equipment: ['whiteboard'],
   },
 }
 
@@ -129,6 +143,12 @@ export const DESK_DEFAULTS: Record<DeskType, {
     color: 0x2563eb,
     topColor: 0x60a5fa,
   },
+  hot: {
+    width: 70,
+    height: 45,
+    color: 0x2563eb,
+    topColor: 0x60a5fa,
+  },
   executive: {
     width: 120,
     height: 70,
@@ -148,11 +168,13 @@ export const DESK_DEFAULTS: Record<DeskType, {
 // ============================================
 
 export const DECORATION_SIZES: Record<DecorationType, Dimensions> = {
+  plant: { width: 36, height: 36 },
   'plant-small': { width: 24, height: 24 },
   'plant-medium': { width: 36, height: 36 },
   'plant-large': { width: 48, height: 48 },
   whiteboard: { width: 80, height: 50 },
   'coffee-machine': { width: 40, height: 40 },
+  coffeeMachine: { width: 40, height: 40 },
   printer: { width: 50, height: 40 },
   bookshelf: { width: 60, height: 30 },
   artwork: { width: 60, height: 40 },
@@ -162,6 +184,14 @@ export const DECORATION_SIZES: Record<DecorationType, Dimensions> = {
   'game-table': { width: 100, height: 60 },
   'water-cooler': { width: 30, height: 30 },
   'reception-desk': { width: 150, height: 60 },
+  lamp: { width: 20, height: 30 },
+  fridge: { width: 40, height: 60 },
+  'conference-table': { width: 200, height: 100 },
+  'lounge-chair': { width: 60, height: 60 },
+  'coffee-table': { width: 80, height: 50 },
+  projector: { width: 40, height: 30 },
+  'tv-screen': { width: 80, height: 50 },
+  'filing-cabinet': { width: 40, height: 50 },
 }
 
 // ============================================
@@ -169,11 +199,13 @@ export const DECORATION_SIZES: Record<DecorationType, Dimensions> = {
 // ============================================
 
 export const DECORATION_COLORS: Record<DecorationType, number> = {
+  plant: 0x228b22,
   'plant-small': 0x228b22,
   'plant-medium': 0x228b22,
   'plant-large': 0x228b22,
   whiteboard: 0xffffff,
   'coffee-machine': 0x5d4037,
+  coffeeMachine: 0x5d4037,
   printer: 0x455a64,
   bookshelf: 0x8b4513,
   artwork: 0xe91e63,
@@ -183,6 +215,14 @@ export const DECORATION_COLORS: Record<DecorationType, number> = {
   'game-table': 0x4caf50,
   'water-cooler': 0x03a9f4,
   'reception-desk': 0x37474f,
+  lamp: 0xffd700,
+  fridge: 0xffffff,
+  'conference-table': 0x8b4513,
+  'lounge-chair': 0x795548,
+  'coffee-table': 0x8b4513,
+  projector: 0x455a64,
+  'tv-screen': 0x000000,
+  'filing-cabinet': 0x546e7a,
 }
 
 // ============================================

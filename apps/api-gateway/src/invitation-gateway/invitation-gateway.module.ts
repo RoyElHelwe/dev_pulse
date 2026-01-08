@@ -2,7 +2,7 @@ import { Module } from '@nestjs/common';
 import { InvitationGatewayController } from './invitation-gateway.controller';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 import { AuthModule } from '../auth/auth.module';
-import { PrismaService } from '../prisma/prisma.service';
+import { PrismaModule, PrismaService } from '@ft-trans/database';
 
 @Module({
   imports: [

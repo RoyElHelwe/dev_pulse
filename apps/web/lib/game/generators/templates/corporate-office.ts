@@ -304,12 +304,12 @@ function createCorporateOfficeLayout(): OfficeLayoutData {
     // Decorations
     decorations: [
       // Plants throughout
-      { id: 'plant-1', type: 'plantLarge', position: { x: 48, y: 48 }, dimensions: { width: 48, height: 48 } },
-      { id: 'plant-2', type: 'plantLarge', position: { x: 592, y: 48 }, dimensions: { width: 48, height: 48 } },
-      { id: 'plant-3', type: 'plantLarge', position: { x: 1200, y: 48 }, dimensions: { width: 48, height: 48 } },
-      { id: 'plant-4', type: 'plantMedium', position: { x: 48, y: 960 }, dimensions: { width: 36, height: 36 } },
-      { id: 'plant-5', type: 'plantMedium', position: { x: 592, y: 960 }, dimensions: { width: 36, height: 36 } },
-      { id: 'plant-6', type: 'plantLarge', position: { x: 1920, y: 48 }, dimensions: { width: 48, height: 48 } },
+      { id: 'plant-1', type: 'plant-large', position: { x: 48, y: 48 }, dimensions: { width: 48, height: 48 } },
+      { id: 'plant-2', type: 'plant-large', position: { x: 592, y: 48 }, dimensions: { width: 48, height: 48 } },
+      { id: 'plant-3', type: 'plant-large', position: { x: 1200, y: 48 }, dimensions: { width: 48, height: 48 } },
+      { id: 'plant-4', type: 'plant-medium', position: { x: 48, y: 960 }, dimensions: { width: 36, height: 36 } },
+      { id: 'plant-5', type: 'plant-medium', position: { x: 592, y: 960 }, dimensions: { width: 36, height: 36 } },
+      { id: 'plant-6', type: 'plant-large', position: { x: 1920, y: 48 }, dimensions: { width: 48, height: 48 } },
       
       // Whiteboards
       { id: 'whiteboard-eng', type: 'whiteboard', position: { x: 64, y: 448 }, dimensions: { width: 160, height: 48 }, interactive: true, interactionRadius: 100 },
@@ -321,7 +321,7 @@ function createCorporateOfficeLayout(): OfficeLayoutData {
       { id: 'couch-2', type: 'couch', position: { x: 1600, y: 640 }, dimensions: { width: 64, height: 160 }, rotation: 90 },
       
       // Reception area
-      { id: 'plant-reception', type: 'plantLarge', position: { x: 1600, y: 1088 }, dimensions: { width: 48, height: 48 } },
+      { id: 'plant-reception', type: 'plant-large', position: { x: 1600, y: 1088 }, dimensions: { width: 48, height: 48 } },
       
       // Artwork
       { id: 'artwork-1', type: 'artwork', position: { x: 1380, y: 1056 }, dimensions: { width: 64, height: 48 } },

@@ -119,10 +119,10 @@ function createHybridWorkspaceLayout(): OfficeLayoutData {
     ],
 
     decorations: [
-      { id: 'plant-1', type: 'plantLarge' as DecorationType, position: { x: W, y: W }, dimensions: { width: 48, height: 48 } },
-      { id: 'plant-2', type: 'plantLarge' as DecorationType, position: { x: width - W - 48, y: W }, dimensions: { width: 48, height: 48 } },
-      { id: 'plant-3', type: 'plantLarge' as DecorationType, position: { x: W, y: height - W - 48 }, dimensions: { width: 48, height: 48 } },
-      { id: 'plant-4', type: 'plantLarge' as DecorationType, position: { x: width - W - 48, y: height - W - 48 }, dimensions: { width: 48, height: 48 } },
+      { id: 'plant-1', type: 'plant-large' as DecorationType, position: { x: W, y: W }, dimensions: { width: 48, height: 48 } },
+      { id: 'plant-2', type: 'plant-large' as DecorationType, position: { x: width - W - 48, y: W }, dimensions: { width: 48, height: 48 } },
+      { id: 'plant-3', type: 'plant-large' as DecorationType, position: { x: W, y: height - W - 48 }, dimensions: { width: 48, height: 48 } },
+      { id: 'plant-4', type: 'plant-large' as DecorationType, position: { x: width - W - 48, y: height - W - 48 }, dimensions: { width: 48, height: 48 } },
       { id: 'wb-collab-1', type: 'whiteboard' as DecorationType, position: { x: COLLAB_X + T, y: COLLAB_Y + T }, dimensions: { width: 128, height: 48 }, interactive: true, interactionRadius: 100 },
       { id: 'wb-collab-2', type: 'whiteboard' as DecorationType, position: { x: COLLAB_X + 10 * T, y: COLLAB_Y + T }, dimensions: { width: 128, height: 48 }, interactive: true, interactionRadius: 100 },
       { id: 'couch-1', type: 'couch' as DecorationType, position: { x: BREAK_X + T, y: BREAK_Y + T }, dimensions: { width: 128, height: 48 } },

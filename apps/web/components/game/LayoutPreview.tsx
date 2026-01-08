@@ -3,8 +3,11 @@
 /**
  * Layout Preview Component
  * 
- * Renders a 2D preview of an office layout using SVG.
+ * Renders a 2D preview of an office layout using clean SVG graphics.
  * Used in the generator UI before committing to a layout.
+ * 
+ * Uses shared theme from @/lib/game/assets/office-theme for consistent
+ * styling with the Phaser game on /office page.
  */
 
 import React, { useState, useCallback, useMemo } from 'react';
@@ -21,6 +24,13 @@ import {
   EyeOff 
 } from 'lucide-react';
 import { OfficeLayoutData, ZoneType, RoomType, DeskType } from '@/lib/game/generators/types';
+import { 
+  OFFICE_COLORS, 
+  OFFICE_DIMENSIONS,
+  SVG_PATHS,
+  getZoneColor,
+  getRoomColor 
+} from '@/lib/game/assets/office-theme';
 
 // Simplified layout interface for preview (after transformation)
 interface PreviewLayout {
@@ -170,47 +180,15 @@ interface LayoutPreviewProps {
   onRoomClick?: (roomId: string) => void;
 }
 
-const ZONE_COLORS: Record<string, { fill: string; stroke: string }> = {
-  // Work zones by department
-  engineering: { fill: '#e3f2fd', stroke: '#2196f3' },
-  product: { fill: '#e0f7fa', stroke: '#00bcd4' },
-  design: { fill: '#fce4ec', stroke: '#e91e63' },
-  sales: { fill: '#e8f5e9', stroke: '#4caf50' },
-  marketing: { fill: '#fff3e0', stroke: '#ff9800' },
-  operations: { fill: '#fff8e1', stroke: '#ffc107' },
-  leadership: { fill: '#ede7f6', stroke: '#673ab7' },
-  hr: { fill: '#fce4ec', stroke: '#e91e63' },
-  finance: { fill: '#c8e6c9', stroke: '#4caf50' },
-  support: { fill: '#bbdefb', stroke: '#2196f3' },
-  // Special zones
-  work: { fill: '#e3f2fd', stroke: '#2196f3' },
-  meeting: { fill: '#e8f5e9', stroke: '#4caf50' },
-  break: { fill: '#fff3e0', stroke: '#ff9800' },
-  focus: { fill: '#f3e5f5', stroke: '#9c27b0' },
-  social: { fill: '#fffde7', stroke: '#ffc107' },
-  collaboration: { fill: '#e0f2f1', stroke: '#009688' },
-  creative: { fill: '#fce4ec', stroke: '#e91e63' },
-  reception: { fill: '#e0f7fa', stroke: '#00bcd4' },
-  executive: { fill: '#ede7f6', stroke: '#673ab7' },
-};
-
-const ROOM_COLORS: Record<string, { fill: string; stroke: string }> = {
-  meeting: { fill: '#c8e6c9', stroke: '#4caf50' },
-  break: { fill: '#ffe0b2', stroke: '#ff9800' },
-  phone: { fill: '#bbdefb', stroke: '#2196f3' },
-  'phone-booth': { fill: '#bbdefb', stroke: '#2196f3' },
-  private: { fill: '#e1bee7', stroke: '#9c27b0' },
-  conference: { fill: '#c5cae9', stroke: '#3f51b5' },
-  huddle: { fill: '#f8bbd0', stroke: '#e91e63' },
-  focus: { fill: '#fff3e0', stroke: '#ff9800' },
-};
-
+// Use shared theme colors - these aliases provide backward compatibility
+const ZONE_COLORS = OFFICE_COLORS.zones;
+const ROOM_COLORS = OFFICE_COLORS.rooms;
 const DESK_COLORS: Record<string, string> = {
-  standard: '#8b4513',
+  standard: OFFICE_COLORS.desk.body,
   standing: '#5d4037',
   executive: '#3e2723',
-  hot: '#f59e0b',
-  hotdesk: '#f59e0b',
+  hot: OFFICE_COLORS.hotDesk.fill,
+  hotdesk: OFFICE_COLORS.hotDesk.fill,
   'l-shaped': '#6d4c41',
 };
 
@@ -330,15 +308,34 @@ export function LayoutPreview({
               transition: isDragging ? 'none' : 'transform 0.1s ease-out',
             }}
           >
-            {/* Background */}
+            {/* Define patterns */}
+            <defs>
+              {/* Wood floor pattern - using shared theme colors */}
+              <pattern id="woodFloor" x="0" y="0" width="40" height="20" patternUnits="userSpaceOnUse">
+                <rect width="40" height="20" fill={OFFICE_COLORS.floor.wood.primary} />
+                <rect x="0" y="0" width="20" height="10" fill={OFFICE_COLORS.floor.wood.secondary} />
+                <rect x="20" y="10" width="20" height="10" fill={OFFICE_COLORS.floor.wood.secondary} />
+                <line x1="0" y1="10" x2="40" y2="10" stroke={OFFICE_COLORS.floor.wood.line} strokeWidth="0.5" />
+                <line x1="20" y1="0" x2="20" y2="10" stroke={OFFICE_COLORS.floor.wood.line} strokeWidth="0.5" />
+                <line x1="0" y1="10" x2="0" y2="20" stroke={OFFICE_COLORS.floor.wood.line} strokeWidth="0.5" />
+              </pattern>
+              {/* Carpet pattern - using shared theme colors */}
+              <pattern id="carpetPattern" x="0" y="0" width="8" height="8" patternUnits="userSpaceOnUse">
+                <rect width="8" height="8" fill={OFFICE_COLORS.floor.carpet.primary} />
+                <rect x="0" y="0" width="4" height="4" fill={OFFICE_COLORS.floor.carpet.secondary} />
+                <rect x="4" y="4" width="4" height="4" fill={OFFICE_COLORS.floor.carpet.secondary} />
+              </pattern>
+            </defs>
+            
+            {/* Background floor */}
             <rect 
               x={0} 
               y={0} 
               width={width} 
               height={height}
-              fill="#f5f5dc"
-              stroke="#333"
-              strokeWidth={4}
+              fill="url(#woodFloor)"
+              stroke={OFFICE_COLORS.wall.primary}
+              strokeWidth={6}
             />
             
             {/* Grid */}
@@ -371,7 +368,7 @@ export function LayoutPreview({
             
             {/* Zones */}
             {showZones && layout.zones?.map((zone) => {
-              const colors = ZONE_COLORS[zone.type] || ZONE_COLORS.engineering;
+              const colors = getZoneColor(zone.type);
               return (
                 <g key={zone.id}>
                   <rect
@@ -400,7 +397,7 @@ export function LayoutPreview({
             
             {/* Rooms */}
             {layout.rooms?.map((room) => {
-              const colors = ROOM_COLORS[room.type] || ROOM_COLORS.meeting;
+              const colors = getRoomColor(room.type);
               const isHovered = hoveredElement === `room-${room.id}`;
               
               return (
@@ -432,16 +429,86 @@ export function LayoutPreview({
                     {room.name}
                   </text>
                   
-                  {/* Room furniture (simplified) */}
+                  {/* Room furniture - Conference table for meeting rooms */}
                   {(room.type === 'meeting' || room.type === 'conference') && (
-                    <rect
-                      x={room.x + room.width * 0.2}
-                      y={room.y + room.height * 0.35}
-                      width={room.width * 0.6}
-                      height={room.height * 0.35}
-                      fill="#8b4513"
-                      rx={4}
-                    />
+                    <>
+                      <rect
+                        x={room.x + room.width * 0.15}
+                        y={room.y + room.height * 0.35}
+                        width={room.width * 0.7}
+                        height={room.height * 0.35}
+                        fill={OFFICE_COLORS.desk.body}
+                        stroke={OFFICE_COLORS.desk.border}
+                        strokeWidth={2}
+                        rx={4}
+                      />
+                      {/* Chairs around table */}
+                      {[0.25, 0.5, 0.75].map((pos) => (
+                        <React.Fragment key={`chair-top-${pos}`}>
+                          <ellipse
+                            cx={room.x + room.width * pos}
+                            cy={room.y + room.height * 0.28}
+                            rx={8}
+                            ry={6}
+                            fill={OFFICE_COLORS.chair.seat}
+                          />
+                          <ellipse
+                            cx={room.x + room.width * pos}
+                            cy={room.y + room.height * 0.78}
+                            rx={8}
+                            ry={6}
+                            fill={OFFICE_COLORS.chair.seat}
+                          />
+                        </React.Fragment>
+                      ))}
+                    </>
+                  )}
+                  
+                  {/* Break room furniture */}
+                  {room.type === 'break' && (
+                    <>
+                      {/* Round table */}
+                      <circle
+                        cx={room.x + room.width * 0.5}
+                        cy={room.y + room.height * 0.5}
+                        r={Math.min(room.width, room.height) * 0.2}
+                        fill={OFFICE_COLORS.desk.surface}
+                        stroke={OFFICE_COLORS.desk.body}
+                        strokeWidth={2}
+                      />
+                      {/* Coffee machine icon */}
+                      <rect
+                        x={room.x + room.width * 0.8}
+                        y={room.y + room.height * 0.3}
+                        width={room.width * 0.12}
+                        height={room.height * 0.25}
+                        fill={OFFICE_COLORS.coffeeMachine.body}
+                        rx={2}
+                      />
+                    </>
+                  )}
+                  
+                  {/* Phone booth / huddle */}
+                  {(room.type === 'phone' || room.type === 'phone-booth' || room.type === 'huddle') && (
+                    <>
+                      <rect
+                        x={room.x + room.width * 0.3}
+                        y={room.y + room.height * 0.4}
+                        width={room.width * 0.4}
+                        height={room.height * 0.3}
+                        fill={OFFICE_COLORS.desk.surface}
+                        stroke={OFFICE_COLORS.desk.body}
+                        strokeWidth={1}
+                        rx={2}
+                      />
+                      <ellipse
+                        cx={room.x + room.width * 0.5}
+                        cy={room.y + room.height * 0.75}
+                        rx={10}
+                        ry={8}
+                        fill={OFFICE_COLORS.chair.seat}
+                      />
+                    </>
                   )}
                 </g>
               );
@@ -449,10 +516,10 @@ export function LayoutPreview({
             
             {/* Desks */}
             {layout.desks?.map((desk) => {
-              const color = DESK_COLORS[desk.type || 'standard'];
+              const color = DESK_COLORS[desk.type || 'standard'] || DESK_COLORS.standard;
               const isHovered = hoveredElement === `desk-${desk.id}`;
-              const width = desk.width || 70;
-              const height = desk.height || 45;
+              const width = desk.width || 60;
+              const height = desk.height || 40;
               
               return (
                 <g 
@@ -461,121 +528,275 @@ export function LayoutPreview({
                   onMouseEnter={() => setHoveredElement(`desk-${desk.id}`)}
                   onMouseLeave={() => setHoveredElement(null)}
                   onClick={() => onDeskClick?.(desk.id)}
+                  style={{ filter: isHovered ? 'brightness(1.1)' : 'none' }}
                 >
-                  {/* Desk */}
+                  {/* Desk body */}
                   <rect
                     x={desk.x}
                     y={desk.y}
                     width={width}
                     height={height}
                     fill={color}
-                    stroke={isHovered ? '#000' : '#5d4037'}
-                    strokeWidth={isHovered ? 3 : 2}
+                    stroke={isHovered ? '#000' : OFFICE_COLORS.desk.border}
+                    strokeWidth={isHovered ? 2 : 1}
+                    rx={3}
+                  />
+                  {/* Desk surface */}
+                  <rect
+                    x={desk.x + 2}
+                    y={desk.y + 2}
+                    width={width - 4}
+                    height={height - 4}
+                    fill={OFFICE_COLORS.desk.surface}
+                    rx={2}
+                  />
+                  {/* Monitor */}
+                  <rect
+                    x={desk.x + width / 2 - 8}
+                    y={desk.y + 6}
+                    width={16}
+                    height={10}
+                    fill={OFFICE_COLORS.monitor.frame}
+                    rx={1}
+                  />
+                  {/* Monitor stand */}
+                  <rect
+                    x={desk.x + width / 2 - 3}
+                    y={desk.y + 16}
+                    width={6}
+                    height={4}
+                    fill={OFFICE_COLORS.monitor.stand}
+                  />
+                  {/* Keyboard */}
+                  <rect
+                    x={desk.x + width / 2 - 10}
+                    y={desk.y + height - 12}
+                    width={20}
+                    height={6}
+                    fill={OFFICE_COLORS.keyboard}
+                    rx={1}
+                  />
+                  {/* Chair */}
+                  <ellipse
+                    cx={desk.x + width / 2}
+                    cy={desk.y + height + 16}
+                    rx={12}
+                    ry={10}
+                    fill={OFFICE_COLORS.chair.seat}
+                    stroke={OFFICE_COLORS.chair.border}
+                    strokeWidth={1}
+                  />
+                  {/* Chair back */}
+                  <rect
+                    x={desk.x + width / 2 - 10}
+                    y={desk.y + height + 20}
+                    width={20}
+                    height={8}
+                    fill={OFFICE_COLORS.chair.back}
+                    stroke={OFFICE_COLORS.chair.border}
+                    strokeWidth={1}
                     rx={3}
                   />
                   
-                  {/* Desk top */}
-                  <rect
-                    x={desk.x + 3}
-                    y={desk.y + 3}
-                    width={width - 6}
-                    height={height - 6}
-                    fill="#d2b48c"
-                    rx={2}
-                  />
-                  
-                  {/* Monitor */}
-                  <rect
-                    x={desk.x + width / 2 - 10}
-                    y={desk.y + 8}
-                    width={20}
-                    height={14}
-                    fill="#333"
-                    rx={2}
-                  />
-                  
-                  {/* Chair */}
-                  <circle
-                    cx={desk.x + width / 2}
-                    cy={desk.y + height + 12}
-                    r={10}
-                    fill="#2563eb"
-                    stroke="#1e40af"
-                    strokeWidth={2}
-                  />
-                  
                   {/* Hot desk indicator */}
-                  {desk.type === 'hot' && (
-                    <circle
-                      cx={desk.x + width - 8}
-                      cy={desk.y + 8}
-                      r={6}
-                      fill="#fbbf24"
-                      stroke="#f59e0b"
-                      strokeWidth={1}
-                    />
+                  {(desk.type === 'hot' || desk.type === 'hotdesk') && (
+                    <>
+                      <circle
+                        cx={desk.x + width - 6}
+                        cy={desk.y + 6}
+                        r={6}
+                        fill={OFFICE_COLORS.hotDesk.fill}
+                        stroke={OFFICE_COLORS.hotDesk.stroke}
+                        strokeWidth={1}
+                      />
+                      <text
+                        x={desk.x + width - 6}
+                        y={desk.y + 9}
+                        fill="#000"
+                        fontSize={8}
+                        textAnchor="middle"
+                        fontWeight="bold"
+                      >
+                        H
+                      </text>
+                    </>
                   )}
                 </g>
               );
             })}
             
             {/* Decorations */}
-            {layout.decorations?.map((deco, i) => (
-              <g key={`deco-${i}`}>
-                {deco.type === 'plant' && (
-                  <>
-                    {/* Pot */}
-                    <rect
-                      x={deco.x - 10}
-                      y={deco.y + 5}
-                      width={20}
-                      height={15}
-                      fill="#d2691e"
-                      rx={2}
-                    />
-                    {/* Leaves */}
-                    <circle cx={deco.x} cy={deco.y - 5} r={12} fill="#228b22" />
-                    <circle cx={deco.x - 8} cy={deco.y} r={8} fill="#2d8f2d" />
-                    <circle cx={deco.x + 8} cy={deco.y} r={8} fill="#2d8f2d" />
-                  </>
-                )}
-                
-                {deco.type === 'whiteboard' && (
-                  <rect
-                    x={deco.x}
-                    y={deco.y}
-                    width={80}
-                    height={55}
-                    fill="#fff"
-                    stroke="#9e9e9e"
-                    strokeWidth={3}
-                    rx={2}
-                  />
-                )}
-                
-                {deco.type === 'coffeeMachine' && (
-                  <rect
-                    x={deco.x}
-                    y={deco.y}
-                    width={30}
-                    height={40}
-                    fill="#5d4037"
-                    rx={3}
-                  />
-                )}
-                
-                {deco.type === 'couch' && (
-                  <rect
-                    x={deco.x}
-                    y={deco.y}
-                    width={70}
-                    height={35}
-                    fill="#6b5b95"
-                    rx={6}
-                  />
-                )}
-              </g>
-            ))}
+            {layout.decorations?.map((deco, i) => {
+              const decoType = deco.type || 'plant';
+              
+              return (
+                <g key={`deco-${deco.id || i}`}>
+                  {/* Plant */}
+                  {(decoType === 'plant' || decoType === 'plantSmall' || decoType === 'plantMedium' || decoType === 'plantLarge') && (
+                    <>
+                      {/* Pot */}
+                      <path
+                        d={`M${deco.x - 10} ${deco.y + 5} L${deco.x - 8} ${deco.y + 18} L${deco.x + 8} ${deco.y + 18} L${deco.x + 10} ${deco.y + 5} Z`}
+                        fill={OFFICE_COLORS.plant.pot}
+                        stroke={OFFICE_COLORS.plant.potBorder}
+                        strokeWidth={1}
+                      />
+                      {/* Leaves */}
+                      <ellipse cx={deco.x} cy={deco.y - 8} rx={14} ry={12} fill={OFFICE_COLORS.plant.leaf1} />
+                      <ellipse cx={deco.x - 8} cy={deco.y - 2} rx={8} ry={7} fill={OFFICE_COLORS.plant.leaf2} />
+                      <ellipse cx={deco.x + 8} cy={deco.y - 2} rx={8} ry={7} fill={OFFICE_COLORS.plant.leaf2} />
+                      <ellipse cx={deco.x} cy={deco.y - 14} rx={6} ry={5} fill={OFFICE_COLORS.plant.leaf3} />
+                    </>
+                  )}
+                  
+                  {/* Whiteboard */}
+                  {decoType === 'whiteboard' && (
+                    <>
+                      <rect
+                        x={deco.x - 35}
+                        y={deco.y - 20}
+                        width={70}
+                        height={45}
+                        fill="#fff"
+                        stroke={OFFICE_COLORS.whiteboard.frame}
+                        strokeWidth={3}
+                        rx={2}
+                      />
+                      <rect
+                        x={deco.x - 30}
+                        y={deco.y - 15}
+                        width={60}
+                        height={35}
+                        fill={OFFICE_COLORS.whiteboard.surface}
+                      />
+                      {/* Marker tray */}
+                      <rect
+                        x={deco.x - 25}
+                        y={deco.y + 20}
+                        width={50}
+                        height={4}
+                        fill={OFFICE_COLORS.whiteboard.tray}
+                      />
+                    </>
+                  )}
+                  
+                  {/* Coffee Machine */}
+                  {decoType === 'coffeeMachine' && (
+                    <>
+                      <rect
+                        x={deco.x - 12}
+                        y={deco.y - 20}
+                        width={24}
+                        height={40}
+                        fill={OFFICE_COLORS.coffeeMachine.body}
+                        stroke="#333"
+                        strokeWidth={1}
+                        rx={3}
+                      />
+                      <rect
+                        x={deco.x - 8}
+                        y={deco.y - 15}
+                        width={16}
+                        height={10}
+                        fill={OFFICE_COLORS.coffeeMachine.panel}
+                        rx={2}
+                      />
+                      <circle cx={deco.x} cy={deco.y + 5} r={5} fill={OFFICE_COLORS.coffeeMachine.indicator} />
+                    </>
+                  )}
+                  
+                  {/* Couch */}
+                  {decoType === 'couch' && (
+                    <>
+                      <rect
+                        x={deco.x - 35}
+                        y={deco.y - 12}
+                        width={70}
+                        height={30}
+                        fill={OFFICE_COLORS.couch.body}
+                        stroke={OFFICE_COLORS.couch.border}
+                        strokeWidth={1}
+                        rx={6}
+                      />
+                      <rect
+                        x={deco.x - 30}
+                        y={deco.y - 8}
+                        width={60}
+                        height={18}
+                        fill={OFFICE_COLORS.couch.cushion}
+                        rx={4}
+                      />
+                      {/* Arm rests */}
+                      <rect
+                        x={deco.x - 38}
+                        y={deco.y - 10}
+                        width={8}
+                        height={24}
+                        fill={OFFICE_COLORS.couch.body}
+                        rx={3}
+                      />
+                      <rect
+                        x={deco.x + 30}
+                        y={deco.y - 10}
+                        width={8}
+                        height={24}
+                        fill={OFFICE_COLORS.couch.body}
+                        rx={3}
+                      />
+                    </>
+                  )}
+                  
+                  {/* Bean Bag */}
+                  {decoType === 'beanBag' && (
+                    <>
+                      <ellipse
+                        cx={deco.x}
+                        cy={deco.y}
+                        rx={28}
+                        ry={24}
+                        fill={OFFICE_COLORS.couch.cushion}
+                        stroke={OFFICE_COLORS.couch.border}
+                        strokeWidth={2}
+                      />
+                      <ellipse
+                        cx={deco.x}
+                        cy={deco.y - 8}
+                        rx={20}
+                        ry={16}
+                        fill={OFFICE_COLORS.couch.body}
+                        opacity={0.6}
+                      />
+                    </>
+                  )}
+                  
+                  {/* Water Cooler */}
+                  {decoType === 'waterCooler' && (
+                    <>
+                      <rect
+                        x={deco.x - 12}
+                        y={deco.y - 16}
+                        width={24}
+                        height={32}
+                        fill="#4fc3f7"
+                        stroke="#0288d1"
+                        strokeWidth={2}
+                        rx={4}
+                      />
+                      <rect
+                        x={deco.x - 8}
+                        y={deco.y - 12}
+                        width={16}
+                        height={20}
+                        fill="#81d4fa"
+                        opacity={0.5}
+                        rx={2}
+                      />
+                      <circle cx={deco.x} cy={deco.y + 12} r={3} fill="#0288d1" />
+                    </>
+                  )}
+                </g>
+              );
+            })}
             
             {/* Spawn Point */}
             {layout.spawnPoint && (
@@ -584,21 +805,21 @@ export function LayoutPreview({
                   cx={layout.spawnPoint.x}
                   cy={layout.spawnPoint.y}
                   r={15}
-                  fill="#4caf50"
-                  fillOpacity={0.3}
-                  stroke="#4caf50"
+                  fill={OFFICE_COLORS.spawn.fill}
+                  fillOpacity={OFFICE_COLORS.spawn.fillOpacity}
+                  stroke={OFFICE_COLORS.spawn.stroke}
                   strokeWidth={2}
                 />
                 <circle
                   cx={layout.spawnPoint.x}
                   cy={layout.spawnPoint.y}
                   r={6}
-                  fill="#4caf50"
+                  fill={OFFICE_COLORS.spawn.fill}
                 />
                 <text
                   x={layout.spawnPoint.x}
                   y={layout.spawnPoint.y + 30}
-                fill="#4caf50"
+                fill={OFFICE_COLORS.spawn.fill}
                 fontSize={10}
                 textAnchor="middle"
                 fontWeight="bold"
@@ -629,8 +850,8 @@ export function LayoutPreview({
                     y={minY}
                     width={wallWidth}
                     height={wallHeight}
-                    fill="#4a5568"
-                    stroke="#2d3748"
+                    fill={OFFICE_COLORS.wall.secondary}
+                    stroke={OFFICE_COLORS.wall.primary}
                     strokeWidth={1}
                   />
                   {/* Wall highlight (3D effect) */}
@@ -639,7 +860,7 @@ export function LayoutPreview({
                     y={minY}
                     width={isHorizontal ? wallWidth : 4}
                     height={isHorizontal ? 4 : wallHeight}
-                    fill="#718096"
+                    fill={OFFICE_COLORS.wall.highlight}
                   />
                   {/* Door gap indicator */}
                   {wall.hasDoor && wall.doorPosition && (
@@ -649,7 +870,7 @@ export function LayoutPreview({
                       width={96}
                       height={96}
                       fill="#f5f5dc"
-                      stroke="#4a5568"
+                      stroke={OFFICE_COLORS.wall.secondary}
                       strokeWidth={2}
                       strokeDasharray="4,4"
                     />
@@ -666,7 +887,7 @@ export function LayoutPreview({
                 width={layout.width}
                 height={layout.height}
                 fill="none"
-                stroke="#4a5568"
+                stroke={OFFICE_COLORS.wall.secondary}
                 strokeWidth={16}
               />
             )}
@@ -678,15 +899,19 @@ export function LayoutPreview({
       <div className="p-3 border-t bg-muted/30">
         <div className="flex flex-wrap gap-3 text-xs">
           <div className="flex items-center gap-1">
-            <div className="w-3 h-3 rounded-sm bg-[#4a5568]" />
+            <div className="w-3 h-3 rounded-sm bg-[#5c4033]" />
             <span>Wall</span>
           </div>
           <div className="flex items-center gap-1">
-            <div className="w-3 h-3 rounded-sm bg-[#8b4513]" />
-            <span>Standard Desk</span>
+            <div className="w-4 h-3 rounded-sm bg-[#8b4513]" />
+            <span>Desk</span>
           </div>
           <div className="flex items-center gap-1">
-            <div className="w-3 h-3 rounded-sm bg-[#f59e0b]" />
+            <div className="w-3 h-3 rounded-full bg-[#3b82f6]" />
+            <span>Chair</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <div className="w-3 h-3 rounded-full bg-[#fbbf24] border border-[#f59e0b]" />
             <span>Hot Desk</span>
           </div>
           <div className="flex items-center gap-1">

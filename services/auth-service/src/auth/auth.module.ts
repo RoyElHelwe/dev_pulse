@@ -2,7 +2,7 @@ import { Module } from '@nestjs/common';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { AuthGuard } from './guards/auth.guard';
-import { PrismaService } from '../prisma/prisma.service';
+import { PrismaService } from '@ft-trans/database';
 import { EmailModule } from '../email/email.module';
 
 @Module({

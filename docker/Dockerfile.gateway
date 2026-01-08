@@ -10,6 +10,9 @@ WORKDIR /app
 # Copy workspace config
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
 
+# Copy prisma schema
+COPY prisma ./prisma
+
 # Copy packages and shared configs
 COPY packages ./packages
 
@@ -19,12 +22,9 @@ COPY apps/api-gateway ./apps/api-gateway
 # Install all dependencies at root (monorepo style)
 RUN pnpm install --no-frozen-lockfile
 
-# Build shared-types package
+# Build shared packages
 RUN cd packages/shared-types && pnpm build
-
-# Generate Prisma Client
-WORKDIR /app/apps/api-gateway
-RUN pnpm prisma generate
+RUN cd packages/database && pnpm prisma:generate && pnpm build
 
 WORKDIR /app
 
@@ -32,8 +32,8 @@ WORKDIR /app
 RUN echo '#!/bin/sh' > /entrypoint.sh && \
     echo 'set -e' >> /entrypoint.sh && \
     echo 'cd /app/apps/api-gateway' >> /entrypoint.sh && \
-    echo 'echo "Syncing database schema..."' >> /entrypoint.sh && \
-    echo 'pnpm prisma db push --accept-data-loss || echo "Schema sync failed"' >> /entrypoint.sh && \
+    echo 'echo "Waiting for database to be ready..."' >> /entrypoint.sh && \
+    echo 'sleep 10' >> /entrypoint.sh && \
     echo 'echo "Starting API Gateway..."' >> /entrypoint.sh && \
     echo 'exec pnpm run dev' >> /entrypoint.sh && \
     chmod +x /entrypoint.sh

@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { RpcException } from '@nestjs/microservices';
-import { PrismaService } from '../prisma/prisma.service';
+import { PrismaService } from '@ft-trans/database';
 
 @Injectable()
 export class WorkspaceService {

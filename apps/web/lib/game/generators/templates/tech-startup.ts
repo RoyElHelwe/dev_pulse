@@ -144,19 +144,19 @@ function createTechStartupLayout(): OfficeLayoutData {
     // Decorations - properly spaced
     decorations: [
       // Plants at corners and strategic locations
-      { id: 'plant-1', type: 'plantLarge', position: { x: 48, y: 48 }, dimensions: { width: 48, height: 48 } },
-      { id: 'plant-2', type: 'plantMedium', position: { x: 416, y: 48 }, dimensions: { width: 36, height: 36 } },
-      { id: 'plant-3', type: 'plantLarge', position: { x: 768, y: 48 }, dimensions: { width: 48, height: 48 } },
-      { id: 'plant-4', type: 'plantSmall', position: { x: 48, y: 800 }, dimensions: { width: 32, height: 32 } },
-      { id: 'plant-5', type: 'plantMedium', position: { x: 768, y: 800 }, dimensions: { width: 36, height: 36 } },
+      { id: 'plant-1', type: 'plant-large', position: { x: 48, y: 48 }, dimensions: { width: 48, height: 48 } },
+      { id: 'plant-2', type: 'plant-medium', position: { x: 416, y: 48 }, dimensions: { width: 36, height: 36 } },
+      { id: 'plant-3', type: 'plant-large', position: { x: 768, y: 48 }, dimensions: { width: 48, height: 48 } },
+      { id: 'plant-4', type: 'plant-small', position: { x: 48, y: 800 }, dimensions: { width: 32, height: 32 } },
+      { id: 'plant-5', type: 'plant-medium', position: { x: 768, y: 800 }, dimensions: { width: 36, height: 36 } },
       
       // Whiteboard for engineering (between desk rows)
       { id: 'whiteboard-1', type: 'whiteboard', position: { x: 64, y: 368 }, dimensions: { width: 160, height: 48 }, interactive: true, interactionRadius: 100 },
       
       // Bean bags in collaboration zone
-      { id: 'bean-bag-1', type: 'beanBag', position: { x: 480, y: 700 }, dimensions: { width: 64, height: 64 } },
-      { id: 'bean-bag-2', type: 'beanBag', position: { x: 576, y: 700 }, dimensions: { width: 64, height: 64 } },
-      { id: 'bean-bag-3', type: 'beanBag', position: { x: 672, y: 700 }, dimensions: { width: 64, height: 64 } },
+      { id: 'bean-bag-1', type: 'bean-bag', position: { x: 480, y: 700 }, dimensions: { width: 64, height: 64 } },
+      { id: 'bean-bag-2', type: 'bean-bag', position: { x: 576, y: 700 }, dimensions: { width: 64, height: 64 } },
+      { id: 'bean-bag-3', type: 'bean-bag', position: { x: 672, y: 700 }, dimensions: { width: 64, height: 64 } },
       
       // Coffee machine in break room
       { id: 'coffee-1', type: 'coffeeMachine', position: { x: 896, y: 480 }, dimensions: { width: 48, height: 48 }, interactive: true, interactionRadius: 80 },

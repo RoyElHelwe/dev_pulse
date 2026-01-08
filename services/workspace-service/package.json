@@ -6,21 +6,25 @@
   "scripts": {
     "build": "nest build",
     "start": "nest start",
+    "dev": "nest start --watch",
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/main",
-    "prisma:generate": "prisma generate",
-    "prisma:migrate": "prisma migrate dev",
-    "prisma:push": "prisma db push"
+    "test": "jest --passWithNoTests",
+    "test:watch": "jest --watch",
+    "test:cov": "jest --coverage",
+    "type-check": "tsc --noEmit"
   },
   "dependencies": {
+    "@ft-trans/database": "workspace:*",
+    "@ft-trans/backend-common": "workspace:*",
     "@dev-pulse/shared-types": "workspace:*",
+    "@prisma/client": "~6.19.0",
     "@nestjs/common": "^11.1.10",
     "@nestjs/core": "^11.1.10",
     "@nestjs/platform-express": "^11.1.10",
     "@nestjs/microservices": "^11.1.10",
     "@nestjs/config": "^4.0.2",
-    "@prisma/client": "~6.19.0",
     "class-validator": "^0.14.3",
     "class-transformer": "^0.5.1",
     "rxjs": "^7.8.2",
@@ -29,12 +33,6 @@
     "reflect-metadata": "^0.2.2"
   },
   "devDependencies": {
-    "@nestjs/cli": "^11.0.14",
-    "@nestjs/schematics": "^11.0.9",
-    "@nestjs/testing": "^11.1.10",
-    "@types/node": "^22.10.2",
-    "@types/express": "^5.0.6",
-    "prisma": "~6.19.0",
-    "typescript": "^5.7.2"
+    "@types/express": "^5.0.6"
   }
 }

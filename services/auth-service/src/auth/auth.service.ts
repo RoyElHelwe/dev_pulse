@@ -4,7 +4,7 @@ import {
   BadRequestException,
   NotFoundException,
 } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
+import { PrismaService } from '@ft-trans/database';
 import { EmailService } from '../email/email.service';
 import * as bcrypt from 'bcryptjs';
 import * as OTPAuth from 'otpauth';

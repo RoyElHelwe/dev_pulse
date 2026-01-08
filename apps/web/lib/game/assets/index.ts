@@ -5,3 +5,4 @@
  */
 
 export * from './tileset-config';
+export * from './office-theme';

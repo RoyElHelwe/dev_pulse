@@ -8,7 +8,7 @@ import { Module } from '@nestjs/common';
 import { OfficeController } from './office.controller';
 import { OfficeRpcController } from './office-rpc.controller';
 import { OfficeService } from './office.service';
-import { PrismaModule } from '../prisma/prisma.module';
+import { PrismaModule } from '@ft-trans/database';
 
 @Module({
   imports: [PrismaModule],

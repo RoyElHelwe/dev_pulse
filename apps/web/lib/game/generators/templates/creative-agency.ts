@@ -235,12 +235,12 @@ function createCreativeAgencyLayout(): OfficeLayoutData {
     // Decorations
     decorations: [
       // Plants
-      { id: 'plant-1', type: 'plantLarge', position: { x: 48, y: 48 }, dimensions: { width: 48, height: 48 } },
-      { id: 'plant-2', type: 'plantLarge', position: { x: 544, y: 48 }, dimensions: { width: 48, height: 48 } },
-      { id: 'plant-3', type: 'plantLarge', position: { x: 1024, y: 48 }, dimensions: { width: 48, height: 48 } },
-      { id: 'plant-4', type: 'plantMedium', position: { x: 48, y: 1024 }, dimensions: { width: 36, height: 36 } },
-      { id: 'plant-5', type: 'plantMedium', position: { x: 416, y: 1024 }, dimensions: { width: 36, height: 36 } },
-      { id: 'plant-6', type: 'plantSmall', position: { x: 320, y: 352 }, dimensions: { width: 24, height: 24 } },
+      { id: 'plant-1', type: 'plant-large', position: { x: 48, y: 48 }, dimensions: { width: 48, height: 48 } },
+      { id: 'plant-2', type: 'plant-large', position: { x: 544, y: 48 }, dimensions: { width: 48, height: 48 } },
+      { id: 'plant-3', type: 'plant-large', position: { x: 1024, y: 48 }, dimensions: { width: 48, height: 48 } },
+      { id: 'plant-4', type: 'plant-medium', position: { x: 48, y: 1024 }, dimensions: { width: 36, height: 36 } },
+      { id: 'plant-5', type: 'plant-medium', position: { x: 416, y: 1024 }, dimensions: { width: 36, height: 36 } },
+      { id: 'plant-6', type: 'plant-small', position: { x: 320, y: 352 }, dimensions: { width: 24, height: 24 } },
       
       // Inspiration whiteboards
       { id: 'whiteboard-1', type: 'whiteboard', position: { x: 64, y: 352 }, dimensions: { width: 160, height: 48 }, interactive: true, interactionRadius: 100 },
@@ -255,10 +255,10 @@ function createCreativeAgencyLayout(): OfficeLayoutData {
       // Lounge furniture
       { id: 'couch-1', type: 'couch', position: { x: 480, y: 704 }, dimensions: { width: 128, height: 64 } },
       { id: 'couch-2', type: 'couch', position: { x: 640, y: 704 }, dimensions: { width: 128, height: 64 } },
-      { id: 'bean-bag-1', type: 'beanBag', position: { x: 480, y: 816 }, dimensions: { width: 64, height: 64 } },
-      { id: 'bean-bag-2', type: 'beanBag', position: { x: 560, y: 816 }, dimensions: { width: 64, height: 64 } },
-      { id: 'bean-bag-3', type: 'beanBag', position: { x: 640, y: 816 }, dimensions: { width: 64, height: 64 } },
-      { id: 'bean-bag-4', type: 'beanBag', position: { x: 720, y: 816 }, dimensions: { width: 64, height: 64 } },
+      { id: 'bean-bag-1', type: 'bean-bag', position: { x: 480, y: 816 }, dimensions: { width: 64, height: 64 } },
+      { id: 'bean-bag-2', type: 'bean-bag', position: { x: 560, y: 816 }, dimensions: { width: 64, height: 64 } },
+      { id: 'bean-bag-3', type: 'bean-bag', position: { x: 640, y: 816 }, dimensions: { width: 64, height: 64 } },
+      { id: 'bean-bag-4', type: 'bean-bag', position: { x: 720, y: 816 }, dimensions: { width: 64, height: 64 } },
       
       // Kitchen area
       { id: 'coffee-1', type: 'coffeeMachine', position: { x: 960, y: 576 }, dimensions: { width: 48, height: 48 }, interactive: true, interactionRadius: 80 },

@@ -1,4 +1,5 @@
 // Game Constants
+import { PHASER_COLORS, hexToNumber, OFFICE_COLORS } from './assets/office-theme';
 
 export const GAME_CONFIG = {
   // Canvas size - large enough for most screens
@@ -12,32 +13,40 @@ export const GAME_CONFIG = {
   PLAYER_SPEED: 200,
   PLAYER_SIZE: 28,
   
-  // Colors (no assets, using graphics)
+  // Colors - now using shared theme for consistency with LayoutPreview
   COLORS: {
     // Floor
-    FLOOR: 0xf5f5dc, // Beige
-    FLOOR_GRID: 0xe5e5c5,
+    FLOOR: PHASER_COLORS.floor,
+    FLOOR_GRID: PHASER_COLORS.floorGrid,
     
     // Walls
-    WALL: 0x4a5568,
-    WALL_DARK: 0x2d3748,
+    WALL: PHASER_COLORS.wall,
+    WALL_DARK: PHASER_COLORS.wallDark,
     
     // Furniture
-    DESK: 0x8b4513, // Brown
-    DESK_TOP: 0xd2b48c, // Tan
-    CHAIR: 0x2563eb, // Blue
+    DESK: PHASER_COLORS.desk,
+    DESK_TOP: PHASER_COLORS.deskTop,
+    CHAIR: PHASER_COLORS.chair,
     
-    // Rooms
+    // Rooms - keep existing room colors for now
     MEETING_ROOM: 0xe8f5e9,
     MEETING_ROOM_BORDER: 0x4caf50,
     BREAK_ROOM: 0xfff3e0,
     BREAK_ROOM_BORDER: 0xff9800,
     
     // Decorations
-    PLANT: 0x228b22,
-    WHITEBOARD: 0xffffff,
-    WHITEBOARD_BORDER: 0x9e9e9e,
-    COFFEE_MACHINE: 0x5d4037,
+    PLANT: PHASER_COLORS.plant,
+    WHITEBOARD: PHASER_COLORS.whiteboard,
+    WHITEBOARD_BORDER: PHASER_COLORS.whiteboardFrame,
+    COFFEE_MACHINE: PHASER_COLORS.coffeeMachine,
+    
+    // Additional colors from shared theme
+    MONITOR: PHASER_COLORS.monitor,
+    MONITOR_SCREEN: PHASER_COLORS.monitorScreen,
+    POT: PHASER_COLORS.pot,
+    COUCH: PHASER_COLORS.couch,
+    COUCH_CUSHION: PHASER_COLORS.couchCushion,
+    CHAIR_BORDER: PHASER_COLORS.chairBorder,
     
     // Player status indicators
     STATUS_ONLINE: 0x4caf50,

@@ -5,7 +5,7 @@
  */
 
 import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
+import { PrismaService } from '@ft-trans/database';
 import {
   CreateOfficeLayoutDto,
   UpdateOfficeLayoutDto,

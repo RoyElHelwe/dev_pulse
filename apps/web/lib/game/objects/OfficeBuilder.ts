@@ -1,6 +1,6 @@
 import * as Phaser from 'phaser'
 import { GAME_CONFIG } from '../constants'
-import { DeskData, RoomData, DecorationData } from '../types'
+import { DecorationData, DeskData, RoomData } from '@dev-pulse/shared-types'
 
 export class OfficeBuilder {
   private scene: Phaser.Scene
@@ -119,60 +119,22 @@ export class OfficeBuilder {
     
     // Draw rooms
     if (layout.rooms && layout.rooms.length > 0) {
-      layout.rooms.forEach((room: any) => {
-        // Support both formats for rooms
-        const x = room.bounds?.x ?? room.x
-        const y = room.bounds?.y ?? room.y
-        const width = room.bounds?.width ?? room.width
-        const height = room.bounds?.height ?? room.height
-        
-        this.drawRoom({
-          id: room.id,
-          name: room.name || 'Room',
-          x: x,
-          y: y,
-          width: width,
-          height: height,
-          type: room.type || 'meeting',
-        })
+      layout.rooms.forEach((room: RoomData) => {
+        this.drawRoom(room)
       })
     }
     
     // Draw desks
     if (layout.desks && layout.desks.length > 0) {
-      layout.desks.forEach((desk: any) => {
-        // Support both formats: {x, y} and {position: {x, y}}
-        const x = desk.position?.x ?? desk.x
-        const y = desk.position?.y ?? desk.y
-        const width = desk.dimensions?.width ?? desk.width ?? 96
-        const height = desk.dimensions?.height ?? desk.height ?? 64
-        
-        this.drawDesk({
-          id: desk.id,
-          x: x,
-          y: y,
-          width: width,
-          height: height,
-          rotation: desk.rotation || 0,
-          type: desk.type || 'standard',
-          occupantId: desk.occupantId || null,
-        })
+      layout.desks.forEach((desk: DeskData) => {
+        this.drawDesk(desk)
       })
     }
     
     // Draw decorations
     if (layout.decorations && layout.decorations.length > 0) {
-      layout.decorations.forEach((decoration: any) => {
-        // Support both formats: {x, y} and {position: {x, y}}
-        const x = decoration.position?.x ?? decoration.x
-        const y = decoration.position?.y ?? decoration.y
-        
-        this.drawDecoration({
-          id: decoration.id,
-          x: x,
-          y: y,
-          type: decoration.type,
-        })
+      layout.decorations.forEach((decoration: DecorationData) => {
+        this.drawDecoration(decoration)
       })
     }
   }
@@ -249,22 +211,24 @@ export class OfficeBuilder {
     this.drawRoom({
       id: 'meeting-1',
       name: 'Meeting Room A',
-      x: 850,
-      y: 50,
-      width: 300,
-      height: 200,
       type: 'meeting',
+      bounds: { x: 850, y: 50, width: 300, height: 200 },
+      capacity: 8,
+      equipment: [],
+      bookable: true,
+      status: 'available',
     })
     
     // Meeting Room 2 (bottom left)
     this.drawRoom({
       id: 'meeting-2',
       name: 'Meeting Room B',
-      x: 50,
-      y: 500,
-      width: 250,
-      height: 180,
       type: 'meeting',
+      bounds: { x: 50, y: 500, width: 250, height: 180 },
+      capacity: 6,
+      equipment: [],
+      bookable: true,
+      status: 'available',
     })
   }
   
@@ -273,11 +237,12 @@ export class OfficeBuilder {
     this.drawRoom({
       id: 'break',
       name: 'Break Room',
-      x: 900,
-      y: 550,
-      width: 250,
-      height: 200,
       type: 'break',
+      bounds: { x: 900, y: 550, width: 250, height: 200 },
+      capacity: 12,
+      equipment: [],
+      bookable: false,
+      status: 'available',
     })
   }
   
@@ -297,18 +262,20 @@ export class OfficeBuilder {
     
     const roomColors = colors[room.type] || { fill: COLORS.MEETING_ROOM, border: COLORS.MEETING_ROOM_BORDER }
     
+    const { x, y, width, height } = room.bounds;
+    
     // Room floor
     this.graphics.fillStyle(roomColors.fill)
-    this.graphics.fillRect(room.x, room.y, room.width, room.height)
+    this.graphics.fillRect(x, y, width, height)
     
     // Room walls/border
     this.graphics.lineStyle(4, roomColors.border, 1)
-    this.graphics.strokeRect(room.x, room.y, room.width, room.height)
+    this.graphics.strokeRect(x, y, width, height)
     
     // Room label
     const label = this.scene.add.text(
-      room.x + room.width / 2,
-      room.y + 15,
+      x + width / 2,
+      y + 15,
       room.name,
       {
         fontSize: '14px',
@@ -329,11 +296,12 @@ export class OfficeBuilder {
   
   private drawMeetingTable(room: RoomData): void {
     const { COLORS } = GAME_CONFIG
+    const { x, y, width, height } = room.bounds;
     
-    const tableWidth = room.width * 0.6
-    const tableHeight = room.height * 0.4
-    const tableX = room.x + (room.width - tableWidth) / 2
-    const tableY = room.y + (room.height - tableHeight) / 2 + 20
+    const tableWidth = width * 0.6
+    const tableHeight = height * 0.4
+    const tableX = x + (width - tableWidth) / 2
+    const tableY = y + (height - tableHeight) / 2 + 20
     
     // Table
     this.graphics.fillStyle(COLORS.DESK)
@@ -364,10 +332,11 @@ export class OfficeBuilder {
   
   private drawBreakRoomFurniture(room: RoomData): void {
     const { COLORS } = GAME_CONFIG
+    const { x, y, width, height } = room.bounds;
     
     // Couch
-    const couchX = room.x + 30
-    const couchY = room.y + room.height - 80
+    const couchX = x + 30
+    const couchY = y + height - 80
     this.graphics.fillStyle(0x6b5b95)
     this.graphics.fillRoundedRect(couchX, couchY, 100, 50, 8)
     this.graphics.fillStyle(0x7d6ba0)
@@ -379,36 +348,36 @@ export class OfficeBuilder {
     
     // Coffee machine
     this.graphics.fillStyle(COLORS.COFFEE_MACHINE)
-    this.graphics.fillRect(room.x + room.width - 60, room.y + 40, 40, 50)
+    this.graphics.fillRect(x + width - 60, y + 40, 40, 50)
     this.graphics.fillStyle(0x8d6e63)
-    this.graphics.fillRect(room.x + room.width - 55, room.y + 50, 30, 30)
+    this.graphics.fillRect(x + width - 55, y + 50, 30, 30)
   }
   
   private drawDesks(): void {
     const desks: DeskData[] = [
       // Row 1 (left side)
-      { id: 'desk-1', x: 100, y: 100, width: 80, height: 50 },
-      { id: 'desk-2', x: 200, y: 100, width: 80, height: 50 },
-      { id: 'desk-3', x: 300, y: 100, width: 80, height: 50 },
-      { id: 'desk-4', x: 400, y: 100, width: 80, height: 50 },
+      { id: 'desk-1', position: { x: 100, y: 100 }, dimensions: { width: 80, height: 50 }, type: 'standard', zoneId: 'main', facing: 'south', isHotDesk: true, status: 'available' },
+      { id: 'desk-2', position: { x: 200, y: 100 }, dimensions: { width: 80, height: 50 }, type: 'standard', zoneId: 'main', facing: 'south', isHotDesk: true, status: 'available' },
+      { id: 'desk-3', position: { x: 300, y: 100 }, dimensions: { width: 80, height: 50 }, type: 'standard', zoneId: 'main', facing: 'south', isHotDesk: true, status: 'available' },
+      { id: 'desk-4', position: { x: 400, y: 100 }, dimensions: { width: 80, height: 50 }, type: 'standard', zoneId: 'main', facing: 'south', isHotDesk: true, status: 'available' },
       
       // Row 2
-      { id: 'desk-5', x: 100, y: 200, width: 80, height: 50 },
-      { id: 'desk-6', x: 200, y: 200, width: 80, height: 50 },
-      { id: 'desk-7', x: 300, y: 200, width: 80, height: 50 },
-      { id: 'desk-8', x: 400, y: 200, width: 80, height: 50 },
+      { id: 'desk-5', position: { x: 100, y: 200 }, dimensions: { width: 80, height: 50 }, type: 'standard', zoneId: 'main', facing: 'south', isHotDesk: true, status: 'available' },
+      { id: 'desk-6', position: { x: 200, y: 200 }, dimensions: { width: 80, height: 50 }, type: 'standard', zoneId: 'main', facing: 'south', isHotDesk: true, status: 'available' },
+      { id: 'desk-7', position: { x: 300, y: 200 }, dimensions: { width: 80, height: 50 }, type: 'standard', zoneId: 'main', facing: 'south', isHotDesk: true, status: 'available' },
+      { id: 'desk-8', position: { x: 400, y: 200 }, dimensions: { width: 80, height: 50 }, type: 'standard', zoneId: 'main', facing: 'south', isHotDesk: true, status: 'available' },
       
       // Row 3
-      { id: 'desk-9', x: 100, y: 350, width: 80, height: 50 },
-      { id: 'desk-10', x: 200, y: 350, width: 80, height: 50 },
-      { id: 'desk-11', x: 300, y: 350, width: 80, height: 50 },
-      { id: 'desk-12', x: 400, y: 350, width: 80, height: 50 },
+      { id: 'desk-9', position: { x: 100, y: 350 }, dimensions: { width: 80, height: 50 }, type: 'standard', zoneId: 'main', facing: 'south', isHotDesk: true, status: 'available' },
+      { id: 'desk-10', position: { x: 200, y: 350 }, dimensions: { width: 80, height: 50 }, type: 'standard', zoneId: 'main', facing: 'south', isHotDesk: true, status: 'available' },
+      { id: 'desk-11', position: { x: 300, y: 350 }, dimensions: { width: 80, height: 50 }, type: 'standard', zoneId: 'main', facing: 'south', isHotDesk: true, status: 'available' },
+      { id: 'desk-12', position: { x: 400, y: 350 }, dimensions: { width: 80, height: 50 }, type: 'standard', zoneId: 'main', facing: 'south', isHotDesk: true, status: 'available' },
       
       // Center area desks
-      { id: 'desk-13', x: 550, y: 300, width: 80, height: 50 },
-      { id: 'desk-14', x: 650, y: 300, width: 80, height: 50 },
-      { id: 'desk-15', x: 550, y: 400, width: 80, height: 50 },
-      { id: 'desk-16', x: 650, y: 400, width: 80, height: 50 },
+      { id: 'desk-13', position: { x: 550, y: 300 }, dimensions: { width: 80, height: 50 }, type: 'standard', zoneId: 'main', facing: 'south', isHotDesk: true, status: 'available' },
+      { id: 'desk-14', position: { x: 650, y: 300 }, dimensions: { width: 80, height: 50 }, type: 'standard', zoneId: 'main', facing: 'south', isHotDesk: true, status: 'available' },
+      { id: 'desk-15', position: { x: 550, y: 400 }, dimensions: { width: 80, height: 50 }, type: 'standard', zoneId: 'main', facing: 'south', isHotDesk: true, status: 'available' },
+      { id: 'desk-16', position: { x: 650, y: 400 }, dimensions: { width: 80, height: 50 }, type: 'standard', zoneId: 'main', facing: 'south', isHotDesk: true, status: 'available' },
     ]
     
     desks.forEach(desk => this.drawDesk(desk))
@@ -416,20 +385,22 @@ export class OfficeBuilder {
   
   private drawDesk(desk: DeskData): void {
     const { COLORS } = GAME_CONFIG
+    const { x, y } = desk.position;
+    const { width, height } = desk.dimensions;
     
     // Desk body
     this.graphics.fillStyle(COLORS.DESK)
-    this.graphics.fillRoundedRect(desk.x, desk.y, desk.width, desk.height, 4)
+    this.graphics.fillRoundedRect(x, y, width, height, 4)
     
     // Desk top
     this.graphics.fillStyle(COLORS.DESK_TOP)
-    this.graphics.fillRoundedRect(desk.x + 3, desk.y + 3, desk.width - 6, desk.height - 6, 3)
+    this.graphics.fillRoundedRect(x + 3, y + 3, width - 6, height - 6, 3)
     
     // Computer monitor
     const monitorWidth = 25
     const monitorHeight = 18
-    const monitorX = desk.x + desk.width / 2 - monitorWidth / 2
-    const monitorY = desk.y + 8
+    const monitorX = x + width / 2 - monitorWidth / 2
+    const monitorY = y + 8
     
     // Monitor
     this.graphics.fillStyle(0x333333)
@@ -442,8 +413,8 @@ export class OfficeBuilder {
     this.graphics.fillRect(monitorX + monitorWidth / 2 - 3, monitorY + monitorHeight, 6, 5)
     
     // Chair
-    const chairX = desk.x + desk.width / 2 - 12
-    const chairY = desk.y + desk.height + 8
+    const chairX = x + width / 2 - 12
+    const chairY = y + height + 8
     
     this.graphics.fillStyle(COLORS.CHAIR)
     this.graphics.fillRoundedRect(chairX, chairY, 24, 24, 4)
@@ -454,50 +425,76 @@ export class OfficeBuilder {
   private drawDecorations(): void {
     const decorations: DecorationData[] = [
       // Plants
-      { id: 'plant-1', type: 'plant', x: 60, y: 60 },
-      { id: 'plant-2', type: 'plant', x: 500, y: 60 },
-      { id: 'plant-3', type: 'plant', x: 800, y: 300 },
-      { id: 'plant-4', type: 'plant', x: 60, y: 450 },
+      { id: 'plant-1', type: 'plant', position: { x: 60, y: 60 }, dimensions: { width: 30, height: 30 } },
+      { id: 'plant-2', type: 'plant', position: { x: 500, y: 60 }, dimensions: { width: 30, height: 30 } },
+      { id: 'plant-3', type: 'plant', position: { x: 800, y: 300 }, dimensions: { width: 30, height: 30 } },
+      { id: 'plant-4', type: 'plant', position: { x: 60, y: 450 }, dimensions: { width: 30, height: 30 } },
       
       // Whiteboards
-      { id: 'wb-1', type: 'whiteboard', x: 520, y: 80 },
-      { id: 'wb-2', type: 'whiteboard', x: 350, y: 500 },
+      { id: 'wb-1', type: 'whiteboard', position: { x: 520, y: 80 }, dimensions: { width: 60, height: 40 } },
+      { id: 'wb-2', type: 'whiteboard', position: { x: 350, y: 500 }, dimensions: { width: 60, height: 40 } },
     ]
     
     decorations.forEach(deco => this.drawDecoration(deco))
   }
   
   private drawDecoration(deco: DecorationData): void {
+    const { x, y } = deco.position;
     switch (deco.type) {
       case 'plant':
-        this.drawPlant(deco.x, deco.y)
+      case 'plant-small':
+      case 'plant-medium':
+      case 'plant-large':
+        this.drawPlant(x, y, 'plant')
         break
       case 'whiteboard':
-        this.drawWhiteboard(deco.x, deco.y)
+        this.drawWhiteboard(x, y)
+        break
+      case 'coffeeMachine':
+      case 'coffee-machine':
+        this.drawCoffeeMachine(x, y)
+        break
+      case 'couch':
+      case 'lounge-chair':
+        this.drawCouch(x, y)
+        break
+      case 'water-cooler':
+        this.drawWaterCooler(x, y)
+        break
+      case 'artwork':
+        this.drawArtwork(x, y)
         break
       default:
         // For unknown decoration types, just draw a simple marker
         this.graphics.fillStyle(0x9e9e9e)
-        this.graphics.fillCircle(deco.x, deco.y, 10)
+        this.graphics.fillCircle(x, y, 10)
         break
     }
   }
   
-  private drawPlant(x: number, y: number): void {
+  private drawPlant(x: number, y: number, type: string = 'plant'): void {
     const { COLORS } = GAME_CONFIG
+    
+    // Determine size based on type
+    let potWidth = 24, potHeight = 20, leafSize = 15
+    if (type === 'plantSmall') {
+      potWidth = 16; potHeight = 14; leafSize = 10
+    } else if (type === 'plantLarge') {
+      potWidth = 32; potHeight = 28; leafSize = 20
+    }
     
     // Pot
     this.graphics.fillStyle(0xd2691e)
-    this.graphics.fillRect(x - 12, y + 10, 24, 20)
+    this.graphics.fillRect(x - potWidth/2, y + 10, potWidth, potHeight)
     this.graphics.fillStyle(0xcd853f)
-    this.graphics.fillRect(x - 15, y + 8, 30, 6)
+    this.graphics.fillRect(x - potWidth/2 - 3, y + 8, potWidth + 6, 6)
     
     // Plant leaves
     this.graphics.fillStyle(COLORS.PLANT)
-    this.graphics.fillCircle(x, y - 5, 15)
-    this.graphics.fillCircle(x - 10, y, 10)
-    this.graphics.fillCircle(x + 10, y, 10)
-    this.graphics.fillCircle(x, y + 5, 12)
+    this.graphics.fillCircle(x, y - 5, leafSize)
+    this.graphics.fillCircle(x - leafSize * 0.7, y, leafSize * 0.7)
+    this.graphics.fillCircle(x + leafSize * 0.7, y, leafSize * 0.7)
+    this.graphics.fillCircle(x, y + 5, leafSize * 0.8)
   }
   
   private drawWhiteboard(x: number, y: number): void {
@@ -529,6 +526,103 @@ export class OfficeBuilder {
       this.graphics.fillStyle(color)
       this.graphics.fillRect(x + 20 + i * 20, y + height, 8, 6)
     })
+  }
+  
+  private drawCoffeeMachine(x: number, y: number): void {
+    const { COLORS } = GAME_CONFIG
+    
+    // Machine body
+    this.graphics.fillStyle(COLORS.COFFEE_MACHINE)
+    this.graphics.fillRoundedRect(x - 12, y - 20, 24, 40, 3)
+    
+    // Control panel
+    this.graphics.fillStyle(0x222222)
+    this.graphics.fillRoundedRect(x - 8, y - 15, 16, 10, 2)
+    
+    // Buttons
+    this.graphics.fillStyle(0x4caf50)
+    this.graphics.fillCircle(x - 4, y - 10, 2)
+    this.graphics.fillStyle(0xf44336)
+    this.graphics.fillCircle(x + 4, y - 10, 2)
+    
+    // Indicator light
+    this.graphics.fillStyle(0xdc2626)
+    this.graphics.fillCircle(x, y + 5, 3)
+    
+    // Drip tray
+    this.graphics.fillStyle(0x333333)
+    this.graphics.fillRect(x - 10, y + 15, 20, 4)
+  }
+  
+  private drawCouch(x: number, y: number): void {
+    const width = 70
+    const height = 30
+    
+    // Couch body
+    this.graphics.fillStyle(0x7c3aed)
+    this.graphics.fillRoundedRect(x - width/2, y - height/2, width, height, 6)
+    
+    // Cushions
+    this.graphics.fillStyle(0x8b5cf6)
+    this.graphics.fillRoundedRect(x - width/2 + 5, y - height/2 + 4, width - 10, height - 12, 4)
+    
+    // Arm rests
+    this.graphics.fillStyle(0x7c3aed)
+    this.graphics.fillRoundedRect(x - width/2 - 4, y - height/2 + 2, 8, height - 4, 3)
+    this.graphics.fillRoundedRect(x + width/2 - 4, y - height/2 + 2, 8, height - 4, 3)
+  }
+  
+  private drawBeanBag(x: number, y: number): void {
+    // Bean bag shape using ellipses
+    this.graphics.fillStyle(0x8b5cf6)
+    this.graphics.fillEllipse(x, y, 56, 48)
+    
+    // Highlight
+    this.graphics.fillStyle(0x7c3aed, 0.6)
+    this.graphics.fillEllipse(x, y - 8, 40, 32)
+  }
+  
+  private drawWaterCooler(x: number, y: number): void {
+    // Cooler body
+    this.graphics.fillStyle(0x4fc3f7)
+    this.graphics.fillRoundedRect(x - 12, y - 16, 24, 32, 4)
+    
+    // Water container
+    this.graphics.fillStyle(0x81d4fa, 0.5)
+    this.graphics.fillRoundedRect(x - 8, y - 12, 16, 20, 2)
+    
+    // Spout
+    this.graphics.fillStyle(0x0288d1)
+    this.graphics.fillCircle(x, y + 12, 3)
+    
+    // Base
+    this.graphics.fillStyle(0x0288d1)
+    this.graphics.fillRect(x - 10, y + 14, 20, 4)
+  }
+  
+  private drawArtwork(x: number, y: number): void {
+    const width = 64
+    const height = 48
+    
+    // Frame
+    this.graphics.fillStyle(0x8b4513)
+    this.graphics.fillRect(x, y, width, height)
+    
+    // Canvas
+    this.graphics.fillStyle(0xf5f5dc)
+    this.graphics.fillRect(x + 4, y + 4, width - 8, height - 8)
+    
+    // Simple abstract art pattern
+    this.graphics.fillStyle(0xff6b6b)
+    this.graphics.fillCircle(x + width/2, y + height/2, 12)
+    this.graphics.fillStyle(0x4ecdc4)
+    this.graphics.fillRect(x + 10, y + 10, 15, 15)
+    this.graphics.fillStyle(0xffe66d)
+    this.graphics.fillTriangle(
+      x + width - 15, y + height - 10,
+      x + width - 5, y + height - 10,
+      x + width - 10, y + height - 25
+    )
   }
   
   public getCollisionBodies(): Phaser.GameObjects.Rectangle[] {

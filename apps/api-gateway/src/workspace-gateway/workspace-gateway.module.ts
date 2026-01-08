@@ -2,7 +2,7 @@ import { Module } from '@nestjs/common';
 import { WorkspaceGatewayController } from './workspace-gateway.controller';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 import { AuthModule } from '../auth/auth.module';
-import { PrismaModule } from '../prisma/prisma.module';
+import { PrismaModule } from '@ft-trans/database';
 
 @Module({
   imports: [

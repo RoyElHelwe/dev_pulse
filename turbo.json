@@ -1,7 +1,7 @@
 {
   "$schema": "https://turbo.build/schema.json",
   "globalDependencies": ["**/.env.*local"],
-  "pipeline": {
+  "tasks": {
     "build": {
       "dependsOn": ["^build"],
       "outputs": [".next/**", "!.next/cache/**", "dist/**"],
@@ -37,13 +37,14 @@
     "clean": {
       "cache": false
     },
-    "migrate": {
+    "prisma:generate": {
+      "cache": false,
+      "outputs": ["node_modules/.prisma/**"]
+    },
+    "prisma:migrate": {
       "cache": false
     },
-    "migrate:deploy": {
-      "cache": false
-    },
-    "seed": {
+    "prisma:push": {
       "cache": false
     }
   }

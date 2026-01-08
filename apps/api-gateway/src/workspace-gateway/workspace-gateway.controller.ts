@@ -16,7 +16,7 @@ import {
 } from '@nestjs/common';
 import { ClientProxy } from '@nestjs/microservices';
 import { AuthGuard } from '../auth/guards/auth.guard';
-import { PrismaService } from '../prisma/prisma.service';
+import { PrismaService } from '@ft-trans/database';
 import { firstValueFrom } from 'rxjs';
 import { Request as ExpressRequest } from 'express';
 

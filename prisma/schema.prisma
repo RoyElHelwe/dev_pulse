@@ -1,0 +1,393 @@
+// =============================================================================
+// Unified Prisma Schema for ft_transcendence
+// This is the single source of truth for all database models
+// =============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// =============================================================================
+// AUTHENTICATION MODELS
+// =============================================================================
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  emailVerified Boolean   @default(false)
+  name          String?
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Better Auth relations
+  accounts       Account[]
+  sessions       Session[]
+  passwordResets PasswordReset[]
+
+  // 2FA fields
+  twoFactorEnabled Boolean @default(false)
+  twoFactorSecret  String?
+
+  // Application relations
+  workspaces    WorkspaceMember[]
+  tasks         Task[]            @relation("TaskAssignee")
+  createdTasks  Task[]            @relation("TaskCreator")
+  taskComments  TaskComment[]
+  messages      Message[]
+  auditLogs     AuditLog[]
+
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id             String   @id @default(cuid())
+  sessionToken   String   @unique
+  refreshToken   String   @unique
+  userId         String
+  expires        DateTime
+  refreshExpires DateTime
+  ipAddress      String?
+  userAgent      String?
+  lastActivityAt DateTime @default(now())
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+model PasswordReset {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String
+  used      Boolean  @default(false)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("password_resets")
+}
+
+// =============================================================================
+// WORKSPACE & TEAM MODELS
+// =============================================================================
+
+model Workspace {
+  id           String   @id @default(cuid())
+  name         String
+  slug         String   @unique
+  description  String?
+  image        String?
+  ownerId      String
+  officeLayout Json?    // Legacy: 2D office layout (deprecated - use OfficeLayout model)
+  settings     Json?    // Workspace settings
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  members     WorkspaceMember[]
+  invitations Invitation[]
+  tasks       Task[]
+  sprints     Sprint[]
+  messages    Message[]
+  office      OfficeLayout?
+
+  @@map("workspaces")
+}
+
+model WorkspaceMember {
+  id          String   @id @default(cuid())
+  workspaceId String
+  userId      String   @unique // ONE workspace per user
+  role        String   @default("MEMBER") // OWNER, ADMIN, MANAGER, MEMBER, VIEWER
+  position    Json?    // Avatar position in 2D office
+  status      String   @default("OFFLINE") // ONLINE, OFFLINE, AWAY, BUSY
+  joinedAt    DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+  @@map("workspace_members")
+}
+
+model Invitation {
+  id          String   @id @default(cuid())
+  workspaceId String
+  email       String
+  token       String   @unique
+  role        String   @default("MEMBER")
+  status      String   @default("PENDING") // PENDING, ACCEPTED, DECLINED, EXPIRED
+  expiresAt   DateTime
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([email])
+  @@index([token])
+  @@map("invitations")
+}
+
+// =============================================================================
+// OFFICE LAYOUT MODELS
+// =============================================================================
+
+enum GenerationMode {
+  AI_AUTO
+  TEMPLATE
+  MANUAL
+  HYBRID
+}
+
+enum TemplateCategory {
+  STARTUP
+  CORPORATE
+  CREATIVE
+  REMOTE_HUB
+  ENTERPRISE
+  HYBRID
+}
+
+model OfficeLayout {
+  id          String   @id @default(cuid())
+  workspaceId String   @unique
+
+  // Generation metadata
+  generationMode  GenerationMode @default(AI_AUTO)
+  templateId      String?
+  aiPrompt        String?
+
+  // Layout data (JSON) - contains desks, rooms, decorations, zones
+  layout Json
+
+  // Metrics
+  teamSize    Int
+  departments String[]
+  totalArea   Int
+  deskCount   Int
+  roomCount   Int
+
+  // AI metadata
+  aiReasoning       String?
+  optimizationScore Float?
+
+  // Versioning
+  version           Int     @default(1)
+  previousVersionId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspace       Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  deskAssignments DeskAssignment[]
+  roomBookings    MeetingRoomBooking[]
+
+  @@index([workspaceId])
+  @@map("office_layouts")
+}
+
+model OfficeTemplate {
+  id          String           @id @default(cuid())
+  name        String
+  description String
+  category    TemplateCategory
+
+  // Template data
+  layout  Json
+  preview String? // Image URL
+
+  // Metadata
+  minTeamSize Int
+  maxTeamSize Int
+  popularity  Int     @default(0)
+  isDefault   Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("office_templates")
+}
+
+model DeskAssignment {
+  id             String  @id @default(cuid())
+  officeLayoutId String
+  userId         String
+  deskId         String
+  isHotDesk      Boolean @default(false)
+
+  // For hot desk booking
+  reservedFrom DateTime?
+  reservedTo   DateTime?
+  checkedInAt  DateTime?
+
+  officeLayout OfficeLayout @relation(fields: [officeLayoutId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([officeLayoutId, deskId])
+  @@index([officeLayoutId, userId])
+  @@map("desk_assignments")
+}
+
+model MeetingRoomBooking {
+  id             String @id @default(cuid())
+  officeLayoutId String
+  roomId         String
+  userId         String
+
+  title         String?
+  description   String?
+  startTime     DateTime
+  endTime       DateTime
+  attendees     String[] // User IDs
+  isRecurring   Boolean  @default(false)
+  recurringRule String?  // iCal RRULE format
+
+  officeLayout OfficeLayout @relation(fields: [officeLayoutId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([officeLayoutId, roomId, startTime])
+  @@index([userId])
+  @@map("meeting_room_bookings")
+}
+
+// =============================================================================
+// TASK MANAGEMENT MODELS
+// =============================================================================
+
+model Task {
+  id          String    @id @default(cuid())
+  title       String
+  description String?   @db.Text
+  status      String    @default("TODO") // TODO, IN_PROGRESS, REVIEW, DONE
+  priority    String    @default("MEDIUM") // LOW, MEDIUM, HIGH, URGENT
+  workspaceId String
+  assigneeId  String?
+  creatorId   String
+  sprintId    String?
+  tags        String[]
+  deadline    DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  workspace Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  assignee  User?         @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  creator   User          @relation("TaskCreator", fields: [creatorId], references: [id])
+  sprint    Sprint?       @relation(fields: [sprintId], references: [id])
+  comments  TaskComment[]
+
+  @@map("tasks")
+}
+
+model TaskComment {
+  id        String   @id @default(cuid())
+  taskId    String
+  userId    String
+  content   String   @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("task_comments")
+}
+
+model Sprint {
+  id          String   @id @default(cuid())
+  name        String
+  goal        String?  @db.Text
+  workspaceId String
+  startDate   DateTime
+  endDate     DateTime
+  status      String   @default("PLANNED") // PLANNED, ACTIVE, COMPLETED
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  tasks     Task[]
+
+  @@map("sprints")
+}
+
+// =============================================================================
+// COMMUNICATION MODELS
+// =============================================================================
+
+model Message {
+  id          String   @id @default(cuid())
+  content     String   @db.Text
+  workspaceId String
+  userId      String
+  type        String   @default("TEXT") // TEXT, SYSTEM, FILE
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("messages")
+}
+
+// =============================================================================
+// AUDIT & SECURITY
+// =============================================================================
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  action     String
+  entityType String
+  entityId   String?
+  metadata   Json?
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@map("audit_logs")
+}

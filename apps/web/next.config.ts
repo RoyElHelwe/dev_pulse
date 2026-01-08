@@ -1,6 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  transpilePackages: ['@ft-trans/frontend-shared'],
+  transpilePackages: ['@ft-trans/frontend-shared', '@dev-pulse/shared-types'],
+  output: 'standalone', // Required for Docker production builds
   experimental: {
     turbo: {
       rules: {
