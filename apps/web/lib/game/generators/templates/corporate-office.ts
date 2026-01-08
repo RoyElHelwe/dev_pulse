@@ -293,7 +293,7 @@ function createCorporateOfficeLayout(): OfficeLayoutData {
         type: 'break',
         bounds: { x: 1376, y: 576, width: 288, height: 256 },
         capacity: 15,
-        equipment: ['coffee-machine', 'fridge', 'microwave'],
+        equipment: ['coffeeMachine', 'fridge', 'microwave'],
         bookable: false,
         status: 'available',
         color: '#fff3e0',
@@ -304,24 +304,24 @@ function createCorporateOfficeLayout(): OfficeLayoutData {
     // Decorations
     decorations: [
       // Plants throughout
-      { id: 'plant-1', type: 'plant-large', position: { x: 48, y: 48 }, dimensions: { width: 48, height: 48 } },
-      { id: 'plant-2', type: 'plant-large', position: { x: 592, y: 48 }, dimensions: { width: 48, height: 48 } },
-      { id: 'plant-3', type: 'plant-large', position: { x: 1200, y: 48 }, dimensions: { width: 48, height: 48 } },
-      { id: 'plant-4', type: 'plant-medium', position: { x: 48, y: 960 }, dimensions: { width: 36, height: 36 } },
-      { id: 'plant-5', type: 'plant-medium', position: { x: 592, y: 960 }, dimensions: { width: 36, height: 36 } },
-      { id: 'plant-6', type: 'plant-large', position: { x: 1920, y: 48 }, dimensions: { width: 48, height: 48 } },
+      { id: 'plant-1', type: 'plantLarge', position: { x: 48, y: 48 }, dimensions: { width: 48, height: 48 } },
+      { id: 'plant-2', type: 'plantLarge', position: { x: 592, y: 48 }, dimensions: { width: 48, height: 48 } },
+      { id: 'plant-3', type: 'plantLarge', position: { x: 1200, y: 48 }, dimensions: { width: 48, height: 48 } },
+      { id: 'plant-4', type: 'plantMedium', position: { x: 48, y: 960 }, dimensions: { width: 36, height: 36 } },
+      { id: 'plant-5', type: 'plantMedium', position: { x: 592, y: 960 }, dimensions: { width: 36, height: 36 } },
+      { id: 'plant-6', type: 'plantLarge', position: { x: 1920, y: 48 }, dimensions: { width: 48, height: 48 } },
       
       // Whiteboards
       { id: 'whiteboard-eng', type: 'whiteboard', position: { x: 64, y: 448 }, dimensions: { width: 160, height: 48 }, interactive: true, interactionRadius: 100 },
       { id: 'whiteboard-sales', type: 'whiteboard', position: { x: 736, y: 448 }, dimensions: { width: 160, height: 48 }, interactive: true, interactionRadius: 100 },
       
       // Break room furniture
-      { id: 'coffee-1', type: 'coffee-machine', position: { x: 1408, y: 608 }, dimensions: { width: 48, height: 48 }, interactive: true, interactionRadius: 80 },
+      { id: 'coffee-1', type: 'coffeeMachine', position: { x: 1408, y: 608 }, dimensions: { width: 48, height: 48 }, interactive: true, interactionRadius: 80 },
       { id: 'couch-1', type: 'couch', position: { x: 1408, y: 720 }, dimensions: { width: 160, height: 64 } },
       { id: 'couch-2', type: 'couch', position: { x: 1600, y: 640 }, dimensions: { width: 64, height: 160 }, rotation: 90 },
       
       // Reception area
-      { id: 'plant-reception', type: 'plant-large', position: { x: 1600, y: 1088 }, dimensions: { width: 48, height: 48 } },
+      { id: 'plant-reception', type: 'plantLarge', position: { x: 1600, y: 1088 }, dimensions: { width: 48, height: 48 } },
       
       // Artwork
       { id: 'artwork-1', type: 'artwork', position: { x: 1380, y: 1056 }, dimensions: { width: 64, height: 48 } },

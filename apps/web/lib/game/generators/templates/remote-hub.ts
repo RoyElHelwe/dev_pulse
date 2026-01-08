@@ -233,7 +233,7 @@ function createRemoteHubLayout(): OfficeLayoutData {
         type: 'break',
         bounds: { x: 320, y: 640, width: 288, height: 256 },
         capacity: 20,
-        equipment: ['coffee-machine', 'espresso', 'fridge', 'snacks'],
+        equipment: ['coffeeMachine', 'espresso', 'fridge', 'snacks'],
         bookable: false,
         status: 'available',
         color: '#fff3e0',
@@ -244,25 +244,25 @@ function createRemoteHubLayout(): OfficeLayoutData {
     // Decorations
     decorations: [
       // Plants
-      { id: 'plant-1', type: 'plant-large', position: { x: 48, y: 48 }, dimensions: { width: 48, height: 48 } },
-      { id: 'plant-2', type: 'plant-large', position: { x: 544, y: 48 }, dimensions: { width: 48, height: 48 } },
-      { id: 'plant-3', type: 'plant-large', position: { x: 896, y: 48 }, dimensions: { width: 48, height: 48 } },
-      { id: 'plant-4', type: 'plant-medium', position: { x: 48, y: 928 }, dimensions: { width: 36, height: 36 } },
-      { id: 'plant-5', type: 'plant-medium', position: { x: 608, y: 928 }, dimensions: { width: 36, height: 36 } },
-      { id: 'plant-6', type: 'plant-small', position: { x: 544, y: 416 }, dimensions: { width: 24, height: 24 } },
+      { id: 'plant-1', type: 'plantLarge', position: { x: 48, y: 48 }, dimensions: { width: 48, height: 48 } },
+      { id: 'plant-2', type: 'plantLarge', position: { x: 544, y: 48 }, dimensions: { width: 48, height: 48 } },
+      { id: 'plant-3', type: 'plantLarge', position: { x: 896, y: 48 }, dimensions: { width: 48, height: 48 } },
+      { id: 'plant-4', type: 'plantMedium', position: { x: 48, y: 928 }, dimensions: { width: 36, height: 36 } },
+      { id: 'plant-5', type: 'plantMedium', position: { x: 608, y: 928 }, dimensions: { width: 36, height: 36 } },
+      { id: 'plant-6', type: 'plantSmall', position: { x: 544, y: 416 }, dimensions: { width: 24, height: 24 } },
       
       // Lounge furniture in social area
       { id: 'couch-1', type: 'couch', position: { x: 64, y: 704 }, dimensions: { width: 128, height: 64 } },
       { id: 'couch-2', type: 'couch', position: { x: 64, y: 800 }, dimensions: { width: 128, height: 64 } },
       { id: 'couch-3', type: 'couch', position: { x: 224, y: 704 }, dimensions: { width: 128, height: 64 } },
       
-      { id: 'bean-bag-1', type: 'bean-bag', position: { x: 64, y: 896 }, dimensions: { width: 64, height: 64 } },
-      { id: 'bean-bag-2', type: 'bean-bag', position: { x: 144, y: 896 }, dimensions: { width: 64, height: 64 } },
-      { id: 'bean-bag-3', type: 'bean-bag', position: { x: 224, y: 896 }, dimensions: { width: 64, height: 64 } },
+      { id: 'bean-bag-1', type: 'beanBag', position: { x: 64, y: 896 }, dimensions: { width: 64, height: 64 } },
+      { id: 'bean-bag-2', type: 'beanBag', position: { x: 144, y: 896 }, dimensions: { width: 64, height: 64 } },
+      { id: 'bean-bag-3', type: 'beanBag', position: { x: 224, y: 896 }, dimensions: { width: 64, height: 64 } },
       
       // Cafe area
-      { id: 'coffee-1', type: 'coffee-machine', position: { x: 352, y: 672 }, dimensions: { width: 48, height: 48 }, interactive: true, interactionRadius: 80 },
-      { id: 'water-1', type: 'water-cooler', position: { x: 416, y: 672 }, dimensions: { width: 32, height: 32 }, interactive: true, interactionRadius: 60 },
+      { id: 'coffee-1', type: 'coffeeMachine', position: { x: 352, y: 672 }, dimensions: { width: 48, height: 48 }, interactive: true, interactionRadius: 80 },
+      { id: 'water-1', type: 'waterCooler', position: { x: 416, y: 672 }, dimensions: { width: 32, height: 32 }, interactive: true, interactionRadius: 60 },
       
       // Whiteboards
       { id: 'whiteboard-1', type: 'whiteboard', position: { x: 576, y: 352 }, dimensions: { width: 128, height: 48 }, interactive: true, interactionRadius: 100 },

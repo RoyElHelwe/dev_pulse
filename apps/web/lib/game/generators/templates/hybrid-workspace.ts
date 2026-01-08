@@ -119,16 +119,16 @@ function createHybridWorkspaceLayout(): OfficeLayoutData {
     ],
 
     decorations: [
-      { id: 'plant-1', type: 'plant-large' as DecorationType, position: { x: W, y: W }, dimensions: { width: 48, height: 48 } },
-      { id: 'plant-2', type: 'plant-large' as DecorationType, position: { x: width - W - 48, y: W }, dimensions: { width: 48, height: 48 } },
-      { id: 'plant-3', type: 'plant-large' as DecorationType, position: { x: W, y: height - W - 48 }, dimensions: { width: 48, height: 48 } },
-      { id: 'plant-4', type: 'plant-large' as DecorationType, position: { x: width - W - 48, y: height - W - 48 }, dimensions: { width: 48, height: 48 } },
+      { id: 'plant-1', type: 'plantLarge' as DecorationType, position: { x: W, y: W }, dimensions: { width: 48, height: 48 } },
+      { id: 'plant-2', type: 'plantLarge' as DecorationType, position: { x: width - W - 48, y: W }, dimensions: { width: 48, height: 48 } },
+      { id: 'plant-3', type: 'plantLarge' as DecorationType, position: { x: W, y: height - W - 48 }, dimensions: { width: 48, height: 48 } },
+      { id: 'plant-4', type: 'plantLarge' as DecorationType, position: { x: width - W - 48, y: height - W - 48 }, dimensions: { width: 48, height: 48 } },
       { id: 'wb-collab-1', type: 'whiteboard' as DecorationType, position: { x: COLLAB_X + T, y: COLLAB_Y + T }, dimensions: { width: 128, height: 48 }, interactive: true, interactionRadius: 100 },
       { id: 'wb-collab-2', type: 'whiteboard' as DecorationType, position: { x: COLLAB_X + 10 * T, y: COLLAB_Y + T }, dimensions: { width: 128, height: 48 }, interactive: true, interactionRadius: 100 },
       { id: 'couch-1', type: 'couch' as DecorationType, position: { x: BREAK_X + T, y: BREAK_Y + T }, dimensions: { width: 128, height: 48 } },
       { id: 'couch-2', type: 'couch' as DecorationType, position: { x: BREAK_X + T, y: BREAK_Y + 4 * T }, dimensions: { width: 128, height: 48 } },
-      { id: 'coffee', type: 'coffee-machine' as DecorationType, position: { x: BREAK_X + 7 * T, y: BREAK_Y + T }, dimensions: { width: 48, height: 48 }, interactive: true, interactionRadius: 80 },
-      { id: 'water', type: 'water-cooler' as DecorationType, position: { x: BREAK_X + 7 * T, y: BREAK_Y + 3 * T }, dimensions: { width: 32, height: 32 }, interactive: true, interactionRadius: 60 },
+      { id: 'coffee', type: 'coffeeMachine' as DecorationType, position: { x: BREAK_X + 7 * T, y: BREAK_Y + T }, dimensions: { width: 48, height: 48 }, interactive: true, interactionRadius: 80 },
+      { id: 'water', type: 'waterCooler' as DecorationType, position: { x: BREAK_X + 7 * T, y: BREAK_Y + 3 * T }, dimensions: { width: 32, height: 32 }, interactive: true, interactionRadius: 60 },
     ],
 
     walls: [
