@@ -19,13 +19,14 @@ model Workspace {
   description String?
   image       String?
   ownerId     String
-  officeLayout Json?   // Generated office layout data
+  officeLayout Json?   // Generated office layout data (deprecated - use OfficeLayout model)
   settings    Json?    // Workspace settings
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   members      WorkspaceMember[]
   invitations  Invitation[]
+  office       OfficeLayout?
 
   @@map("workspaces")
 }
@@ -63,4 +64,130 @@ model Invitation {
   @@index([email])
   @@index([token])
   @@map("invitations")
+}
+
+// ============================================
+// OFFICE LAYOUT MODELS
+// ============================================
+
+model OfficeLayout {
+  id            String   @id @default(cuid())
+  workspaceId   String   @unique
+  
+  // Generation metadata
+  generationMode  GenerationMode @default(AI_AUTO)
+  templateId      String?
+  aiPrompt        String?
+  
+  // Layout data (JSON) - contains desks, rooms, decorations, zones
+  layout          Json
+  
+  // Metrics
+  teamSize        Int
+  departments     String[]
+  totalArea       Int
+  deskCount       Int
+  roomCount       Int
+  
+  // AI metadata
+  aiReasoning     String?
+  optimizationScore Float?
+  
+  // Versioning
+  version         Int      @default(1)
+  previousVersionId String?
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  deskAssignments DeskAssignment[]
+  roomBookings    MeetingRoomBooking[]
+
+  @@index([workspaceId])
+  @@map("office_layouts")
+}
+
+enum GenerationMode {
+  AI_AUTO
+  TEMPLATE
+  MANUAL
+  HYBRID
+}
+
+model OfficeTemplate {
+  id          String   @id @default(cuid())
+  name        String
+  description String
+  category    TemplateCategory
+  
+  // Template data
+  layout      Json
+  preview     String?  // Image URL
+  
+  // Metadata
+  minTeamSize Int
+  maxTeamSize Int
+  popularity  Int      @default(0)
+  isDefault   Boolean  @default(false)
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("office_templates")
+}
+
+enum TemplateCategory {
+  STARTUP
+  CORPORATE
+  CREATIVE
+  REMOTE_HUB
+  ENTERPRISE
+  HYBRID
+}
+
+model DeskAssignment {
+  id            String   @id @default(cuid())
+  officeLayoutId String
+  userId        String
+  deskId        String
+  isHotDesk     Boolean  @default(false)
+  
+  // For hot desk booking
+  reservedFrom  DateTime?
+  reservedTo    DateTime?
+  checkedInAt   DateTime?
+  
+  officeLayout  OfficeLayout @relation(fields: [officeLayoutId], references: [id], onDelete: Cascade)
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([officeLayoutId, deskId])
+  @@index([officeLayoutId, userId])
+  @@map("desk_assignments")
+}
+
+model MeetingRoomBooking {
+  id            String   @id @default(cuid())
+  officeLayoutId String
+  roomId        String
+  userId        String
+  
+  title         String?
+  description   String?
+  startTime     DateTime
+  endTime       DateTime
+  attendees     String[] // User IDs
+  isRecurring   Boolean  @default(false)
+  recurringRule String?  // iCal RRULE format
+  
+  officeLayout  OfficeLayout @relation(fields: [officeLayoutId], references: [id], onDelete: Cascade)
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([officeLayoutId, roomId, startTime])
+  @@index([userId])
+  @@map("meeting_room_bookings")
 }

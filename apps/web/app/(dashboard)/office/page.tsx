@@ -12,6 +12,7 @@ export default function OfficePage() {
   const router = useRouter()
   const { user, isAuthenticated, isLoading: authLoading } = useAuth()
   const [workspaceId, setWorkspaceId] = useState<string | null>(null)
+  const [officeLayout, setOfficeLayout] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [chatInput, setChatInput] = useState('')
   const [showMobileChat, setShowMobileChat] = useState(false)
@@ -40,12 +41,37 @@ export default function OfficePage() {
           const data = await res.json()
           if (data.hasWorkspace) {
             setWorkspaceId(data.workspace.id)
+            
+            // Load office layout
+            try {
+              const layoutRes = await fetch(
+                `${process.env.NEXT_PUBLIC_API_URL}/workspaces/${data.workspace.id}/office/layout`,
+                { credentials: 'include' }
+              )
+              if (layoutRes.ok) {
+                const layoutData = await layoutRes.json()
+                console.log('Office layout loaded:', layoutData)
+                setOfficeLayout(layoutData)
+              } else {
+                console.log('No office layout found, using default')
+              }
+            } catch (layoutError) {
+              console.error('Failed to load office layout:', layoutError)
+            }
           } else {
+            // No workspace yet, redirect to onboarding
+            console.log('No workspace found, redirecting to onboarding')
             router.push('/onboarding')
           }
+        } else {
+          // If API call fails, redirect to onboarding
+          console.log('API call failed, redirecting to onboarding')
+          router.push('/onboarding')
         }
       } catch (error) {
         console.error('Failed to fetch workspace:', error)
+        // Redirect to onboarding on error
+        router.push('/onboarding')
       } finally {
         setLoading(false)
       }
@@ -271,6 +297,7 @@ export default function OfficePage() {
           username={user.name || user.email}
           email={user.email}
           workspaceId={workspaceId}
+          officeLayout={officeLayout}
           players={playerList}
           onPlayerMove={handlePlayerMove}
           onReady={handleReady}

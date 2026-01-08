@@ -5,19 +5,198 @@ import { DeskData, RoomData, DecorationData } from '../types'
 export class OfficeBuilder {
   private scene: Phaser.Scene
   private graphics: Phaser.GameObjects.Graphics
+  private collisionBodies: Phaser.GameObjects.Rectangle[] = []
+  private layoutWidth: number = GAME_CONFIG.WIDTH
+  private layoutHeight: number = GAME_CONFIG.HEIGHT
   
   constructor(scene: Phaser.Scene) {
     this.scene = scene
     this.graphics = scene.add.graphics()
   }
   
-  public buildOffice(): void {
+  /**
+   * Add a collision body for walls
+   */
+  private addWallCollision(x: number, y: number, width: number, height: number): void {
+    const body = this.scene.add.rectangle(x, y, width, height, 0x000000, 0)
+    this.scene.physics.add.existing(body, true) // true = static body
+    this.collisionBodies.push(body)
+  }
+  
+  public buildOffice(layoutData?: any): void {
+    // If custom layout data is provided from backend, use it
+    if (layoutData?.layout) {
+      this.buildFromLayoutData(layoutData.layout)
+    } else {
+      // Otherwise use default office layout
+      this.drawFloor()
+      this.drawWalls()
+      this.drawMeetingRooms()
+      this.drawBreakRoom()
+      this.drawDesks()
+      this.drawDecorations()
+    }
+  }
+  
+  private buildFromLayoutData(layout: any): void {
+    // Get layout dimensions
+    this.layoutWidth = layout.dimensions?.width ?? layout.width ?? GAME_CONFIG.WIDTH
+    this.layoutHeight = layout.dimensions?.height ?? layout.height ?? GAME_CONFIG.HEIGHT
+    
+    // Draw floor first
     this.drawFloor()
-    this.drawWalls()
-    this.drawMeetingRooms()
-    this.drawBreakRoom()
-    this.drawDesks()
-    this.drawDecorations()
+    
+    // Draw walls if provided, otherwise use default
+    if (layout.walls && layout.walls.length > 0) {
+      layout.walls.forEach((wall: any) => {
+        this.graphics.fillStyle(GAME_CONFIG.COLORS.WALL)
+        
+        // Support both formats: {x, y, width, height} and {start, end, thickness}
+        if (wall.start && wall.end) {
+          // Convert start/end/thickness format to rect
+          const startX = wall.start.x
+          const startY = wall.start.y
+          const endX = wall.end.x
+          const endY = wall.end.y
+          const thickness = wall.thickness || 32
+          
+          // Determine if horizontal or vertical wall
+          if (startY === endY) {
+            // Horizontal wall
+            const x = Math.min(startX, endX)
+            const width = Math.abs(endX - startX)
+            if (width > 0) {
+              this.graphics.fillRect(x, startY, width, thickness)
+              // Add collision body (center coordinates)
+              this.addWallCollision(x + width / 2, startY + thickness / 2, width, thickness)
+            }
+          } else if (startX === endX) {
+            // Vertical wall
+            const y = Math.min(startY, endY)
+            const height = Math.abs(endY - startY)
+            if (height > 0) {
+              this.graphics.fillRect(startX, y, thickness, height)
+              // Add collision body (center coordinates)
+              this.addWallCollision(startX + thickness / 2, y + height / 2, thickness, height)
+            }
+          } else {
+            // Diagonal or complex wall - draw as thick line (no collision for diagonal)
+            this.graphics.lineStyle(thickness, GAME_CONFIG.COLORS.WALL, 1)
+            this.graphics.lineBetween(startX, startY, endX, endY)
+          }
+        } else {
+          // Standard x, y, width, height format
+          const x = wall.x
+          const y = wall.y
+          const width = wall.width
+          const height = wall.height
+          this.graphics.fillRect(x, y, width, height)
+          // Add collision body (center coordinates)
+          this.addWallCollision(x + width / 2, y + height / 2, width, height)
+        }
+      })
+    } else {
+      this.drawWalls()
+    }
+    
+    // Draw zones if provided
+    if (layout.zones && layout.zones.length > 0) {
+      layout.zones.forEach((zone: any) => {
+        const color = this.getZoneColor(zone.type)
+        
+        // Support both formats: {x, y, width, height} and {bounds: {x, y, width, height}}
+        const x = zone.bounds?.x ?? zone.x
+        const y = zone.bounds?.y ?? zone.y
+        const width = zone.bounds?.width ?? zone.width
+        const height = zone.bounds?.height ?? zone.height
+        
+        this.graphics.fillStyle(color, 0.1)
+        this.graphics.fillRect(x, y, width, height)
+        this.graphics.lineStyle(2, color, 0.3)
+        this.graphics.strokeRect(x, y, width, height)
+      })
+    }
+    
+    // Draw rooms
+    if (layout.rooms && layout.rooms.length > 0) {
+      layout.rooms.forEach((room: any) => {
+        // Support both formats for rooms
+        const x = room.bounds?.x ?? room.x
+        const y = room.bounds?.y ?? room.y
+        const width = room.bounds?.width ?? room.width
+        const height = room.bounds?.height ?? room.height
+        
+        this.drawRoom({
+          id: room.id,
+          name: room.name || 'Room',
+          x: x,
+          y: y,
+          width: width,
+          height: height,
+          type: room.type || 'meeting',
+        })
+      })
+    }
+    
+    // Draw desks
+    if (layout.desks && layout.desks.length > 0) {
+      layout.desks.forEach((desk: any) => {
+        // Support both formats: {x, y} and {position: {x, y}}
+        const x = desk.position?.x ?? desk.x
+        const y = desk.position?.y ?? desk.y
+        const width = desk.dimensions?.width ?? desk.width ?? 96
+        const height = desk.dimensions?.height ?? desk.height ?? 64
+        
+        this.drawDesk({
+          id: desk.id,
+          x: x,
+          y: y,
+          width: width,
+          height: height,
+          rotation: desk.rotation || 0,
+          type: desk.type || 'standard',
+          occupantId: desk.occupantId || null,
+        })
+      })
+    }
+    
+    // Draw decorations
+    if (layout.decorations && layout.decorations.length > 0) {
+      layout.decorations.forEach((decoration: any) => {
+        // Support both formats: {x, y} and {position: {x, y}}
+        const x = decoration.position?.x ?? decoration.x
+        const y = decoration.position?.y ?? decoration.y
+        
+        this.drawDecoration({
+          id: decoration.id,
+          x: x,
+          y: y,
+          type: decoration.type,
+        })
+      })
+    }
+  }
+  
+  private getZoneColor(type: string): number {
+    const colors: Record<string, number> = {
+      'workspace': 0x4a90e2,
+      'meeting': 0x7cb342,
+      'social': 0xffa726,
+      'quiet': 0x9575cd,
+      'collaboration': 0x26c6da,
+      'focus': 0x9575cd,
+      'break': 0xffa726,
+      'lounge': 0xff7043,
+      'creative': 0xec407a,
+      'lobby': 0x78909c,
+      'reception': 0x78909c,
+      'kitchen': 0xffca28,
+      'conference': 0x66bb6a,
+      'executive': 0x5c6bc0,
+      'open-office': 0x42a5f5,
+      'private-office': 0x7e57c2,
+    }
+    return colors[type] || 0x78909c
   }
   
   private drawFloor(): void {
@@ -105,13 +284,18 @@ export class OfficeBuilder {
   private drawRoom(room: RoomData): void {
     const { COLORS } = GAME_CONFIG
     
-    const colors = {
+    const colors: Record<string, { fill: number, border: number }> = {
       meeting: { fill: COLORS.MEETING_ROOM, border: COLORS.MEETING_ROOM_BORDER },
       break: { fill: COLORS.BREAK_ROOM, border: COLORS.BREAK_ROOM_BORDER },
       private: { fill: 0xf3e5f5, border: 0x9c27b0 },
+      conference: { fill: COLORS.MEETING_ROOM, border: COLORS.MEETING_ROOM_BORDER },
+      phone: { fill: 0xe3f2fd, border: 0x2196f3 },
+      'phone-booth': { fill: 0xe3f2fd, border: 0x2196f3 },
+      focus: { fill: 0xfff3e0, border: 0xff9800 },
+      lounge: { fill: 0xf3e5f5, border: 0x9c27b0 },
     }
     
-    const roomColors = colors[room.type]
+    const roomColors = colors[room.type] || { fill: COLORS.MEETING_ROOM, border: COLORS.MEETING_ROOM_BORDER }
     
     // Room floor
     this.graphics.fillStyle(roomColors.fill)
@@ -280,16 +464,23 @@ export class OfficeBuilder {
       { id: 'wb-2', type: 'whiteboard', x: 350, y: 500 },
     ]
     
-    decorations.forEach(deco => {
-      switch (deco.type) {
-        case 'plant':
-          this.drawPlant(deco.x, deco.y)
-          break
-        case 'whiteboard':
-          this.drawWhiteboard(deco.x, deco.y)
-          break
-      }
-    })
+    decorations.forEach(deco => this.drawDecoration(deco))
+  }
+  
+  private drawDecoration(deco: DecorationData): void {
+    switch (deco.type) {
+      case 'plant':
+        this.drawPlant(deco.x, deco.y)
+        break
+      case 'whiteboard':
+        this.drawWhiteboard(deco.x, deco.y)
+        break
+      default:
+        // For unknown decoration types, just draw a simple marker
+        this.graphics.fillStyle(0x9e9e9e)
+        this.graphics.fillCircle(deco.x, deco.y, 10)
+        break
+    }
   }
   
   private drawPlant(x: number, y: number): void {
@@ -341,24 +532,26 @@ export class OfficeBuilder {
   }
   
   public getCollisionBodies(): Phaser.GameObjects.Rectangle[] {
-    const bodies: Phaser.GameObjects.Rectangle[] = []
-    const { TILE_SIZE, WIDTH, HEIGHT } = GAME_CONFIG
+    // If collision bodies were already created from layout data, return them
+    if (this.collisionBodies.length > 0) {
+      return this.collisionBodies
+    }
     
-    // Wall collisions
+    // Otherwise create default perimeter walls (for default office)
+    const { TILE_SIZE } = GAME_CONFIG
+    const width = this.layoutWidth
+    const height = this.layoutHeight
+    
+    // Wall collisions (center coordinates)
     // Top
-    bodies.push(this.scene.add.rectangle(WIDTH / 2, TILE_SIZE / 2, WIDTH, TILE_SIZE, 0x000000, 0))
+    this.addWallCollision(width / 2, TILE_SIZE / 2, width, TILE_SIZE)
     // Bottom
-    bodies.push(this.scene.add.rectangle(WIDTH / 2, HEIGHT - TILE_SIZE / 2, WIDTH, TILE_SIZE, 0x000000, 0))
+    this.addWallCollision(width / 2, height - TILE_SIZE / 2, width, TILE_SIZE)
     // Left
-    bodies.push(this.scene.add.rectangle(TILE_SIZE / 2, HEIGHT / 2, TILE_SIZE, HEIGHT, 0x000000, 0))
+    this.addWallCollision(TILE_SIZE / 2, height / 2, TILE_SIZE, height)
     // Right
-    bodies.push(this.scene.add.rectangle(WIDTH - TILE_SIZE / 2, HEIGHT / 2, TILE_SIZE, HEIGHT, 0x000000, 0))
+    this.addWallCollision(width - TILE_SIZE / 2, height / 2, TILE_SIZE, height)
     
-    // Enable physics on all collision bodies
-    bodies.forEach(body => {
-      this.scene.physics.add.existing(body, true) // true = static body
-    })
-    
-    return bodies
+    return this.collisionBodies
   }
 }

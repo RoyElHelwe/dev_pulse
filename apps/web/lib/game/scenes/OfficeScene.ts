@@ -6,6 +6,7 @@ import { PlayerData, Position, PlayerDirection } from '../types'
 
 export interface OfficeSceneConfig {
   localPlayer: PlayerData
+  officeLayout?: any
   onPlayerMove?: (position: Position, direction: PlayerDirection) => void
   onReady?: () => void
 }
@@ -45,7 +46,7 @@ export class OfficeScene extends Phaser.Scene {
     
     // Build office environment
     this.officeBuilder = new OfficeBuilder(this)
-    this.officeBuilder.buildOffice()
+    this.officeBuilder.buildOffice(this.config.officeLayout)
     
     // Get collision bodies
     this.collisionBodies = this.officeBuilder.getCollisionBodies()

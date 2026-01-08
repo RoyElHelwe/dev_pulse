@@ -11,6 +11,7 @@ interface VirtualOfficeProps {
   username: string
   email: string
   workspaceId: string
+  officeLayout?: any  // Office layout data from backend
   players?: PlayerData[]  // Remote players to display
   onPlayerMove?: (position: Position, direction: PlayerDirection) => void
   onReady?: () => void
@@ -22,6 +23,7 @@ export function VirtualOffice({
   username,
   email,
   workspaceId,
+  officeLayout,
   players = [],
   onPlayerMove,
   onReady,
@@ -65,6 +67,7 @@ export function VirtualOffice({
       
       const sceneConfig: OfficeSceneConfig = {
         localPlayer,
+        officeLayout,
         onPlayerMove: (position, direction) => {
           onPlayerMoveRef.current?.(position, direction)
         },
@@ -132,7 +135,7 @@ export function VirtualOffice({
       setError('Failed to load virtual office. Please refresh the page.')
       setIsLoading(false)
     }
-  }, [userId, username, email, workspaceId]) // Removed onPlayerMove and onReady from deps
+  }, [userId, username, email, workspaceId, officeLayout]) // Added officeLayout to deps
   
   // Initialize game once on mount
   useEffect(() => {
@@ -233,9 +236,9 @@ export function VirtualOffice({
   }
   
   return (
-    <div className="absolute inset-0">
+    <div className={`relative ${className}`}>
       {isLoading && (
-        <div className="absolute inset-0 flex items-center justify-center bg-gray-900 z-10">
+        <div className="absolute inset-0 flex items-center justify-center bg-gray-100 rounded-lg z-10">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
             <p className="text-gray-600">Loading Virtual Office...</p>
@@ -244,8 +247,8 @@ export function VirtualOffice({
       )}
       <div 
         ref={containerRef} 
-        className="w-full h-full"
-        style={{ position: 'absolute', inset: 0 }}
+        className="w-full h-full rounded-lg overflow-hidden"
+        style={{ minHeight: '600px' }}
       />
     </div>
   )

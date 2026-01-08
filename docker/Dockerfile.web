@@ -19,6 +19,9 @@ COPY apps/web ./apps/web
 # Install all dependencies at root (monorepo style)
 RUN pnpm install --no-frozen-lockfile
 
+# Build shared-types package
+RUN cd packages/shared-types && pnpm build
+
 WORKDIR /app/apps/web
 
 EXPOSE 3000

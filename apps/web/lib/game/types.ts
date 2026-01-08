@@ -1,70 +1,49 @@
-// Game Types for 2D Virtual Office
+/**
+ * Game Types for 2D Virtual Office
+ * 
+ * Player-specific types for the Phaser game.
+ * Office layout types are imported from @dev-pulse/shared-types.
+ */
 
-export type PlayerStatus = 'online' | 'available' | 'away' | 'busy' | 'offline' | 'dnd'
-export type PlayerDirection = 'up' | 'down' | 'left' | 'right'
+import type { Position } from '@dev-pulse/shared-types';
 
-export interface Position {
-  x: number
-  y: number
-}
+export type { Position };
+
+// ============================================
+// PLAYER TYPES
+// ============================================
+
+export type PlayerStatus = 'online' | 'available' | 'away' | 'busy' | 'offline' | 'dnd';
+export type PlayerDirection = 'up' | 'down' | 'left' | 'right';
 
 export interface PlayerData {
-  id: string
-  name: string
-  email?: string
-  position: Position
-  direction?: PlayerDirection
-  status?: PlayerStatus
-  avatarColor?: string
-  workspaceId?: string
+  id: string;
+  name: string;
+  email?: string;
+  position: Position;
+  direction?: PlayerDirection;
+  status?: PlayerStatus;
+  avatarColor?: string;
+  workspaceId?: string;
 }
 
-export interface OfficeLayout {
-  width: number
-  height: number
-  tileSize: number
-  desks: DeskData[]
-  meetingRooms: RoomData[]
-  breakRoom?: RoomData
-  decorations: DecorationData[]
-}
-
-export interface DeskData {
-  id: string
-  x: number
-  y: number
-  width: number
-  height: number
-  ownerId?: string
-  ownerName?: string
-}
-
-export interface RoomData {
-  id: string
-  name: string
-  x: number
-  y: number
-  width: number
-  height: number
-  type: 'meeting' | 'break' | 'private'
-}
-
-export interface DecorationData {
-  id: string
-  type: 'plant' | 'whiteboard' | 'coffee' | 'printer' | 'bookshelf'
-  x: number
-  y: number
-}
+// ============================================
+// GAME EVENT TYPES
+// ============================================
 
 export interface GameEvents {
-  'player:move': { position: Position; direction: string }
-  'player:joined': PlayerData
-  'player:left': { id: string }
-  'player:updated': Partial<PlayerData> & { id: string }
-  'players:sync': PlayerData[]
+  'player:move': { position: Position; direction: string };
+  'player:joined': PlayerData;
+  'player:left': { id: string };
+  'player:updated': Partial<PlayerData> & { id: string };
+  'players:sync': PlayerData[];
 }
 
-// Colors for avatars (will be assigned based on user id hash)
+// ============================================
+// AVATAR COLORS
+// ============================================
+
+// Colors for avatars (assigned based on user id hash)
 export const AVATAR_COLORS = [
   '#FF6B6B', // Red
   '#4ECDC4', // Teal

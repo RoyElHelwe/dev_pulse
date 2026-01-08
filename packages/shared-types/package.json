@@ -1,0 +1,31 @@
+{
+  "name": "@dev-pulse/shared-types",
+  "version": "1.0.0",
+  "description": "Shared TypeScript types for Dev Pulse - office layouts, DTOs, and common interfaces",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.js"
+    },
+    "./office": {
+      "types": "./dist/office/index.d.ts",
+      "import": "./dist/office/index.js",
+      "require": "./dist/office/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf dist",
+    "dev": "tsc --watch"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  },
+  "files": [
+    "dist",
+    "src"
+  ]
+}

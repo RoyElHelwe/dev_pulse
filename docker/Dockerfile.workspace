@@ -19,6 +19,9 @@ COPY services/workspace-service ./services/workspace-service
 # Install all dependencies at root (monorepo style)
 RUN pnpm install --no-frozen-lockfile
 
+# Build shared-types package
+RUN cd packages/shared-types && pnpm build
+
 # Generate Prisma client
 WORKDIR /app/services/workspace-service
 RUN pnpm prisma:generate

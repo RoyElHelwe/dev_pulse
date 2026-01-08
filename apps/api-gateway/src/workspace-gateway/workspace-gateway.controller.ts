@@ -2,9 +2,12 @@ import {
   Controller,
   Get,
   Post,
+  Put,
+  Delete,
   Patch,
   Body,
   Param,
+  Query,
   UseGuards,
   Request,
   Inject,
@@ -178,6 +181,90 @@ export class WorkspaceGatewayController {
         ...member,
         user: userMap.get(member.userId) || { name: 'Unknown', email: '' },
       }));
+    } catch (error) {
+      this.handleRpcError(error);
+    }
+  }
+
+  // ==================== OFFICE LAYOUT ROUTES ====================
+
+  /**
+   * Create or update office layout
+   */
+  @Post(':id/office/layout')
+  async createOfficeLayout(
+    @Request() req: AuthenticatedRequest,
+    @Param('id') workspaceId: string,
+    @Body() body: any,
+  ) {
+    try {
+      return await firstValueFrom(
+        this.workspaceClient.send(
+          { cmd: 'create_office_layout' },
+          { workspaceId, userId: req.user.id, ...body },
+        ),
+      );
+    } catch (error) {
+      this.handleRpcError(error);
+    }
+  }
+
+  /**
+   * Get office layout
+   */
+  @Get(':id/office/layout')
+  async getOfficeLayout(
+    @Request() req: AuthenticatedRequest,
+    @Param('id') workspaceId: string,
+  ) {
+    try {
+      return await firstValueFrom(
+        this.workspaceClient.send(
+          { cmd: 'get_office_layout' },
+          { workspaceId, userId: req.user.id },
+        ),
+      );
+    } catch (error) {
+      this.handleRpcError(error);
+    }
+  }
+
+  /**
+   * Update office layout
+   */
+  @Put(':id/office/layout')
+  async updateOfficeLayout(
+    @Request() req: AuthenticatedRequest,
+    @Param('id') workspaceId: string,
+    @Body() body: any,
+  ) {
+    try {
+      return await firstValueFrom(
+        this.workspaceClient.send(
+          { cmd: 'update_office_layout' },
+          { workspaceId, userId: req.user.id, ...body },
+        ),
+      );
+    } catch (error) {
+      this.handleRpcError(error);
+    }
+  }
+
+  /**
+   * Delete office layout
+   */
+  @Delete(':id/office/layout')
+  async deleteOfficeLayout(
+    @Request() req: AuthenticatedRequest,
+    @Param('id') workspaceId: string,
+  ) {
+    try {
+      return await firstValueFrom(
+        this.workspaceClient.send(
+          { cmd: 'delete_office_layout' },
+          { workspaceId, userId: req.user.id },
+        ),
+      );
     } catch (error) {
       this.handleRpcError(error);
     }

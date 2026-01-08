@@ -71,8 +71,8 @@ export function AppLayout({ children }: AppLayoutProps) {
         return
       }
 
-      // Skip workspace fetch on onboarding page
-      if (isOnboarding) {
+      // Skip workspace fetch on onboarding or office page
+      if (isOnboarding || isOfficePage) {
         setWorkspaceLoading(false)
         return
       }

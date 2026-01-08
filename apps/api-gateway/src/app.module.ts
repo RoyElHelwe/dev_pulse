@@ -7,6 +7,7 @@ import { WebsocketModule } from './websocket/websocket.module';
 import { AuthModule } from './auth/auth.module';
 import { WorkspaceGatewayModule } from './workspace-gateway/workspace-gateway.module';
 import { InvitationGatewayModule } from './invitation-gateway/invitation-gateway.module';
+import { OfficeGatewayModule } from './office-gateway/office-gateway.module';
 
 @Module({
   imports: [
@@ -35,6 +36,9 @@ import { InvitationGatewayModule } from './invitation-gateway/invitation-gateway
 
     // Invitation Gateway
     InvitationGatewayModule,
+
+    // Office Gateway
+    OfficeGatewayModule,
   ],
   controllers: [AppController],
   providers: [AppService],
