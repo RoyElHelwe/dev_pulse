@@ -18,6 +18,7 @@ build/
 .next/
 out/
 .turbo/
+.pnpm-store/
 
 # Testing
 coverage/
