@@ -59,7 +59,8 @@ FROM prisma AS builder
 # Copy all source code
 COPY . .
 
-# Build shared packages first
+# Clean incremental build caches and build shared packages
+RUN find . -name 'tsconfig.tsbuildinfo' -delete
 RUN pnpm --filter @ft-trans/database build
 RUN pnpm --filter @ft-trans/backend-common build
 RUN pnpm --filter @dev-pulse/shared-types build
@@ -217,17 +218,7 @@ CMD ["node", "server.js"]
 # =============================================================================
 
 # API-GATEWAY DEV
-FROM prisma AS api-gateway-dev
-
-WORKDIR /app
-
-# Copy all source
-COPY . .
-
-# Build shared packages
-RUN pnpm --filter @ft-trans/database build
-RUN pnpm --filter @ft-trans/backend-common build
-RUN pnpm --filter @dev-pulse/shared-types build
+FROM builder AS api-gateway-dev
 
 WORKDIR /app/apps/api-gateway
 
@@ -236,14 +227,7 @@ EXPOSE 4000
 CMD ["pnpm", "run", "dev"]
 
 # AUTH-SERVICE DEV
-FROM prisma AS auth-service-dev
-
-WORKDIR /app
-
-COPY . .
-
-RUN pnpm --filter @ft-trans/database build
-RUN pnpm --filter @ft-trans/backend-common build
+FROM builder AS auth-service-dev
 
 WORKDIR /app/services/auth-service
 
@@ -252,15 +236,7 @@ EXPOSE 3001
 CMD ["pnpm", "run", "dev"]
 
 # WORKSPACE-SERVICE DEV
-FROM prisma AS workspace-service-dev
-
-WORKDIR /app
-
-COPY . .
-
-RUN pnpm --filter @ft-trans/database build
-RUN pnpm --filter @ft-trans/backend-common build
-RUN pnpm --filter @dev-pulse/shared-types build
+FROM builder AS workspace-service-dev
 
 WORKDIR /app/services/workspace-service
 

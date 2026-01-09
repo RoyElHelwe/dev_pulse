@@ -43,7 +43,7 @@ services:
     container_name: ft_trans_redis
     restart: unless-stopped
     ports:
-      - '6379:6379'
+      - '6378:6379'
     volumes:
       - redis_data:/data
     healthcheck:
@@ -95,12 +95,11 @@ services:
     volumes:
       - ./apps/api-gateway/src:/app/apps/api-gateway/src
       - ./packages/database/src:/app/packages/database/src
-      - ./packages/database/dist:/app/packages/database/dist
       - ./packages/backend-common/src:/app/packages/backend-common/src
-      - ./packages/backend-common/dist:/app/packages/backend-common/dist
       - ./packages/shared-types/src:/app/packages/shared-types/src
-      - ./packages/shared-types/dist:/app/packages/shared-types/dist
       - ./prisma:/app/prisma
+      - /app/node_modules
+      - /app/apps/api-gateway/node_modules
     environment:
       - NODE_ENV=${NODE_ENV:-development}
       - DATABASE_URL=${DATABASE_URL_DOCKER:-postgresql://dev:dev@postgres:5432/ft_trans}
@@ -141,10 +140,10 @@ services:
     volumes:
       - ./services/auth-service/src:/app/services/auth-service/src
       - ./packages/database/src:/app/packages/database/src
-      - ./packages/database/dist:/app/packages/database/dist
       - ./packages/backend-common/src:/app/packages/backend-common/src
-      - ./packages/backend-common/dist:/app/packages/backend-common/dist
       - ./prisma:/app/prisma
+      - /app/node_modules
+      - /app/services/auth-service/node_modules
     environment:
       - NODE_ENV=${NODE_ENV:-development}
       - DATABASE_URL=${DATABASE_URL_DOCKER:-postgresql://dev:dev@postgres:5432/ft_trans}
@@ -177,12 +176,11 @@ services:
     volumes:
       - ./services/workspace-service/src:/app/services/workspace-service/src
       - ./packages/database/src:/app/packages/database/src
-      - ./packages/database/dist:/app/packages/database/dist
       - ./packages/backend-common/src:/app/packages/backend-common/src
-      - ./packages/backend-common/dist:/app/packages/backend-common/dist
       - ./packages/shared-types/src:/app/packages/shared-types/src
-      - ./packages/shared-types/dist:/app/packages/shared-types/dist
       - ./prisma:/app/prisma
+      - /app/node_modules
+      - /app/services/workspace-service/node_modules
     environment:
       - NODE_ENV=${NODE_ENV:-development}
       - DATABASE_URL=${DATABASE_URL_DOCKER:-postgresql://dev:dev@postgres:5432/ft_trans}
@@ -216,6 +214,7 @@ services:
       - ./apps/web/components:/app/apps/web/components
       - ./apps/web/lib:/app/apps/web/lib
       - ./apps/web/public:/app/apps/web/public
+      - ./apps/web/proxy.ts:/app/apps/web/proxy.ts
       - ./packages/shared-types/src:/app/packages/shared-types/src
     environment:
       - NODE_ENV=${NODE_ENV:-development}

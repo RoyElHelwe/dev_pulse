@@ -7,7 +7,7 @@ const publicRoutes = ['/', '/login', '/register']
 // Routes that should not redirect authenticated users to dashboard
 const noRedirectRoutes = ['/invite/']
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
 
   // Skip middleware for static files and Next.js internals
