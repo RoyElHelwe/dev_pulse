@@ -57,7 +57,7 @@ install:
 	docker run --rm -v $(PWD):/app -w /app node:22-alpine sh -c "\
 		corepack enable && \
 		corepack prepare pnpm@9.14.4 --activate && \
-		pnpm install --frozen-lockfile"
+		pnpm install"
 	@echo "✅ Dependencies installed"
 
 # =============================================================================
