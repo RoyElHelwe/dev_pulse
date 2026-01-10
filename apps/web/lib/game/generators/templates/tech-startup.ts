@@ -1,31 +1,35 @@
 // Template 1: Tech Startup (5-15 people)
 // Professional open floor plan with collaborative clusters
+// Features: 13 desks (6 eng, 4 design, 3 hot), 2 focus pods, meeting room, break area
+// Includes: Interactive whiteboards, coffee station, lounge seating, multiple plants
 
 import { OfficeTemplate, OfficeLayoutData } from '../types'
 
 export const techStartupTemplate: OfficeTemplate = {
   id: 'tech-startup',
   name: 'Tech Startup',
-  description: 'Modern open floor plan with collaborative areas, perfect for early-stage tech companies',
+  description: 'Modern open floor plan with collaborative areas, focus pods, and flexible seating - perfect for early-stage tech companies',
   category: 'STARTUP',
   minTeamSize: 5,
   maxTeamSize: 15,
-  tags: ['open-plan', 'collaborative', 'agile', 'modern'],
+  tags: ['open-plan', 'collaborative', 'agile', 'modern', 'flexible'],
   layout: createTechStartupLayout(),
 }
 
 function createTechStartupLayout(): OfficeLayoutData {
-  // Grid system: 32px tiles, all measurements divisible by 32
+  // === GRID SYSTEM ===
+  // All measurements align to 32px tiles for clean, consistent spacing
   const TILE = 32
-  const WALL = TILE // Wall thickness
-  const DESK_W = 96  // 3 tiles wide
-  const DESK_H = 64  // 2 tiles deep
+  const WALL = TILE // Wall thickness (32px)
+  const DESK_W = 96  // 3 tiles wide - standard desk width
+  const DESK_H = 64  // 2 tiles deep - standard desk depth
   const DESK_GAP = 32 // 1 tile gap between desks
   const ROW_GAP = 96  // 3 tiles between rows (for chairs + walkway)
-  const ROOM_WALL = 16 // Internal room walls
+  const ROOM_WALL = 16 // Internal room walls (thinner than outer walls)
 
-  const width = 1600  
-  const height = 900 
+  // === OFFICE DIMENSIONS ===
+  const width = 1600   // Total office width
+  const height = 900   // Total office height 
 
   return {
     metadata: {
@@ -82,11 +86,11 @@ function createTechStartupLayout(): OfficeLayoutData {
       },
     ],
 
-    // Desks - properly spaced
+    // Desks - properly spaced with variety for ergonomics
     desks: [
-      // Engineering - 2 rows of 3 desks (6 total)
-      // Row 1 - facing south
-      { id: 'desk-eng-1', position: { x: 40, y: 96 }, dimensions: { width: DESK_W, height: DESK_H }, type: 'standard', zoneId: 'zone-engineering', facing: 'south', isHotDesk: false, status: 'available' },
+      // === ENGINEERING ZONE - 2 rows of 3 desks (6 total) ===
+      // Row 1 - facing south for natural light
+      { id: 'desk-eng-1', position: { x: 64, y: 96 }, dimensions: { width: DESK_W, height: DESK_H }, type: 'standard', zoneId: 'zone-engineering', facing: 'south', isHotDesk: false, status: 'available' },
       { id: 'desk-eng-2', position: { x: 64 + DESK_W + DESK_GAP, y: 96 }, dimensions: { width: DESK_W, height: DESK_H }, type: 'standard', zoneId: 'zone-engineering', facing: 'south', isHotDesk: false, status: 'available' },
       { id: 'desk-eng-3', position: { x: 64 + (DESK_W + DESK_GAP) * 2, y: 96 }, dimensions: { width: DESK_W, height: DESK_H }, type: 'standing', zoneId: 'zone-engineering', facing: 'south', isHotDesk: false, status: 'available' },
       
@@ -95,8 +99,8 @@ function createTechStartupLayout(): OfficeLayoutData {
       { id: 'desk-eng-5', position: { x: 64 + DESK_W + DESK_GAP, y: 256 }, dimensions: { width: DESK_W, height: DESK_H }, type: 'standard', zoneId: 'zone-engineering', facing: 'north', isHotDesk: false, status: 'available' },
       { id: 'desk-eng-6', position: { x: 64 + (DESK_W + DESK_GAP) * 2, y: 256 }, dimensions: { width: DESK_W, height: DESK_H }, type: 'standing', zoneId: 'zone-engineering', facing: 'north', isHotDesk: false, status: 'available' },
       
-      // Product & Design - 2 rows of 2 desks (4 total)
-      // Row 1
+      // === PRODUCT & DESIGN ZONE - 2 rows of 2 desks (4 total) ===
+      // Row 1 - wider desks for design work
       { id: 'desk-design-1', position: { x: 480, y: 96 }, dimensions: { width: DESK_W, height: DESK_H }, type: 'standard', zoneId: 'zone-product', facing: 'south', isHotDesk: false, status: 'available' },
       { id: 'desk-design-2', position: { x: 480 + DESK_W + DESK_GAP, y: 96 }, dimensions: { width: DESK_W, height: DESK_H }, type: 'standard', zoneId: 'zone-product', facing: 'south', isHotDesk: false, status: 'available' },
       
@@ -104,7 +108,8 @@ function createTechStartupLayout(): OfficeLayoutData {
       { id: 'desk-design-3', position: { x: 480, y: 256 }, dimensions: { width: DESK_W, height: DESK_H }, type: 'standard', zoneId: 'zone-product', facing: 'north', isHotDesk: false, status: 'available' },
       { id: 'desk-design-4', position: { x: 480 + DESK_W + DESK_GAP, y: 256 }, dimensions: { width: DESK_W, height: DESK_H }, type: 'standard', zoneId: 'zone-product', facing: 'north', isHotDesk: false, status: 'available' },
       
-      // Hot desks in collaboration area - 3 desks
+      // === COLLABORATION ZONE - Hot desks (3 total) ===
+      // Flexible seating for visitors, temporary work, or overflow
       { id: 'desk-hot-1', position: { x: 64, y: 544 }, dimensions: { width: DESK_W, height: DESK_H }, type: 'hotdesk', zoneId: 'zone-collaboration', facing: 'south', isHotDesk: true, status: 'available' },
       { id: 'desk-hot-2', position: { x: 64 + DESK_W + DESK_GAP * 2, y: 544 }, dimensions: { width: DESK_W, height: DESK_H }, type: 'hotdesk', zoneId: 'zone-collaboration', facing: 'south', isHotDesk: true, status: 'available' },
       { id: 'desk-hot-3', position: { x: 64 + (DESK_W + DESK_GAP * 2) * 2, y: 544 }, dimensions: { width: DESK_W, height: DESK_H }, type: 'hotdesk', zoneId: 'zone-collaboration', facing: 'south', isHotDesk: true, status: 'available' },
@@ -112,12 +117,12 @@ function createTechStartupLayout(): OfficeLayoutData {
 
     // Rooms - with proper walls and doors
     rooms: [
-      // Meeting Room - top right (with walls)
+      // Meeting Room - top right (with walls) - Fixed position to align with walls
       {
         id: 'meeting-main',
         name: 'Glass Room',
         type: 'meeting',
-        bounds: { x: 864, y: WALL, width: 384, height: 256 },
+        bounds: { x: 848, y: WALL, width: 736, height: 240 },
         capacity: 8,
         equipment: ['projector', 'whiteboard', 'video-conference'],
         bookable: true,
@@ -125,15 +130,43 @@ function createTechStartupLayout(): OfficeLayoutData {
         color: '#e8f5e9',
         borderColor: '#4caf50',
       },
+      
+      // Phone Booth 1 - for private calls
+      {
+        id: 'phone-booth-1',
+        name: 'Focus Pod 1',
+        type: 'phone-booth',
+        bounds: { x: 848, y: 288, width: 144, height: 128 },
+        capacity: 1,
+        equipment: ['phone', 'desk-light'],
+        bookable: true,
+        status: 'available',
+        color: '#e3f2fd',
+        borderColor: '#2196f3',
+      },
+      
+      // Phone Booth 2 - for private calls
+      {
+        id: 'phone-booth-2',
+        name: 'Focus Pod 2',
+        type: 'phone-booth',
+        bounds: { x: 1008, y: 288, width: 144, height: 128 },
+        capacity: 1,
+        equipment: ['phone', 'desk-light'],
+        bookable: true,
+        status: 'available',
+        color: '#e3f2fd',
+        borderColor: '#2196f3',
+      },
      
       // Break Room - bottom right (larger)
       {
         id: 'break-room',
         name: 'Coffee & Lounge',
         type: 'break',
-        bounds: { x: 864, y: 448, width: 384, height: 416 },
+        bounds: { x: 848, y: 458, width: 736, height: 440 },
         capacity: 8,
-        equipment: ['coffee-machine', 'fridge'],
+        equipment: ['coffee-machine', 'fridge', 'microwave'],
         bookable: false,
         status: 'available',
         color: '#fff3e0',
@@ -141,29 +174,50 @@ function createTechStartupLayout(): OfficeLayoutData {
       },
     ],
 
-    // Decorations - properly spaced
+    // Decorations - properly spaced with enhanced variety
     decorations: [
-      // Plants at corners and strategic locations
+      // === PLANTS - Strategic placement for aesthetics ===
       { id: 'plant-1', type: 'plant-large', position: { x: 48, y: 48 }, dimensions: { width: 48, height: 48 } },
       { id: 'plant-2', type: 'plant-medium', position: { x: 416, y: 48 }, dimensions: { width: 36, height: 36 } },
       { id: 'plant-3', type: 'plant-large', position: { x: 768, y: 48 }, dimensions: { width: 48, height: 48 } },
       { id: 'plant-4', type: 'plant-small', position: { x: 48, y: 800 }, dimensions: { width: 32, height: 32 } },
       { id: 'plant-5', type: 'plant-medium', position: { x: 768, y: 800 }, dimensions: { width: 36, height: 36 } },
+      { id: 'plant-6', type: 'plant-small', position: { x: 400, y: 192 }, dimensions: { width: 32, height: 32 } },
+      { id: 'plant-7', type: 'plant-medium', position: { x: 800, y: 192 }, dimensions: { width: 36, height: 36 } },
       
-      // Whiteboard for engineering (between desk rows)
-      { id: 'whiteboard-1', type: 'whiteboard', position: { x: 64, y: 368 }, dimensions: { width: 160, height: 48 }, interactive: true, interactionRadius: 100 },
+      // === COLLABORATIVE TOOLS ===
+      // Whiteboards for brainstorming (positioned between desk rows)
+      { id: 'whiteboard-1', type: 'whiteboard', position: { x: 250, y: 400 }, dimensions: { width: 160, height: 48 }, interactive: true, interactionRadius: 100 },
+      { id: 'whiteboard-2', type: 'whiteboard', position: { x: 596, y: 400 }, dimensions: { width: 160, height: 48 }, interactive: true, interactionRadius: 100 },
       
+      // Standing collaboration table
+      { id: 'collab-table-1', type: 'meeting-table', position: { x: 320, y: 600 }, dimensions: { width: 96, height: 64 } },
+      
+      // === LOUNGE FURNITURE ===
       // Bean bags in collaboration zone
       { id: 'bean-bag-1', type: 'bean-bag', position: { x: 480, y: 700 }, dimensions: { width: 64, height: 64 } },
       { id: 'bean-bag-2', type: 'bean-bag', position: { x: 576, y: 700 }, dimensions: { width: 64, height: 64 } },
       { id: 'bean-bag-3', type: 'bean-bag', position: { x: 672, y: 700 }, dimensions: { width: 64, height: 64 } },
       
-      // Coffee machine in break room
+      // === BREAK ROOM AMENITIES ===
+      // Coffee station
       { id: 'coffee-1', type: 'coffeeMachine', position: { x: 896, y: 480 }, dimensions: { width: 48, height: 48 }, interactive: true, interactionRadius: 80 },
+      { id: 'water-cooler', type: 'water-cooler', position: { x: 1088, y: 480 }, dimensions: { width: 32, height: 48 }, interactive: true, interactionRadius: 80 },
       
-      // Couch in break room
+      // Lounge seating
       { id: 'couch-1', type: 'couch', position: { x: 896, y: 700 }, dimensions: { width: 160, height: 64 } },
-      { id: 'couch-2', type: 'couch', position: { x: 1088, y: 550 }, dimensions: { width: 64, height: 160 }, rotation: 90 },
+      { id: 'couch-2', type: 'couch', position: { x: 1120, y: 550 }, dimensions: { width: 64, height: 160 }, rotation: 90 },
+      { id: 'armchair-1', type: 'armchair', position: { x: 1088, y: 700 }, dimensions: { width: 64, height: 64 } },
+      
+      // Coffee table
+      { id: 'coffee-table', type: 'coffee-table', position: { x: 960, y: 640 }, dimensions: { width: 96, height: 64 } },
+      
+      // === OFFICE EQUIPMENT ===
+      // Bookshelf for resources
+      { id: 'bookshelf-1', type: 'bookshelf', position: { x: 800, y: 64 }, dimensions: { width: 96, height: 48 } },
+      
+      // Filing cabinet
+      { id: 'filing-cabinet', type: 'filing-cabinet', position: { x: 800, y: 320 }, dimensions: { width: 48, height: 48 } },
     ],
 
     // Walls - outer walls + room walls with doors

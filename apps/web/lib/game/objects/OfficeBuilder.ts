@@ -2,16 +2,113 @@ import * as Phaser from 'phaser'
 import { GAME_CONFIG } from '../constants'
 import { DecorationData, DeskData, RoomData } from '@dev-pulse/shared-types'
 
+// TypeScript Interfaces - Exported for reusability
+export interface Position {
+  x: number
+  y: number
+}
+
+export interface Dimensions {
+  width: number
+  height: number
+}
+
+export interface Bounds extends Position, Dimensions {}
+
+export interface WallData {
+  x?: number
+  y?: number
+  width?: number
+  height?: number
+  start?: Position
+  end?: Position
+  thickness?: number
+}
+
+export interface ZoneData {
+  id?: string
+  type: string
+  x?: number
+  y?: number
+  width?: number
+  height?: number
+  bounds?: Bounds
+}
+
+export interface LayoutConfig {
+  dimensions?: Dimensions
+  width?: number
+  height?: number
+  walls?: WallData[]
+  zones?: ZoneData[]
+  rooms?: RoomData[]
+  desks?: DeskData[]
+  decorations?: DecorationData[]
+}
+
+export interface LayoutDataWrapper {
+  layout?: LayoutConfig
+}
+
+export interface RoomColors {
+  fill: number
+  border: number
+}
+
 export class OfficeBuilder {
   private scene: Phaser.Scene
   private graphics: Phaser.GameObjects.Graphics
   private collisionBodies: Phaser.GameObjects.Rectangle[] = []
+  private textObjects: Phaser.GameObjects.Text[] = []
   private layoutWidth: number = GAME_CONFIG.WIDTH
   private layoutHeight: number = GAME_CONFIG.HEIGHT
+  private roomColorMap?: Record<string, RoomColors>
+  private zoneColorMap?: Record<string, number>
   
   constructor(scene: Phaser.Scene) {
     this.scene = scene
     this.graphics = scene.add.graphics()
+  }
+
+  /**
+   * Validate bounds with optional context logging
+   */
+  private validateBounds(bounds: Partial<Bounds> | undefined | null, contextId?: string): boolean {
+    if (!bounds || 
+        typeof bounds.x !== 'number' || 
+        typeof bounds.y !== 'number' || 
+        typeof bounds.width !== 'number' || 
+        typeof bounds.height !== 'number' ||
+        bounds.width <= 0 || 
+        bounds.height <= 0) {
+      if (contextId) {
+        console.warn(`Invalid bounds for ${contextId}`)
+      }
+      return false
+    }
+    return true
+  }
+
+  /**
+   * Validate position coordinates
+   */
+  private validatePosition(x: any, y: any): boolean {
+    return typeof x === 'number' && typeof y === 'number'
+  }
+
+  /**
+   * Reset drawing state before rebuilding to avoid duplicate shapes/bodies.
+   */
+  private resetScene(): void {
+    this.graphics.clear()
+    this.collisionBodies.forEach(body => {
+      const physicsBody = body.body as Phaser.Physics.Arcade.StaticBody | undefined
+      physicsBody?.destroy()
+      body.destroy()
+    })
+    this.collisionBodies = []
+    this.textObjects.forEach(text => text.destroy())
+    this.textObjects = []
   }
   
   /**
@@ -23,7 +120,17 @@ export class OfficeBuilder {
     this.collisionBodies.push(body)
   }
   
-  public buildOffice(layoutData?: any): void {
+  /**
+   * Build and render the office layout.
+   * Clears any existing graphics and collision bodies before rendering.
+   * 
+   * @param layoutData - Optional custom layout configuration from backend.
+   *                     If not provided, uses DEFAULT_LAYOUTS from GAME_CONFIG.
+   */
+  public buildOffice(layoutData?: LayoutDataWrapper): void {
+    // Clear any previous run so we do not stack graphics/colliders
+    this.resetScene()
+
     // If custom layout data is provided from backend, use it
     if (layoutData?.layout) {
       this.buildFromLayoutData(layoutData.layout)
@@ -38,244 +145,300 @@ export class OfficeBuilder {
     }
   }
   
-  private buildFromLayoutData(layout: any): void {
-    // Get layout dimensions
+  private buildFromLayoutData(layout: LayoutConfig): void {
+    // Validate layout data
+    if (!layout || typeof layout !== 'object') {
+      console.error('Invalid layout data provided, using default office')
+      this.drawFloor()
+      this.drawWalls()
+      this.drawMeetingRooms()
+      this.drawBreakRoom()
+      this.drawDesks()
+      this.drawDecorations()
+      return
+    }
+    
+    // Normalize and validate dimensions once
     this.layoutWidth = layout.dimensions?.width ?? layout.width ?? GAME_CONFIG.WIDTH
     this.layoutHeight = layout.dimensions?.height ?? layout.height ?? GAME_CONFIG.HEIGHT
+    
+    if (this.layoutWidth <= 0 || this.layoutHeight <= 0) {
+      console.error('Invalid layout dimensions, using defaults')
+      this.layoutWidth = GAME_CONFIG.WIDTH
+      this.layoutHeight = GAME_CONFIG.HEIGHT
+    }
     
     // Draw floor first
     this.drawFloor()
     
     // Draw walls if provided, otherwise use default
-    if (layout.walls && layout.walls.length > 0) {
-      layout.walls.forEach((wall: any) => {
-        this.graphics.fillStyle(GAME_CONFIG.COLORS.WALL)
-        
-        // Support both formats: {x, y, width, height} and {start, end, thickness}
-        if (wall.start && wall.end) {
-          // Convert start/end/thickness format to rect
-          const startX = wall.start.x
-          const startY = wall.start.y
-          const endX = wall.end.x
-          const endY = wall.end.y
-          const thickness = wall.thickness || 32
-          
-          // Determine if horizontal or vertical wall
-          if (startY === endY) {
-            // Horizontal wall
-            const x = Math.min(startX, endX)
-            const width = Math.abs(endX - startX)
-            if (width > 0) {
-              this.graphics.fillRect(x, startY, width, thickness)
-              // Add collision body (center coordinates)
-              this.addWallCollision(x + width / 2, startY + thickness / 2, width, thickness)
-            }
-          } else if (startX === endX) {
-            // Vertical wall
-            const y = Math.min(startY, endY)
-            const height = Math.abs(endY - startY)
-            if (height > 0) {
-              this.graphics.fillRect(startX, y, thickness, height)
-              // Add collision body (center coordinates)
-              this.addWallCollision(startX + thickness / 2, y + height / 2, thickness, height)
-            }
-          } else {
-            // Diagonal or complex wall - draw as thick line (no collision for diagonal)
-            this.graphics.lineStyle(thickness, GAME_CONFIG.COLORS.WALL, 1)
-            this.graphics.lineBetween(startX, startY, endX, endY)
-          }
-        } else {
-          // Standard x, y, width, height format
-          const x = wall.x
-          const y = wall.y
-          const width = wall.width
-          const height = wall.height
-          this.graphics.fillRect(x, y, width, height)
-          // Add collision body (center coordinates)
-          this.addWallCollision(x + width / 2, y + height / 2, width, height)
-        }
-      })
+    if (Array.isArray(layout.walls) && layout.walls.length > 0) {
+      this.drawWallsFromLayout(layout.walls)
     } else {
       this.drawWalls()
     }
     
     // Draw zones if provided
-    if (layout.zones && layout.zones.length > 0) {
-      layout.zones.forEach((zone: any) => {
-        const color = this.getZoneColor(zone.type)
-        
-        // Support both formats: {x, y, width, height} and {bounds: {x, y, width, height}}
-        const x = zone.bounds?.x ?? zone.x
-        const y = zone.bounds?.y ?? zone.y
-        const width = zone.bounds?.width ?? zone.width
-        const height = zone.bounds?.height ?? zone.height
-        
-        this.graphics.fillStyle(color, 0.1)
-        this.graphics.fillRect(x, y, width, height)
-        this.graphics.lineStyle(2, color, 0.3)
-        this.graphics.strokeRect(x, y, width, height)
-      })
+    if (Array.isArray(layout.zones) && layout.zones.length > 0) {
+      this.drawZonesFromLayout(layout.zones)
     }
     
     // Draw rooms
-    if (layout.rooms && layout.rooms.length > 0) {
+    if (Array.isArray(layout.rooms) && layout.rooms.length > 0) {
       layout.rooms.forEach((room: RoomData) => {
-        this.drawRoom(room)
+        if (room && room.id) {
+          this.drawRoom(room)
+        }
       })
     }
     
     // Draw desks
-    if (layout.desks && layout.desks.length > 0) {
+    if (Array.isArray(layout.desks) && layout.desks.length > 0) {
       layout.desks.forEach((desk: DeskData) => {
-        this.drawDesk(desk)
+        if (desk && desk.id) {
+          this.drawDesk(desk)
+        }
       })
     }
     
     // Draw decorations
-    if (layout.decorations && layout.decorations.length > 0) {
+    if (Array.isArray(layout.decorations) && layout.decorations.length > 0) {
       layout.decorations.forEach((decoration: DecorationData) => {
-        this.drawDecoration(decoration)
+        if (decoration && decoration.id) {
+          this.drawDecoration(decoration)
+        }
       })
     }
   }
+
+  /**
+   * Draw walls from layout data - extracted method for cleaner code
+   */
+  private drawWallsFromLayout(walls: WallData[]): void {
+    walls.forEach((wall: WallData) => {
+      this.graphics.fillStyle(GAME_CONFIG.COLORS.WALL)
+      
+      // Support both formats: {x, y, width, height} and {start, end, thickness}
+      if (wall.start && wall.end) {
+        this.drawWallSegment(wall)
+      } else {
+        this.drawRectWall(wall)
+      }
+    })
+  }
+
+  /**
+   * Draw a wall segment from start/end coordinates
+   */
+  private drawWallSegment(wall: WallData): void {
+    const startX = wall.start!.x
+    const startY = wall.start!.y
+    const endX = wall.end!.x
+    const endY = wall.end!.y
+    const thickness = wall.thickness || 32
+    
+    // Determine if horizontal or vertical wall
+    if (startY === endY) {
+      // Horizontal wall
+      const x = Math.min(startX, endX)
+      const width = Math.abs(endX - startX)
+      if (width > 0) {
+        this.graphics.fillRect(x, startY, width, thickness)
+        this.addWallCollision(x + width / 2, startY + thickness / 2, width, thickness)
+      }
+    } else if (startX === endX) {
+      // Vertical wall
+      const y = Math.min(startY, endY)
+      const height = Math.abs(endY - startY)
+      if (height > 0) {
+        this.graphics.fillRect(startX, y, thickness, height)
+        this.addWallCollision(startX + thickness / 2, y + height / 2, thickness, height)
+      }
+    } else {
+      // Diagonal or complex wall
+      this.graphics.lineStyle(thickness, GAME_CONFIG.COLORS.WALL, 1)
+      this.graphics.lineBetween(startX, startY, endX, endY)
+
+      const minX = Math.min(startX, endX) - thickness / 2
+      const minY = Math.min(startY, endY) - thickness / 2
+      const colliderWidth = Math.abs(endX - startX) + thickness
+      const colliderHeight = Math.abs(endY - startY) + thickness
+      this.addWallCollision(minX + colliderWidth / 2, minY + colliderHeight / 2, colliderWidth, colliderHeight)
+    }
+  }
+
+  /**
+   * Draw a rectangular wall
+   */
+  private drawRectWall(wall: WallData): void {
+    const x = wall.x ?? 0
+    const y = wall.y ?? 0
+    const width = wall.width ?? 0
+    const height = wall.height ?? 0
+    
+    if (width > 0 && height > 0) {
+      this.graphics.fillRect(x, y, width, height)
+      this.addWallCollision(x + width / 2, y + height / 2, width, height)
+    }
+  }
+
+  /**
+   * Draw zones from layout data
+   */
+  private drawZonesFromLayout(zones: ZoneData[]): void {
+    zones.forEach((zone: ZoneData) => {
+      const color = this.getZoneColor(zone.type)
+      
+      // Support both formats: {x, y, width, height} and {bounds: {x, y, width, height}}
+      const x = zone.bounds?.x ?? zone.x
+      const y = zone.bounds?.y ?? zone.y
+      const width = zone.bounds?.width ?? zone.width
+      const height = zone.bounds?.height ?? zone.height
+      
+      // Validate zone dimensions
+      if (!this.validateBounds({ x, y, width, height }, zone.id || zone.type)) {
+        return
+      }
+      
+      this.graphics.fillStyle(color, 0.1)
+      this.graphics.fillRect(x, y, width, height)
+      this.graphics.lineStyle(2, color, 0.3)
+      this.graphics.strokeRect(x, y, width, height)
+    })
+  }
   
   private getZoneColor(type: string): number {
-    const colors: Record<string, number> = {
-      'workspace': 0x4a90e2,
-      'meeting': 0x7cb342,
-      'social': 0xffa726,
-      'quiet': 0x9575cd,
-      'collaboration': 0x26c6da,
-      'focus': 0x9575cd,
-      'break': 0xffa726,
-      'lounge': 0xff7043,
-      'creative': 0xec407a,
-      'lobby': 0x78909c,
-      'reception': 0x78909c,
-      'kitchen': 0xffca28,
-      'conference': 0x66bb6a,
-      'executive': 0x5c6bc0,
-      'open-office': 0x42a5f5,
-      'private-office': 0x7e57c2,
+    if (!this.zoneColorMap) {
+      this.zoneColorMap = {
+        'workspace': 0x4a90e2,
+        'meeting': 0x7cb342,
+        'social': 0xffa726,
+        'quiet': 0x9575cd,
+        'collaboration': 0x26c6da,
+        'focus': 0x9575cd,
+        'break': 0xffa726,
+        'lounge': 0xff7043,
+        'creative': 0xec407a,
+        'lobby': 0x78909c,
+        'reception': 0x78909c,
+        'kitchen': 0xffca28,
+        'conference': 0x66bb6a,
+        'executive': 0x5c6bc0,
+        'open-office': 0x42a5f5,
+        'private-office': 0x7e57c2,
+      }
     }
-    return colors[type] || 0x78909c
+    return this.zoneColorMap[type] || 0x78909c
   }
   
   private drawFloor(): void {
-    const { TILE_SIZE, WIDTH, HEIGHT, COLORS } = GAME_CONFIG
-    
+    const { TILE_SIZE, COLORS } = GAME_CONFIG
+    const width = this.layoutWidth
+    const height = this.layoutHeight
+
     // Main floor
     this.graphics.fillStyle(COLORS.FLOOR)
-    this.graphics.fillRect(0, 0, WIDTH, HEIGHT)
-    
+    this.graphics.fillRect(0, 0, width, height)
+
     // Grid pattern
     this.graphics.lineStyle(1, COLORS.FLOOR_GRID, 0.5)
-    
-    for (let x = 0; x <= WIDTH; x += TILE_SIZE) {
-      this.graphics.lineBetween(x, 0, x, HEIGHT)
+
+    for (let x = 0; x <= width; x += TILE_SIZE) {
+      this.graphics.lineBetween(x, 0, x, height)
     }
-    
-    for (let y = 0; y <= HEIGHT; y += TILE_SIZE) {
-      this.graphics.lineBetween(0, y, WIDTH, y)
+
+    for (let y = 0; y <= height; y += TILE_SIZE) {
+      this.graphics.lineBetween(0, y, width, y)
     }
   }
   
   private drawWalls(): void {
-    const { COLORS, WIDTH, HEIGHT, TILE_SIZE } = GAME_CONFIG
+    const { COLORS, TILE_SIZE } = GAME_CONFIG
+    const width = this.layoutWidth
+    const height = this.layoutHeight
     const wallThickness = TILE_SIZE
-    
+
     this.graphics.fillStyle(COLORS.WALL)
-    
+
     // Top wall
-    this.graphics.fillRect(0, 0, WIDTH, wallThickness)
-    
+    this.graphics.fillRect(0, 0, width, wallThickness)
+    this.addWallCollision(width / 2, wallThickness / 2, width, wallThickness)
+
     // Bottom wall
-    this.graphics.fillRect(0, HEIGHT - wallThickness, WIDTH, wallThickness)
-    
+    this.graphics.fillRect(0, height - wallThickness, width, wallThickness)
+    this.addWallCollision(width / 2, height - wallThickness / 2, width, wallThickness)
+
     // Left wall
-    this.graphics.fillRect(0, 0, wallThickness, HEIGHT)
-    
+    this.graphics.fillRect(0, 0, wallThickness, height)
+    this.addWallCollision(wallThickness / 2, height / 2, wallThickness, height)
+
     // Right wall
-    this.graphics.fillRect(WIDTH - wallThickness, 0, wallThickness, HEIGHT)
-    
+    this.graphics.fillRect(width - wallThickness, 0, wallThickness, height)
+    this.addWallCollision(width - wallThickness / 2, height / 2, wallThickness, height)
+
     // Wall details (darker top)
     this.graphics.fillStyle(COLORS.WALL_DARK)
-    this.graphics.fillRect(0, 0, WIDTH, 8)
-    this.graphics.fillRect(0, 0, 8, HEIGHT)
+    this.graphics.fillRect(0, 0, width, 8)
+    this.graphics.fillRect(0, 0, 8, height)
   }
   
   private drawMeetingRooms(): void {
-    const { COLORS, TILE_SIZE } = GAME_CONFIG
-    
-    // Meeting Room 1 (top right)
-    this.drawRoom({
-      id: 'meeting-1',
-      name: 'Meeting Room A',
-      type: 'meeting',
-      bounds: { x: 850, y: 50, width: 300, height: 200 },
-      capacity: 8,
-      equipment: [],
-      bookable: true,
-      status: 'available',
-    })
-    
-    // Meeting Room 2 (bottom left)
-    this.drawRoom({
-      id: 'meeting-2',
-      name: 'Meeting Room B',
-      type: 'meeting',
-      bounds: { x: 50, y: 500, width: 250, height: 180 },
-      capacity: 6,
-      equipment: [],
-      bookable: true,
-      status: 'available',
-    })
+    const meetingRooms = GAME_CONFIG.DEFAULT_LAYOUTS.MEETING_ROOMS
+    meetingRooms.forEach(room => this.drawRoom(room))
   }
   
   private drawBreakRoom(): void {
-    // Break room (bottom right)
-    this.drawRoom({
-      id: 'break',
-      name: 'Break Room',
-      type: 'break',
-      bounds: { x: 900, y: 550, width: 250, height: 200 },
-      capacity: 12,
-      equipment: [],
-      bookable: false,
-      status: 'available',
-    })
+    const breakRoom = GAME_CONFIG.DEFAULT_LAYOUTS.BREAK_ROOM
+    this.drawRoom(breakRoom)
+  }
+  
+  /**
+   * Get room colors with lazy initialization for performance
+   */
+  private getRoomColors(type: string): RoomColors {
+    if (!this.roomColorMap) {
+      const { COLORS } = GAME_CONFIG
+      this.roomColorMap = {
+        meeting: { fill: COLORS.MEETING_ROOM, border: COLORS.MEETING_ROOM_BORDER },
+        break: { fill: COLORS.BREAK_ROOM, border: COLORS.BREAK_ROOM_BORDER },
+        private: { fill: 0xf3e5f5, border: 0x9c27b0 },
+        conference: { fill: COLORS.MEETING_ROOM, border: COLORS.MEETING_ROOM_BORDER },
+        phone: { fill: 0xe3f2fd, border: 0x2196f3 },
+        'phone-booth': { fill: 0xe3f2fd, border: 0x2196f3 },
+        focus: { fill: 0xfff3e0, border: 0xff9800 },
+        lounge: { fill: 0xf3e5f5, border: 0x9c27b0 },
+      }
+    }
+    return this.roomColorMap[type] || { fill: GAME_CONFIG.COLORS.MEETING_ROOM, border: GAME_CONFIG.COLORS.MEETING_ROOM_BORDER }
   }
   
   private drawRoom(room: RoomData): void {
-    const { COLORS } = GAME_CONFIG
-    
-    const colors: Record<string, { fill: number, border: number }> = {
-      meeting: { fill: COLORS.MEETING_ROOM, border: COLORS.MEETING_ROOM_BORDER },
-      break: { fill: COLORS.BREAK_ROOM, border: COLORS.BREAK_ROOM_BORDER },
-      private: { fill: 0xf3e5f5, border: 0x9c27b0 },
-      conference: { fill: COLORS.MEETING_ROOM, border: COLORS.MEETING_ROOM_BORDER },
-      phone: { fill: 0xe3f2fd, border: 0x2196f3 },
-      'phone-booth': { fill: 0xe3f2fd, border: 0x2196f3 },
-      focus: { fill: 0xfff3e0, border: 0xff9800 },
-      lounge: { fill: 0xf3e5f5, border: 0x9c27b0 },
+    // Guard against missing bounds
+    if (!room || !room.bounds) {
+      console.warn(`Room ${room?.id || 'unknown'} missing bounds data, skipping render`)
+      return
     }
     
-    const roomColors = colors[room.type] || { fill: COLORS.MEETING_ROOM, border: COLORS.MEETING_ROOM_BORDER }
+    // Validate bounds
+    if (!this.validateBounds(room.bounds, room.id)) {
+      return
+    }
     
-    const { x, y, width, height } = room.bounds;
+    const roomColors = this.getRoomColors(room.type)
+    const bounds = room.bounds  // Store once to avoid re-destructuring
     
     // Room floor
     this.graphics.fillStyle(roomColors.fill)
-    this.graphics.fillRect(x, y, width, height)
+    this.graphics.fillRect(bounds.x, bounds.y, bounds.width, bounds.height)
     
     // Room walls/border
     this.graphics.lineStyle(4, roomColors.border, 1)
-    this.graphics.strokeRect(x, y, width, height)
+    this.graphics.strokeRect(bounds.x, bounds.y, bounds.width, bounds.height)
     
     // Room label
     const label = this.scene.add.text(
-      x + width / 2,
-      y + 15,
+      bounds.x + bounds.width / 2,
+      bounds.y + 15,
       room.name,
       {
         fontSize: '14px',
@@ -285,21 +448,28 @@ export class OfficeBuilder {
       }
     )
     label.setOrigin(0.5, 0)
+    this.textObjects.push(label)
     
-    // Draw room-specific furniture
+    // Draw room-specific furniture - pass bounds to avoid re-destructuring
     if (room.type === 'meeting') {
-      this.drawMeetingTable(room)
+      this.drawMeetingTable(bounds)
     } else if (room.type === 'break') {
-      this.drawBreakRoomFurniture(room)
+      this.drawBreakRoomFurniture(bounds)
     }
   }
   
-  private drawMeetingTable(room: RoomData): void {
-    const { COLORS } = GAME_CONFIG
-    const { x, y, width, height } = room.bounds;
+  private drawMeetingTable(bounds: Bounds): void {
+    const { COLORS, FURNITURE } = GAME_CONFIG
     
-    const tableWidth = width * 0.6
-    const tableHeight = height * 0.4
+    // Skip if room is too small for furniture
+    if (bounds.width < 100 || bounds.height < 80) {
+      return
+    }
+    
+    const { x, y, width, height } = bounds
+    
+    const tableWidth = Math.min(width * 0.6, width - 40)
+    const tableHeight = Math.min(height * 0.4, height - 60)
     const tableX = x + (width - tableWidth) / 2
     const tableY = y + (height - tableHeight) / 2 + 20
     
@@ -311,28 +481,50 @@ export class OfficeBuilder {
     this.graphics.fillStyle(COLORS.DESK_TOP)
     this.graphics.fillRoundedRect(tableX + 4, tableY + 4, tableWidth - 8, tableHeight - 8, 6)
     
-    // Chairs around table
-    const chairSize = 20
-    const chairPositions = [
-      // Top row
-      { x: tableX + tableWidth * 0.25, y: tableY - chairSize - 5 },
-      { x: tableX + tableWidth * 0.5, y: tableY - chairSize - 5 },
-      { x: tableX + tableWidth * 0.75, y: tableY - chairSize - 5 },
-      // Bottom row
-      { x: tableX + tableWidth * 0.25, y: tableY + tableHeight + 5 },
-      { x: tableX + tableWidth * 0.5, y: tableY + tableHeight + 5 },
-      { x: tableX + tableWidth * 0.75, y: tableY + tableHeight + 5 },
-    ]
+    // Chairs around table with bounds checking
+    const chairSize = FURNITURE.MEETING_CHAIR_SIZE
+    const chairOffset = 5
     
+    // Check if we can draw chairs above and below table
+    const canDrawTopChairs = tableY - chairSize - chairOffset >= y
+    const canDrawBottomChairs = tableY + tableHeight + chairSize + chairOffset <= y + height
+    
+    const chairPositions: Position[] = []
+    
+    // Top row chairs (only if within bounds)
+    if (canDrawTopChairs) {
+      chairPositions.push(
+        { x: tableX + tableWidth * 0.25, y: tableY - chairSize - chairOffset },
+        { x: tableX + tableWidth * 0.5, y: tableY - chairSize - chairOffset },
+        { x: tableX + tableWidth * 0.75, y: tableY - chairSize - chairOffset }
+      )
+    }
+    
+    // Bottom row chairs (only if within bounds)
+    if (canDrawBottomChairs) {
+      chairPositions.push(
+        { x: tableX + tableWidth * 0.25, y: tableY + tableHeight + chairOffset },
+        { x: tableX + tableWidth * 0.5, y: tableY + tableHeight + chairOffset },
+        { x: tableX + tableWidth * 0.75, y: tableY + tableHeight + chairOffset }
+      )
+    }
+    
+    // Draw chairs
+    this.graphics.fillStyle(COLORS.CHAIR)
     chairPositions.forEach(pos => {
-      this.graphics.fillStyle(COLORS.CHAIR)
       this.graphics.fillRoundedRect(pos.x - chairSize / 2, pos.y, chairSize, chairSize, 4)
     })
   }
   
-  private drawBreakRoomFurniture(room: RoomData): void {
-    const { COLORS } = GAME_CONFIG
-    const { x, y, width, height } = room.bounds;
+  private drawBreakRoomFurniture(bounds: Bounds): void {
+    const { COLORS, FURNITURE } = GAME_CONFIG
+    
+    // Skip if room is too small for furniture
+    if (bounds.width < 150 || bounds.height < 100) {
+      return
+    }
+    
+    const { x, y, width, height } = bounds
     
     // Couch
     const couchX = x + 30
@@ -344,7 +536,13 @@ export class OfficeBuilder {
     
     // Coffee table
     this.graphics.fillStyle(COLORS.DESK)
-    this.graphics.fillRoundedRect(couchX + 120, couchY + 10, 60, 30, 4)
+    this.graphics.fillRoundedRect(
+      couchX + FURNITURE.COFFEE_TABLE_OFFSET_X, 
+      couchY + FURNITURE.COFFEE_TABLE_OFFSET_Y, 
+      FURNITURE.COFFEE_TABLE_WIDTH, 
+      FURNITURE.COFFEE_TABLE_HEIGHT, 
+      4
+    )
     
     // Coffee machine
     this.graphics.fillStyle(COLORS.COFFEE_MACHINE)
@@ -354,39 +552,27 @@ export class OfficeBuilder {
   }
   
   private drawDesks(): void {
-    const desks: DeskData[] = [
-      // Row 1 (left side)
-      { id: 'desk-1', position: { x: 100, y: 100 }, dimensions: { width: 80, height: 50 }, type: 'standard', zoneId: 'main', facing: 'south', isHotDesk: true, status: 'available' },
-      { id: 'desk-2', position: { x: 200, y: 100 }, dimensions: { width: 80, height: 50 }, type: 'standard', zoneId: 'main', facing: 'south', isHotDesk: true, status: 'available' },
-      { id: 'desk-3', position: { x: 300, y: 100 }, dimensions: { width: 80, height: 50 }, type: 'standard', zoneId: 'main', facing: 'south', isHotDesk: true, status: 'available' },
-      { id: 'desk-4', position: { x: 400, y: 100 }, dimensions: { width: 80, height: 50 }, type: 'standard', zoneId: 'main', facing: 'south', isHotDesk: true, status: 'available' },
-      
-      // Row 2
-      { id: 'desk-5', position: { x: 100, y: 200 }, dimensions: { width: 80, height: 50 }, type: 'standard', zoneId: 'main', facing: 'south', isHotDesk: true, status: 'available' },
-      { id: 'desk-6', position: { x: 200, y: 200 }, dimensions: { width: 80, height: 50 }, type: 'standard', zoneId: 'main', facing: 'south', isHotDesk: true, status: 'available' },
-      { id: 'desk-7', position: { x: 300, y: 200 }, dimensions: { width: 80, height: 50 }, type: 'standard', zoneId: 'main', facing: 'south', isHotDesk: true, status: 'available' },
-      { id: 'desk-8', position: { x: 400, y: 200 }, dimensions: { width: 80, height: 50 }, type: 'standard', zoneId: 'main', facing: 'south', isHotDesk: true, status: 'available' },
-      
-      // Row 3
-      { id: 'desk-9', position: { x: 100, y: 350 }, dimensions: { width: 80, height: 50 }, type: 'standard', zoneId: 'main', facing: 'south', isHotDesk: true, status: 'available' },
-      { id: 'desk-10', position: { x: 200, y: 350 }, dimensions: { width: 80, height: 50 }, type: 'standard', zoneId: 'main', facing: 'south', isHotDesk: true, status: 'available' },
-      { id: 'desk-11', position: { x: 300, y: 350 }, dimensions: { width: 80, height: 50 }, type: 'standard', zoneId: 'main', facing: 'south', isHotDesk: true, status: 'available' },
-      { id: 'desk-12', position: { x: 400, y: 350 }, dimensions: { width: 80, height: 50 }, type: 'standard', zoneId: 'main', facing: 'south', isHotDesk: true, status: 'available' },
-      
-      // Center area desks
-      { id: 'desk-13', position: { x: 550, y: 300 }, dimensions: { width: 80, height: 50 }, type: 'standard', zoneId: 'main', facing: 'south', isHotDesk: true, status: 'available' },
-      { id: 'desk-14', position: { x: 650, y: 300 }, dimensions: { width: 80, height: 50 }, type: 'standard', zoneId: 'main', facing: 'south', isHotDesk: true, status: 'available' },
-      { id: 'desk-15', position: { x: 550, y: 400 }, dimensions: { width: 80, height: 50 }, type: 'standard', zoneId: 'main', facing: 'south', isHotDesk: true, status: 'available' },
-      { id: 'desk-16', position: { x: 650, y: 400 }, dimensions: { width: 80, height: 50 }, type: 'standard', zoneId: 'main', facing: 'south', isHotDesk: true, status: 'available' },
-    ]
-    
+    const desks = GAME_CONFIG.DEFAULT_LAYOUTS.DESKS
     desks.forEach(desk => this.drawDesk(desk))
   }
   
   private drawDesk(desk: DeskData): void {
-    const { COLORS } = GAME_CONFIG
-    const { x, y } = desk.position;
-    const { width, height } = desk.dimensions;
+    const { COLORS, FURNITURE } = GAME_CONFIG
+    
+    // Guard against missing position or dimensions
+    if (!desk || !desk.position || !desk.dimensions) {
+      console.warn(`Desk ${desk?.id || 'unknown'} missing position or dimensions, skipping render`)
+      return
+    }
+    
+    // Validate position and dimensions
+    const { x, y } = desk.position
+    const { width, height } = desk.dimensions
+    
+    if (!this.validatePosition(x, y) || width <= 0 || height <= 0) {
+      console.warn(`Desk ${desk.id} has invalid position or dimensions, skipping render`)
+      return
+    }
     
     // Desk body
     this.graphics.fillStyle(COLORS.DESK)
@@ -397,60 +583,72 @@ export class OfficeBuilder {
     this.graphics.fillRoundedRect(x + 3, y + 3, width - 6, height - 6, 3)
     
     // Computer monitor
-    const monitorWidth = 25
-    const monitorHeight = 18
-    const monitorX = x + width / 2 - monitorWidth / 2
+    const monitorX = x + width / 2 - FURNITURE.MONITOR_WIDTH / 2
     const monitorY = y + 8
     
     // Monitor
     this.graphics.fillStyle(0x333333)
-    this.graphics.fillRoundedRect(monitorX, monitorY, monitorWidth, monitorHeight, 2)
+    this.graphics.fillRoundedRect(monitorX, monitorY, FURNITURE.MONITOR_WIDTH, FURNITURE.MONITOR_HEIGHT, 2)
     this.graphics.fillStyle(0x4fc3f7)
-    this.graphics.fillRect(monitorX + 2, monitorY + 2, monitorWidth - 4, monitorHeight - 4)
+    this.graphics.fillRect(monitorX + 2, monitorY + 2, FURNITURE.MONITOR_WIDTH - 4, FURNITURE.MONITOR_HEIGHT - 4)
     
     // Monitor stand
     this.graphics.fillStyle(0x333333)
-    this.graphics.fillRect(monitorX + monitorWidth / 2 - 3, monitorY + monitorHeight, 6, 5)
+    this.graphics.fillRect(
+      monitorX + FURNITURE.MONITOR_WIDTH / 2 - FURNITURE.MONITOR_STAND_WIDTH / 2, 
+      monitorY + FURNITURE.MONITOR_HEIGHT, 
+      FURNITURE.MONITOR_STAND_WIDTH, 
+      FURNITURE.MONITOR_STAND_HEIGHT
+    )
     
     // Chair
-    const chairX = x + width / 2 - 12
-    const chairY = y + height + 8
+    const chairX = x + width / 2 - FURNITURE.DESK_CHAIR_SIZE / 2
+    const chairY = y + height + FURNITURE.CHAIR_OFFSET
     
     this.graphics.fillStyle(COLORS.CHAIR)
-    this.graphics.fillRoundedRect(chairX, chairY, 24, 24, 4)
+    this.graphics.fillRoundedRect(chairX, chairY, FURNITURE.DESK_CHAIR_SIZE, FURNITURE.DESK_CHAIR_SIZE, 4)
     this.graphics.fillStyle(0x1e40af)
-    this.graphics.fillRoundedRect(chairX + 3, chairY + 3, 18, 18, 3)
+    this.graphics.fillRoundedRect(chairX + 3, chairY + 3, FURNITURE.DESK_CHAIR_SIZE - 6, FURNITURE.DESK_CHAIR_SIZE - 6, 3)
   }
   
   private drawDecorations(): void {
-    const decorations: DecorationData[] = [
-      // Plants
-      { id: 'plant-1', type: 'plant', position: { x: 60, y: 60 }, dimensions: { width: 30, height: 30 } },
-      { id: 'plant-2', type: 'plant', position: { x: 500, y: 60 }, dimensions: { width: 30, height: 30 } },
-      { id: 'plant-3', type: 'plant', position: { x: 800, y: 300 }, dimensions: { width: 30, height: 30 } },
-      { id: 'plant-4', type: 'plant', position: { x: 60, y: 450 }, dimensions: { width: 30, height: 30 } },
-      
-      // Whiteboards
-      { id: 'wb-1', type: 'whiteboard', position: { x: 520, y: 80 }, dimensions: { width: 60, height: 40 } },
-      { id: 'wb-2', type: 'whiteboard', position: { x: 350, y: 500 }, dimensions: { width: 60, height: 40 } },
-    ]
-    
+    const decorations = GAME_CONFIG.DEFAULT_LAYOUTS.DECORATIONS
     decorations.forEach(deco => this.drawDecoration(deco))
   }
   
   private drawDecoration(deco: DecorationData): void {
-    const { x, y } = deco.position;
-    switch (deco.type) {
+    // Guard against missing position
+    if (!deco || !deco.position) {
+      console.warn(`Decoration ${deco?.id || 'unknown'} missing position, skipping render`)
+      return
+    }
+    
+    // Validate position
+    const { x, y } = deco.position
+    if (!this.validatePosition(x, y)) {
+      console.warn(`Decoration ${deco.id} has invalid position, skipping render`)
+      return
+    }
+    
+    // Normalize decoration type for consistency
+    const type = (deco.type || '').toLowerCase().replace(/_/g, '-')
+    
+    switch (type) {
       case 'plant':
-      case 'plant-small':
-      case 'plant-medium':
-      case 'plant-large':
         this.drawPlant(x, y, 'plant')
+        break
+      case 'plant-small':
+        this.drawPlant(x, y, 'plant-small')
+        break
+      case 'plant-medium':
+        this.drawPlant(x, y, 'plant-medium')
+        break
+      case 'plant-large':
+        this.drawPlant(x, y, 'plant-large')
         break
       case 'whiteboard':
         this.drawWhiteboard(x, y)
         break
-      case 'coffeeMachine':
       case 'coffee-machine':
         this.drawCoffeeMachine(x, y)
         break
@@ -475,11 +673,20 @@ export class OfficeBuilder {
   private drawPlant(x: number, y: number, type: string = 'plant'): void {
     const { COLORS } = GAME_CONFIG
     
-    // Determine size based on type
+    // Validate coordinates
+    if (!this.validatePosition(x, y)) {
+      return
+    }
+    
+    // Determine size based on type - normalize type names
     let potWidth = 24, potHeight = 20, leafSize = 15
-    if (type === 'plantSmall') {
+    const normalizedType = type.toLowerCase()
+    
+    if (normalizedType === 'plant-small') {
       potWidth = 16; potHeight = 14; leafSize = 10
-    } else if (type === 'plantLarge') {
+    } else if (normalizedType === 'plant-medium') {
+      potWidth = 24; potHeight = 20; leafSize = 15
+    } else if (normalizedType === 'plant-large') {
       potWidth = 32; potHeight = 28; leafSize = 20
     }
     
@@ -499,6 +706,12 @@ export class OfficeBuilder {
   
   private drawWhiteboard(x: number, y: number): void {
     const { COLORS } = GAME_CONFIG
+    
+    // Validate coordinates
+    if (!this.validatePosition(x, y)) {
+      return
+    }
+    
     const width = 120
     const height = 80
     
@@ -531,6 +744,11 @@ export class OfficeBuilder {
   private drawCoffeeMachine(x: number, y: number): void {
     const { COLORS } = GAME_CONFIG
     
+    // Validate coordinates
+    if (!this.validatePosition(x, y)) {
+      return
+    }
+    
     // Machine body
     this.graphics.fillStyle(COLORS.COFFEE_MACHINE)
     this.graphics.fillRoundedRect(x - 12, y - 20, 24, 40, 3)
@@ -555,6 +773,11 @@ export class OfficeBuilder {
   }
   
   private drawCouch(x: number, y: number): void {
+    // Validate coordinates
+    if (!this.validatePosition(x, y)) {
+      return
+    }
+    
     const width = 70
     const height = 30
     
@@ -572,17 +795,12 @@ export class OfficeBuilder {
     this.graphics.fillRoundedRect(x + width/2 - 4, y - height/2 + 2, 8, height - 4, 3)
   }
   
-  private drawBeanBag(x: number, y: number): void {
-    // Bean bag shape using ellipses
-    this.graphics.fillStyle(0x8b5cf6)
-    this.graphics.fillEllipse(x, y, 56, 48)
-    
-    // Highlight
-    this.graphics.fillStyle(0x7c3aed, 0.6)
-    this.graphics.fillEllipse(x, y - 8, 40, 32)
-  }
-  
   private drawWaterCooler(x: number, y: number): void {
+    // Validate coordinates
+    if (!this.validatePosition(x, y)) {
+      return
+    }
+    
     // Cooler body
     this.graphics.fillStyle(0x4fc3f7)
     this.graphics.fillRoundedRect(x - 12, y - 16, 24, 32, 4)
@@ -601,6 +819,11 @@ export class OfficeBuilder {
   }
   
   private drawArtwork(x: number, y: number): void {
+    // Validate coordinates
+    if (!this.validatePosition(x, y)) {
+      return
+    }
+    
     const width = 64
     const height = 48
     
@@ -626,26 +849,8 @@ export class OfficeBuilder {
   }
   
   public getCollisionBodies(): Phaser.GameObjects.Rectangle[] {
-    // If collision bodies were already created from layout data, return them
-    if (this.collisionBodies.length > 0) {
-      return this.collisionBodies
-    }
-    
-    // Otherwise create default perimeter walls (for default office)
-    const { TILE_SIZE } = GAME_CONFIG
-    const width = this.layoutWidth
-    const height = this.layoutHeight
-    
-    // Wall collisions (center coordinates)
-    // Top
-    this.addWallCollision(width / 2, TILE_SIZE / 2, width, TILE_SIZE)
-    // Bottom
-    this.addWallCollision(width / 2, height - TILE_SIZE / 2, width, TILE_SIZE)
-    // Left
-    this.addWallCollision(TILE_SIZE / 2, height / 2, TILE_SIZE, height)
-    // Right
-    this.addWallCollision(width - TILE_SIZE / 2, height / 2, TILE_SIZE, height)
-    
+    // Collision bodies are now created during drawWalls() or buildFromLayoutData()
+    // This method simply returns the existing bodies
     return this.collisionBodies
   }
 }
