@@ -13,6 +13,21 @@ export const GAME_CONFIG = {
   PLAYER_SPEED: 200,
   PLAYER_SIZE: 28,
   
+  // Furniture dimensions
+  FURNITURE: {
+    MONITOR_WIDTH: 25,
+    MONITOR_HEIGHT: 18,
+    MONITOR_STAND_WIDTH: 6,
+    MONITOR_STAND_HEIGHT: 5,
+    DESK_CHAIR_SIZE: 24,
+    MEETING_CHAIR_SIZE: 20,
+    CHAIR_OFFSET: 8,
+    COFFEE_TABLE_OFFSET_X: 120,
+    COFFEE_TABLE_OFFSET_Y: 10,
+    COFFEE_TABLE_WIDTH: 60,
+    COFFEE_TABLE_HEIGHT: 30,
+  },
+  
   // Colors - now using shared theme for consistency with LayoutPreview
   COLORS: {
     // Floor
@@ -64,6 +79,74 @@ export const GAME_CONFIG = {
     // Spawn point
     SPAWN_X: 400,
     SPAWN_Y: 400,
+  },
+
+  // Default layouts for OfficeBuilder
+  DEFAULT_LAYOUTS: {
+    MEETING_ROOMS: [
+      {
+        id: 'meeting-1',
+        name: 'Meeting Room A',
+        type: 'meeting',
+        bounds: { x: 850, y: 50, width: 300, height: 200 },
+        capacity: 8,
+        equipment: [],
+        bookable: true,
+        status: 'available',
+      },
+      {
+        id: 'meeting-2',
+        name: 'Meeting Room B',
+        type: 'meeting',
+        bounds: { x: 50, y: 500, width: 250, height: 180 },
+        capacity: 6,
+        equipment: [],
+        bookable: true,
+        status: 'available',
+      },
+    ],
+    BREAK_ROOM: {
+      id: 'break',
+      name: 'Break Room',
+      type: 'break',
+      bounds: { x: 900, y: 550, width: 250, height: 200 },
+      capacity: 12,
+      equipment: [],
+      bookable: false,
+      status: 'available',
+    },
+    DESKS: [
+      // Row 1 (left side)
+      { id: 'desk-1', position: { x: 100, y: 100 }, dimensions: { width: 80, height: 50 }, type: 'standard', zoneId: 'main', facing: 'south', isHotDesk: true, status: 'available' },
+      { id: 'desk-2', position: { x: 200, y: 100 }, dimensions: { width: 80, height: 50 }, type: 'standard', zoneId: 'main', facing: 'south', isHotDesk: true, status: 'available' },
+      { id: 'desk-3', position: { x: 300, y: 100 }, dimensions: { width: 80, height: 50 }, type: 'standard', zoneId: 'main', facing: 'south', isHotDesk: true, status: 'available' },
+      { id: 'desk-4', position: { x: 400, y: 100 }, dimensions: { width: 80, height: 50 }, type: 'standard', zoneId: 'main', facing: 'south', isHotDesk: true, status: 'available' },
+      // Row 2
+      { id: 'desk-5', position: { x: 100, y: 200 }, dimensions: { width: 80, height: 50 }, type: 'standard', zoneId: 'main', facing: 'south', isHotDesk: true, status: 'available' },
+      { id: 'desk-6', position: { x: 200, y: 200 }, dimensions: { width: 80, height: 50 }, type: 'standard', zoneId: 'main', facing: 'south', isHotDesk: true, status: 'available' },
+      { id: 'desk-7', position: { x: 300, y: 200 }, dimensions: { width: 80, height: 50 }, type: 'standard', zoneId: 'main', facing: 'south', isHotDesk: true, status: 'available' },
+      { id: 'desk-8', position: { x: 400, y: 200 }, dimensions: { width: 80, height: 50 }, type: 'standard', zoneId: 'main', facing: 'south', isHotDesk: true, status: 'available' },
+      // Row 3
+      { id: 'desk-9', position: { x: 100, y: 350 }, dimensions: { width: 80, height: 50 }, type: 'standard', zoneId: 'main', facing: 'south', isHotDesk: true, status: 'available' },
+      { id: 'desk-10', position: { x: 200, y: 350 }, dimensions: { width: 80, height: 50 }, type: 'standard', zoneId: 'main', facing: 'south', isHotDesk: true, status: 'available' },
+      { id: 'desk-11', position: { x: 300, y: 350 }, dimensions: { width: 80, height: 50 }, type: 'standard', zoneId: 'main', facing: 'south', isHotDesk: true, status: 'available' },
+      { id: 'desk-12', position: { x: 400, y: 350 }, dimensions: { width: 80, height: 50 }, type: 'standard', zoneId: 'main', facing: 'south', isHotDesk: true, status: 'available' },
+      // Center area desks
+      { id: 'desk-13', position: { x: 550, y: 300 }, dimensions: { width: 80, height: 50 }, type: 'standard', zoneId: 'main', facing: 'south', isHotDesk: true, status: 'available' },
+      { id: 'desk-14', position: { x: 650, y: 300 }, dimensions: { width: 80, height: 50 }, type: 'standard', zoneId: 'main', facing: 'south', isHotDesk: true, status: 'available' },
+      { id: 'desk-15', position: { x: 550, y: 400 }, dimensions: { width: 80, height: 50 }, type: 'standard', zoneId: 'main', facing: 'south', isHotDesk: true, status: 'available' },
+      { id: 'desk-16', position: { x: 650, y: 400 }, dimensions: { width: 80, height: 50 }, type: 'standard', zoneId: 'main', facing: 'south', isHotDesk: true, status: 'available' },
+    ],
+    DECORATIONS: [
+      // Plants
+      { id: 'plant-1', type: 'plant', position: { x: 60, y: 60 }, dimensions: { width: 30, height: 30 } },
+      { id: 'plant-2', type: 'plant', position: { x: 500, y: 60 }, dimensions: { width: 30, height: 30 } },
+      { id: 'plant-3', type: 'plant', position: { x: 800, y: 300 }, dimensions: { width: 30, height: 30 } },
+      { id: 'plant-4', type: 'plant', position: { x: 60, y: 450 }, dimensions: { width: 30, height: 30 } },
+      // Whiteboards
+      { id: 'wb-1', type: 'whiteboard', position: { x: 520, y: 80 }, dimensions: { width: 60, height: 40 } },
+      { id: 'wb-2', type: 'whiteboard', position: { x: 350, y: 500 }, dimensions: { width: 60, height: 40 } },
+    ],
   },
 }
 
