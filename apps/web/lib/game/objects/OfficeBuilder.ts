@@ -332,6 +332,7 @@ export class OfficeBuilder {
   
   private drawBreakRoomFurniture(room: RoomData): void {
     const { COLORS } = GAME_CONFIG
+    console.log(room, "room")
     const { x, y, width, height } = room.bounds;
     
     // Couch

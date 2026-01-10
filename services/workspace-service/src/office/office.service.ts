@@ -18,6 +18,93 @@ import {
 export class OfficeService {
   constructor(private readonly prisma: PrismaService) {}
 
+  // ==================== HELPER METHODS ====================
+
+  /**
+   * Transform layout data to match frontend OfficeLayoutData structure
+   * Converts flat structure (x, y, width, height) to nested structure (position, dimensions)
+   */
+  private transformLayoutData(layoutData: any): any {
+    if (!layoutData) return layoutData;
+
+    return {
+      metadata: layoutData.metadata || {},
+      dimensions: layoutData.dimensions || { width: 1600, height: 900 },
+      zones: (layoutData.zones || []).map((zone: any) => ({
+        id: zone.id,
+        type: zone.type,
+        name: zone.name,
+        bounds: zone.bounds || {
+          x: zone.x || 0,
+          y: zone.y || 0,
+          width: zone.width || 0,
+          height: zone.height || 0,
+        },
+        color: zone.color,
+        departmentType: zone.departmentType,
+        rules: zone.rules || {
+          allowHotDesks: false,
+          focusMode: false,
+          allowInteractions: [],
+          notificationsEnabled: true,
+        },
+      })),
+      desks: (layoutData.desks || []).map((desk: any) => ({
+        id: desk.id,
+        position: desk.position || { x: desk.x || 0, y: desk.y || 0 },
+        dimensions: desk.dimensions || { width: desk.width || 96, height: desk.height || 64 },
+        type: desk.type,
+        direction: desk.direction || desk.rotation === 90 || desk.rotation === 270 ? 'east' : 'north',
+        zoneId: desk.zoneId,
+        assignedUserId: desk.assignedUserId,
+        status: desk.status || 'available',
+        label: desk.label,
+      })),
+      rooms: (layoutData.rooms || []).map((room: any) => ({
+        id: room.id,
+        name: room.name,
+        type: room.type,
+        bounds: room.bounds || {
+          x: room.position?.x || room.x || 0,
+          y: room.position?.y || room.y || 0,
+          width: room.dimensions?.width || room.width || 128,
+          height: room.dimensions?.height || room.height || 128,
+        },
+        capacity: room.capacity,
+        status: room.status || 'available',
+        description: room.description,
+        equipment: room.equipment || [],
+        bookable: room.bookable !== undefined ? room.bookable : true,
+      })),
+      decorations: (layoutData.decorations || []).map((decoration: any) => ({
+        id: decoration.id,
+        type: decoration.type,
+        position: decoration.position || { x: decoration.x || 0, y: decoration.y || 0 },
+        rotation: decoration.rotation || 0,
+        scale: decoration.scale || 1,
+      })),
+      walls: (layoutData.walls || []).map((wall: any) => ({
+        id: wall.id,
+        start: wall.start || { x: wall.x1 || 0, y: wall.y1 || 0 },
+        end: wall.end || { x: wall.x2 || 0, y: wall.y2 || 0 },
+        thickness: wall.thickness || 16,
+        type: wall.type || 'solid',
+      })),
+      spawnPoints: (layoutData.spawnPoints || []).map((spawn: any) => ({
+        id: spawn.id,
+        position: spawn.position || { x: spawn.x || 400, y: spawn.y || 300 },
+        type: spawn.type || 'default',
+        departmentType: spawn.departmentType,
+      })),
+      pathways: (layoutData.pathways || []).map((pathway: any) => ({
+        id: pathway.id,
+        points: pathway.points || [],
+        width: pathway.width || 64,
+        isMainCorridor: pathway.isMainCorridor || false,
+      })),
+    };
+  }
+
   // ==================== OFFICE LAYOUT ====================
 
   /**
@@ -64,7 +151,11 @@ export class OfficeService {
       },
     });
 
-    return layout;
+    // Transform the layout data to match frontend structure
+    return {
+      ...layout,
+      layout: this.transformLayoutData(layout.layout),
+    };
   }
 
   /**
@@ -88,7 +179,11 @@ export class OfficeService {
       throw new NotFoundException('No office layout found for this workspace');
     }
 
-    return layout;
+    // Transform the layout data to match frontend structure
+    return {
+      ...layout,
+      layout: this.transformLayoutData(layout.layout),
+    };
   }
 
   /**
@@ -112,7 +207,11 @@ export class OfficeService {
       throw new NotFoundException('Layout not found');
     }
 
-    return layout;
+    // Transform the layout data to match frontend structure
+    return {
+      ...layout,
+      layout: this.transformLayoutData(layout.layout),
+    };
   }
 
   /**
@@ -145,10 +244,16 @@ export class OfficeService {
       updateData.generationMode = dto.generationMode;
     }
 
-    return this.prisma.officeLayout.update({
+    const updatedLayout = await this.prisma.officeLayout.update({
       where: { id: layoutId },
       data: updateData,
     });
+
+    // Transform the layout data to match frontend structure
+    return {
+      ...updatedLayout,
+      layout: this.transformLayoutData(updatedLayout.layout),
+    };
   }
 
   /**

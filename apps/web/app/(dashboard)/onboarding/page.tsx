@@ -101,8 +101,8 @@ export default function OnboardingPage() {
       }
 
       // Navigate to office
-      console.log('Navigating to office...')
-      window.location.href = '/office'
+      // console.log('Navigating to office...')
+      // window.location.href = '/office'
     } catch (error) {
       console.error('Error during onboarding completion:', error)
       alert('Failed to create workspace. Please try again.')
