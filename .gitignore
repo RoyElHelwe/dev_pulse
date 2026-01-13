@@ -61,4 +61,4 @@ prisma/migrations/
 .cache/
 .parcel-cache/
 
-certs/*
+certs/
