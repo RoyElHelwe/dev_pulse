@@ -81,30 +81,26 @@ export class AuthController {
     // Set cookies if not 2FA
     if (!result.requires2FA && result.sessionToken && result.refreshToken) {
       // Set httpOnly cookie for session token
-      res.cookie('session_token', result.sessionToken, {
+      const cookieOptions: any = {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
+        secure: false, // Auth service is HTTP internally
         sameSite: 'lax',
         maxAge: 15 * 60 * 1000, // 15 minutes
         path: '/',
-        domain:
-          process.env.NODE_ENV === 'production'
-            ? process.env.COOKIE_DOMAIN
-            : 'localhost',
-      });
+      };
+      
+      res.cookie('session_token', result.sessionToken, cookieOptions);
 
       // Set httpOnly cookie for refresh token
-      res.cookie('refresh_token', result.refreshToken, {
+      const refreshCookieOptions: any = {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
+        secure: false, // Auth service is HTTP internally
         sameSite: 'lax',
         maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
         path: '/',
-        domain:
-          process.env.NODE_ENV === 'production'
-            ? process.env.COOKIE_DOMAIN
-            : 'localhost',
-      });
+      };
+      
+      res.cookie('refresh_token', result.refreshToken, refreshCookieOptions);
 
       // Return user info without tokens
       return {
@@ -137,29 +133,25 @@ export class AuthController {
     );
 
     // Set httpOnly cookies
-    res.cookie('session_token', result.sessionToken, {
+    const cookieOptions: any = {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      secure: true,
+      sameSite: 'none',
       maxAge: 15 * 60 * 1000, // 15 minutes
       path: '/',
-      domain:
-        process.env.NODE_ENV === 'production'
-          ? process.env.COOKIE_DOMAIN
-          : 'localhost',
-    });
+    };
+    
+    res.cookie('session_token', result.sessionToken, cookieOptions);
 
-    res.cookie('refresh_token', result.refreshToken, {
+    const refreshCookieOptions: any = {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      secure: true,
+      sameSite: 'none',
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
       path: '/',
-      domain:
-        process.env.NODE_ENV === 'production'
-          ? process.env.COOKIE_DOMAIN
-          : 'localhost',
-    });
+    };
+    
+    res.cookie('refresh_token', result.refreshToken, refreshCookieOptions);
 
     // Return user info without tokens
     return {
@@ -191,17 +183,15 @@ export class AuthController {
     );
 
     // Update session token cookie
-    res.cookie('session_token', result.sessionToken, {
+    const cookieOptions: any = {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      secure: true,
+      sameSite: 'none',
       maxAge: 15 * 60 * 1000, // 15 minutes
       path: '/',
-      domain:
-        process.env.NODE_ENV === 'production'
-          ? process.env.COOKIE_DOMAIN
-          : 'localhost',
-    });
+    };
+    
+    res.cookie('session_token', result.sessionToken, cookieOptions);
 
     // Return user info without tokens
     return {

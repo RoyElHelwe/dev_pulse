@@ -86,17 +86,13 @@ export class AuthController {
             if (name === 'session_token' || name === 'refresh_token') {
               res.cookie(name, value, {
                 httpOnly: true,
-                secure: process.env.NODE_ENV === 'production',
-                sameSite: 'lax',
+                secure: true, // Always true since we're using HTTPS
+                sameSite: 'none', // Allow cross-origin cookies
                 maxAge:
                   name === 'session_token'
                     ? 15 * 60 * 1000
                     : 7 * 24 * 60 * 60 * 1000,
                 path: '/',
-                domain:
-                  process.env.NODE_ENV === 'production'
-                    ? process.env.COOKIE_DOMAIN
-                    : 'localhost',
               });
             }
           });
@@ -175,17 +171,13 @@ export class AuthController {
         if (name === 'session_token' || name === 'refresh_token') {
           res.cookie(name, value, {
             httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: 'lax',
+            secure: true, // Always true since we're using HTTPS
+            sameSite: 'none', // Allow cross-origin cookies
             maxAge:
               name === 'session_token'
                 ? 15 * 60 * 1000
                 : 7 * 24 * 60 * 60 * 1000,
             path: '/',
-            domain:
-              process.env.NODE_ENV === 'production'
-                ? process.env.COOKIE_DOMAIN
-                : 'localhost',
           });
         }
       });
@@ -236,17 +228,13 @@ export class AuthController {
         if (name === 'session_token' || name === 'refresh_token') {
           res.cookie(name, value, {
             httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: 'lax',
+            secure: true, // Always true since we're using HTTPS
+            sameSite: 'none', // Allow cross-origin cookies
             maxAge:
               name === 'session_token'
                 ? 15 * 60 * 1000
                 : 7 * 24 * 60 * 60 * 1000,
             path: '/',
-            domain:
-              process.env.NODE_ENV === 'production'
-                ? process.env.COOKIE_DOMAIN
-                : 'localhost',
           });
         }
       });
@@ -288,14 +276,10 @@ export class AuthController {
         if (name === 'session_token') {
           res.cookie(name, value, {
             httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: 'lax',
+            secure: true, // Always true since we're using HTTPS
+            sameSite: 'none', // Allow cross-origin cookies
             maxAge: 15 * 60 * 1000,
             path: '/',
-            domain:
-              process.env.NODE_ENV === 'production'
-                ? process.env.COOKIE_DOMAIN
-                : 'localhost',
           });
         }
       });

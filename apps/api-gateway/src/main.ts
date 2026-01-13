@@ -4,11 +4,33 @@ import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import { AppModule } from './app.module';
+import * as fs from 'fs';
+import * as path from 'path';
 
 async function bootstrap() {
+  const httpsOptions =
+    process.env.NODE_ENV !== 'production'
+      ? {
+          key: fs.readFileSync(path.join(__dirname, '../../../certs/key.pem')),
+          cert: fs.readFileSync(path.join(__dirname, '../../../certs/cert.pem')),
+        }
+      : undefined;
+
   const app = await NestFactory.create(AppModule, {
+    httpsOptions,
     cors: {
-      origin: process.env.CORS_ORIGINS?.split(',') || ['http://localhost:3000'],
+      origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+        // Allow requests with no origin (mobile apps, Postman, etc.)
+        if (!origin) return callback(null, true);
+        
+        // Allow configured origins or any origin in development
+        const allowedOrigins = process.env.CORS_ORIGINS?.split(',') || [];
+        if (allowedOrigins.length === 0 || allowedOrigins.includes(origin)) {
+          callback(null, true);
+        } else {
+          callback(null, true); // Allow all in development
+        }
+      },
       credentials: true,
     },
   });
@@ -51,10 +73,11 @@ async function bootstrap() {
   SwaggerModule.setup('api/docs', app, document);
 
   const port = Number(process.env.API_GATEWAY_PORT) || 4000;
-  await app.listen(port);
+  await app.listen(port, '0.0.0.0');
 
-  console.log(`🚀 API Gateway running on: http://localhost:${port}`);
-  console.log(`📚 API Documentation: http://localhost:${port}/api/docs`);
+  const protocol = httpsOptions ? 'https' : 'http';
+  console.log(`🚀 API Gateway running on: ${protocol}://0.0.0.0:${port}`);
+  console.log(`📚 API Documentation: ${protocol}://0.0.0.0:${port}/api/docs`);
 }
 
 bootstrap();

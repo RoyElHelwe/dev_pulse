@@ -98,6 +98,7 @@ services:
       - ./packages/backend-common/src:/app/packages/backend-common/src
       - ./packages/shared-types/src:/app/packages/shared-types/src
       - ./prisma:/app/prisma
+      - ./certs:/app/certs:ro
       - /app/node_modules
       - /app/apps/api-gateway/node_modules
     environment:
@@ -144,6 +145,7 @@ services:
       - ./packages/database/src:/app/packages/database/src
       - ./packages/backend-common/src:/app/packages/backend-common/src
       - ./prisma:/app/prisma
+      - ./certs:/app/certs:ro
       - /app/node_modules
       - /app/services/auth-service/node_modules
     environment:
@@ -181,6 +183,7 @@ services:
       - ./packages/backend-common/src:/app/packages/backend-common/src
       - ./packages/shared-types/src:/app/packages/shared-types/src
       - ./prisma:/app/prisma
+      - ./certs:/app/certs:ro
       - /app/node_modules
       - /app/services/workspace-service/node_modules
     environment:
@@ -217,6 +220,7 @@ services:
       - ./packages/backend-common/src:/app/packages/backend-common/src
       - ./packages/shared-types/src:/app/packages/shared-types/src
       - ./prisma:/app/prisma
+      - ./certs:/app/certs:ro
       - /app/node_modules
       - /app/services/task-service/node_modules
     environment:
@@ -251,17 +255,22 @@ services:
     restart: unless-stopped
     ports:
       - '3000:3000'
+    command: ["node", "server.js"]
     volumes:
       - ./apps/web/app:/app/apps/web/app
       - ./apps/web/components:/app/apps/web/components
       - ./apps/web/lib:/app/apps/web/lib
       - ./apps/web/public:/app/apps/web/public
       - ./apps/web/proxy.ts:/app/apps/web/proxy.ts
+      - ./apps/web/server.js:/app/apps/web/server.js
       - ./packages/shared-types/src:/app/packages/shared-types/src
+      - ./certs:/app/certs:ro
     environment:
       - NODE_ENV=${NODE_ENV:-development}
       - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:4000}
       - NEXT_PUBLIC_WS_URL=${NEXT_PUBLIC_WS_URL:-ws://localhost:4000}
+      - HOSTNAME=0.0.0.0
+      - PORT=3000
     depends_on:
       - api-gateway
     networks:

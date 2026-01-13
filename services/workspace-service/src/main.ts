@@ -26,7 +26,7 @@ async function bootstrap() {
   await app.startAllMicroservices();
   
   // Also expose HTTP for health checks
-  await app.listen(Number(process.env.WORKSPACE_PORT) || 3002);
+  await app.listen(Number(process.env.WORKSPACE_PORT) || 3002, '0.0.0.0');
   
   console.log(`Workspace Service is running on: ${await app.getUrl()}`);
   console.log(`Connected to NATS: ${process.env.NATS_URL}`);
