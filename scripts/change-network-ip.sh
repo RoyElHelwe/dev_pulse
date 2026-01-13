@@ -6,10 +6,7 @@
 NEW_IP=$1
 
 if [ -z "$NEW_IP" ]; then
-  echo "❌ Error: IP address required"
-  echo "Usage: ./scripts/change-network-ip.sh <IP_ADDRESS>"
-  echo "Example: ./scripts/change-network-ip.sh 192.168.1.100"
-  exit 1
+  IP=$(hostname -I | awk '{print $1}')
 fi
 
 echo "🔄 Updating network IP configuration to: $NEW_IP"
