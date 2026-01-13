@@ -124,6 +124,8 @@ services:
         condition: service_started
       workspace-service:
         condition: service_started
+      task-service:
+        condition: service_started
     networks:
       - ft_trans_network
 
@@ -194,6 +196,46 @@ services:
         condition: service_healthy
       nats:
         condition: service_started
+      prisma-migrate:
+        condition: service_completed_successfully
+    networks:
+      - ft_trans_network
+
+  # Task Service (Microservice)
+  task-service:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: task-service-dev
+    container_name: ft_trans_task_service
+    restart: unless-stopped
+    ports:
+      - '3003:3003'
+    volumes:
+      - ./services/task-service/src:/app/services/task-service/src
+      - ./packages/database/src:/app/packages/database/src
+      - ./packages/backend-common/src:/app/packages/backend-common/src
+      - ./packages/shared-types/src:/app/packages/shared-types/src
+      - ./prisma:/app/prisma
+      - /app/node_modules
+      - /app/services/task-service/node_modules
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - DATABASE_URL=${DATABASE_URL_DOCKER:-postgresql://dev:dev@postgres:5432/ft_trans}
+      - NATS_URL=${NATS_URL_DOCKER:-nats://nats:4222}
+      - REDIS_URL=${REDIS_URL_DOCKER:-redis://redis:6379}
+      - PORT=3003
+      - BLOCKCHAIN_RPC_URL=${BLOCKCHAIN_RPC_URL:-}
+      - BLOCKCHAIN_PRIVATE_KEY=${BLOCKCHAIN_PRIVATE_KEY:-}
+      - BLOCKCHAIN_NETWORK=${BLOCKCHAIN_NETWORK:-sepolia}
+      - CONTRACT_ADDRESS=${CONTRACT_ADDRESS:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_started
+      redis:
+        condition: service_healthy
       prisma-migrate:
         condition: service_completed_successfully
     networks:

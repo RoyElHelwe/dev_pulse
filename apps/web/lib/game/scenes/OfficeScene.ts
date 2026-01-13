@@ -90,15 +90,20 @@ export class OfficeScene extends Phaser.Scene {
   }
   
   private setupInput(): void {
+    // Disable Phaser's default keyboard capture to allow HTML inputs to work
+    if (this.input.keyboard) {
+      this.input.keyboard.removeCapture('W,A,S,D,UP,DOWN,LEFT,RIGHT')
+    }
+    
     // Arrow keys
     this.cursors = this.input.keyboard!.createCursorKeys()
     
     // WASD
     this.wasd = {
-      W: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.W),
-      A: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.A),
-      S: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.S),
-      D: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.D),
+      W: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.W, false),
+      A: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.A, false),
+      S: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.S, false),
+      D: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.D, false),
     }
     
     // Listen for mobile joystick events
@@ -152,6 +157,12 @@ export class OfficeScene extends Phaser.Scene {
   private handleMovement(): void {
     const physicsBody = this.localPlayer.getPhysicsBody()
     if (!physicsBody) return
+    
+    // Don't process movement if keyboard is disabled (e.g., dialog is open)
+    if (!this.keyboardEnabled) {
+      physicsBody.setVelocity(0, 0)
+      return
+    }
     
     const speed = GAME_CONFIG.PLAYER_SPEED
     let velocityX = 0
@@ -298,5 +309,21 @@ export class OfficeScene extends Phaser.Scene {
   
   public getLocalPlayerData(): PlayerData {
     return this.localPlayer.getData()
+  }
+
+  // Keyboard input control for when UI dialogs are open
+  private keyboardEnabled = true
+
+  public disableKeyboard(): void {
+    this.keyboardEnabled = false
+    // Stop any current movement
+    const physicsBody = this.localPlayer.getPhysicsBody()
+    if (physicsBody) {
+      physicsBody.setVelocity(0, 0)
+    }
+  }
+
+  public enableKeyboard(): void {
+    this.keyboardEnabled = true
   }
 }

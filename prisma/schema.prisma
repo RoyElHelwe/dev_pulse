@@ -297,27 +297,84 @@ model MeetingRoomBooking {
 // TASK MANAGEMENT MODELS
 // =============================================================================
 
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  REVIEW
+  DONE
+  ARCHIVED
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum TaskAction {
+  CREATED
+  STATUS_CHANGED
+  ASSIGNED
+  UNASSIGNED
+  PRIORITY_CHANGED
+  DEADLINE_SET
+  DEADLINE_CHANGED
+  COMMENT_ADDED
+  BLOCKCHAIN_VERIFIED
+  SPRINT_ADDED
+  SPRINT_REMOVED
+}
+
+enum SprintStatus {
+  PLANNED
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
 model Task {
-  id          String    @id @default(cuid())
+  id          String       @id @default(cuid())
   title       String
-  description String?   @db.Text
-  status      String    @default("TODO") // TODO, IN_PROGRESS, REVIEW, DONE
-  priority    String    @default("MEDIUM") // LOW, MEDIUM, HIGH, URGENT
+  description String?      @db.Text
+  status      TaskStatus   @default(TODO)
+  priority    TaskPriority @default(MEDIUM)
   workspaceId String
   assigneeId  String?
   creatorId   String
   sprintId    String?
   tags        String[]
   deadline    DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
 
-  workspace Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  assignee  User?         @relation("TaskAssignee", fields: [assigneeId], references: [id])
-  creator   User          @relation("TaskCreator", fields: [creatorId], references: [id])
-  sprint    Sprint?       @relation(fields: [sprintId], references: [id])
-  comments  TaskComment[]
+  // Task position in kanban column (for drag-drop ordering)
+  position Int @default(0)
 
+  // Time tracking
+  estimatedHours Float?
+  actualHours    Float?
+  startedAt      DateTime?
+  completedAt    DateTime?
+
+  // Blockchain verification
+  blockchainVerified   Boolean   @default(false)
+  blockchainTxHash     String?
+  blockchainRecordedAt DateTime?
+  proofHash            String?
+
+  // Metadata
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspace  Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  assignee   User?          @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  creator    User           @relation("TaskCreator", fields: [creatorId], references: [id])
+  sprint     Sprint?        @relation(fields: [sprintId], references: [id])
+  comments   TaskComment[]
+  activities TaskActivity[]
+
+  @@index([workspaceId, status])
+  @@index([assigneeId])
+  @@index([sprintId])
   @@map("tasks")
 }
 
@@ -332,24 +389,83 @@ model TaskComment {
   task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([taskId])
   @@map("task_comments")
 }
 
+model TaskActivity {
+  id        String     @id @default(cuid())
+  taskId    String
+  userId    String
+  action    TaskAction
+  oldValue  String?
+  newValue  String?
+  metadata  Json?
+  createdAt DateTime   @default(now())
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+  @@map("task_activities")
+}
+
 model Sprint {
-  id          String   @id @default(cuid())
+  id          String       @id @default(cuid())
   name        String
-  goal        String?  @db.Text
+  goal        String?      @db.Text
   workspaceId String
   startDate   DateTime
   endDate     DateTime
-  status      String   @default("PLANNED") // PLANNED, ACTIVE, COMPLETED
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  status      SprintStatus @default(PLANNED)
+
+  // Sprint metrics (calculated)
+  totalTasks      Int @default(0)
+  completedTasks  Int @default(0)
+  totalPoints     Int @default(0)
+  completedPoints Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   tasks     Task[]
 
+  @@index([workspaceId, status])
   @@map("sprints")
+}
+
+// =============================================================================
+// BLOCKCHAIN MODELS
+// =============================================================================
+
+model UserWallet {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  address   String   @unique // Ethereum address
+  verified  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("user_wallets")
+}
+
+model BlockchainRecord {
+  id            String    @id @default(cuid())
+  taskId        String    @unique
+  txHash        String    @unique
+  blockNumber   Int?
+  proofHash     String
+  workerAddress String?
+  network       String    @default("sepolia") // sepolia, polygon, mainnet
+  status        String    @default("PENDING") // PENDING, CONFIRMED, FAILED
+  gasUsed       String?
+  errorMessage  String?
+  createdAt     DateTime  @default(now())
+  confirmedAt   DateTime?
+
+  @@index([workerAddress])
+  @@index([status])
+  @@map("blockchain_records")
 }
 
 // =============================================================================

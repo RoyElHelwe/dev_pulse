@@ -35,6 +35,15 @@ export function VirtualOffice({
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   
+  // Expose keyboard control methods
+  const disableKeyboard = useCallback(() => {
+    sceneRef.current?.disableKeyboard()
+  }, [])
+  
+  const enableKeyboard = useCallback(() => {
+    sceneRef.current?.enableKeyboard()
+  }, [])
+  
   // Use refs for callbacks to avoid re-initializing the game
   const onPlayerMoveRef = useRef(onPlayerMove)
   const onReadyRef = useRef(onReady)
@@ -195,6 +204,25 @@ export function VirtualOffice({
     sceneRef.current?.syncPlayers(players)
   }, [])
   
+  // Listen for dialog open/close events to disable/enable keyboard
+  useEffect(() => {
+    const handleDialogOpened = () => {
+      sceneRef.current?.disableKeyboard()
+    }
+    
+    const handleDialogClosed = () => {
+      sceneRef.current?.enableKeyboard()
+    }
+    
+    window.addEventListener('dialog-opened', handleDialogOpened)
+    window.addEventListener('dialog-closed', handleDialogClosed)
+    
+    return () => {
+      window.removeEventListener('dialog-opened', handleDialogOpened)
+      window.removeEventListener('dialog-closed', handleDialogClosed)
+    }
+  }, [])
+  
   // Expose methods via ref
   useEffect(() => {
     // Attach methods to window for debugging (optional)
@@ -204,6 +232,8 @@ export function VirtualOffice({
         updateRemotePlayer,
         removeRemotePlayer,
         syncPlayers,
+        disableKeyboard,
+        enableKeyboard,
       }
     }
     
@@ -212,7 +242,7 @@ export function VirtualOffice({
         delete (window as any).__virtualOffice
       }
     }
-  }, [addRemotePlayer, updateRemotePlayer, removeRemotePlayer, syncPlayers])
+  }, [addRemotePlayer, updateRemotePlayer, removeRemotePlayer, syncPlayers, disableKeyboard, enableKeyboard])
   
   if (error) {
     return (

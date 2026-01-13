@@ -631,4 +631,310 @@ export class WebsocketGateway
     if (!officeRoom) return [];
     return Array.from(officeRoom.values());
   }
+
+  // ============================================
+  // Task Management Events
+  // ============================================
+
+  @SubscribeMessage('task:subscribe')
+  handleTaskSubscribe(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { workspaceId: string },
+  ): void {
+    const { workspaceId } = data;
+    if (!workspaceId) return;
+    
+    // Join task room for workspace
+    client.join(`tasks:${workspaceId}`);
+    this.logger.log(`Client ${client.id} subscribed to tasks for workspace ${workspaceId}`);
+    client.emit('task:subscribed', { workspaceId });
+  }
+
+  @SubscribeMessage('task:unsubscribe')
+  handleTaskUnsubscribe(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { workspaceId: string },
+  ): void {
+    const { workspaceId } = data;
+    if (!workspaceId) return;
+    
+    client.leave(`tasks:${workspaceId}`);
+    this.logger.log(`Client ${client.id} unsubscribed from tasks for workspace ${workspaceId}`);
+  }
+
+  // Broadcast task events to workspace (called from task service via API gateway)
+  broadcastTaskEvent(
+    workspaceId: string,
+    event: string,
+    data: any,
+  ): void {
+    this.server.to(`tasks:${workspaceId}`).emit(event, data);
+    this.logger.log(`Broadcasted ${event} to tasks:${workspaceId}`);
+  }
+
+  // Task created event
+  @SubscribeMessage('task:created')
+  handleTaskCreated(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { workspaceId: string; task: any; userId: string },
+  ): void {
+    const { workspaceId, task, userId } = data;
+    if (!workspaceId) return;
+
+    // Broadcast to all clients in the workspace
+    this.server.to(`tasks:${workspaceId}`).emit('task:created', {
+      task,
+      createdBy: userId,
+      timestamp: new Date().toISOString(),
+    });
+    
+    this.logger.log(`Task created in workspace ${workspaceId}: ${task.id}`);
+  }
+
+  // Task updated event
+  @SubscribeMessage('task:updated')
+  handleTaskUpdated(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { workspaceId: string; task: any; userId: string; changes?: any },
+  ): void {
+    const { workspaceId, task, userId, changes } = data;
+    if (!workspaceId) return;
+
+    // Broadcast to all clients except sender
+    client.to(`tasks:${workspaceId}`).emit('task:updated', {
+      task,
+      updatedBy: userId,
+      changes,
+      timestamp: new Date().toISOString(),
+    });
+    
+    this.logger.log(`Task updated in workspace ${workspaceId}: ${task.id}`);
+  }
+
+  // Task status changed (drag-drop)
+  @SubscribeMessage('task:status:changed')
+  handleTaskStatusChanged(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: {
+      workspaceId: string;
+      taskId: string;
+      oldStatus: string;
+      newStatus: string;
+      userId: string;
+      userName?: string;
+    },
+  ): void {
+    const { workspaceId, taskId, oldStatus, newStatus, userId, userName } = data;
+    if (!workspaceId) return;
+
+    // Broadcast to all clients except sender
+    client.to(`tasks:${workspaceId}`).emit('task:status:changed', {
+      taskId,
+      oldStatus,
+      newStatus,
+      movedBy: userId,
+      movedByName: userName,
+      timestamp: new Date().toISOString(),
+    });
+    
+    this.logger.log(`Task ${taskId} moved from ${oldStatus} to ${newStatus} in workspace ${workspaceId}`);
+  }
+
+  // Task assigned event
+  @SubscribeMessage('task:assigned')
+  handleTaskAssigned(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: {
+      workspaceId: string;
+      taskId: string;
+      taskTitle: string;
+      assigneeId: string;
+      assigneeName?: string;
+      assignedBy: string;
+    },
+  ): void {
+    const { workspaceId, taskId, taskTitle, assigneeId, assigneeName, assignedBy } = data;
+    if (!workspaceId) return;
+
+    // Broadcast to workspace
+    this.server.to(`tasks:${workspaceId}`).emit('task:assigned', {
+      taskId,
+      taskTitle,
+      assigneeId,
+      assigneeName,
+      assignedBy,
+      timestamp: new Date().toISOString(),
+    });
+
+    // Also send personal notification to assignee
+    const assigneeSocket = this.findUserSocket(assigneeId);
+    if (assigneeSocket) {
+      assigneeSocket.emit('notification', {
+        type: 'task:assigned',
+        title: 'New Task Assigned',
+        message: `You've been assigned to: ${taskTitle}`,
+        taskId,
+        timestamp: new Date().toISOString(),
+      });
+    }
+    
+    this.logger.log(`Task ${taskId} assigned to ${assigneeId} in workspace ${workspaceId}`);
+  }
+
+  // Task deleted event
+  @SubscribeMessage('task:deleted')
+  handleTaskDeleted(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { workspaceId: string; taskId: string; userId: string },
+  ): void {
+    const { workspaceId, taskId, userId } = data;
+    if (!workspaceId) return;
+
+    // Broadcast to all clients except sender
+    client.to(`tasks:${workspaceId}`).emit('task:deleted', {
+      taskId,
+      deletedBy: userId,
+      timestamp: new Date().toISOString(),
+    });
+    
+    this.logger.log(`Task deleted in workspace ${workspaceId}: ${taskId}`);
+  }
+
+  // Task blockchain verified event
+  @SubscribeMessage('task:blockchain:verified')
+  handleTaskBlockchainVerified(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: {
+      workspaceId: string;
+      taskId: string;
+      taskTitle: string;
+      txHash: string;
+      completedBy: string;
+      completedByName?: string;
+    },
+  ): void {
+    const { workspaceId, taskId, taskTitle, txHash, completedBy, completedByName } = data;
+    if (!workspaceId) return;
+
+    // Broadcast celebration to entire workspace!
+    this.server.to(`tasks:${workspaceId}`).emit('task:blockchain:verified', {
+      taskId,
+      taskTitle,
+      txHash,
+      completedBy,
+      completedByName,
+      timestamp: new Date().toISOString(),
+    });
+    
+    // Also broadcast to office for visual celebration
+    this.server.to(`office:${workspaceId}`).emit('office:celebration', {
+      type: 'blockchain_verified',
+      message: `${completedByName || 'Someone'} completed "${taskTitle}" - Now on blockchain! 🎉`,
+      userId: completedBy,
+    });
+    
+    this.logger.log(`Task ${taskId} verified on blockchain in workspace ${workspaceId}`);
+  }
+
+  // Task comment added
+  @SubscribeMessage('task:comment:added')
+  handleTaskCommentAdded(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: {
+      workspaceId: string;
+      taskId: string;
+      comment: any;
+      userId: string;
+      userName?: string;
+    },
+  ): void {
+    const { workspaceId, taskId, comment, userId, userName } = data;
+    if (!workspaceId) return;
+
+    // Broadcast to all clients except sender
+    client.to(`tasks:${workspaceId}`).emit('task:comment:added', {
+      taskId,
+      comment,
+      addedBy: userId,
+      addedByName: userName,
+      timestamp: new Date().toISOString(),
+    });
+    
+    this.logger.log(`Comment added to task ${taskId} in workspace ${workspaceId}`);
+  }
+
+  // Sprint events
+  @SubscribeMessage('sprint:created')
+  handleSprintCreated(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { workspaceId: string; sprint: any; userId: string },
+  ): void {
+    const { workspaceId, sprint, userId } = data;
+    if (!workspaceId) return;
+
+    this.server.to(`tasks:${workspaceId}`).emit('sprint:created', {
+      sprint,
+      createdBy: userId,
+      timestamp: new Date().toISOString(),
+    });
+  }
+
+  @SubscribeMessage('sprint:started')
+  handleSprintStarted(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { workspaceId: string; sprintId: string; sprintName: string; userId: string },
+  ): void {
+    const { workspaceId, sprintId, sprintName, userId } = data;
+    if (!workspaceId) return;
+
+    this.server.to(`tasks:${workspaceId}`).emit('sprint:started', {
+      sprintId,
+      sprintName,
+      startedBy: userId,
+      timestamp: new Date().toISOString(),
+    });
+    
+    // Celebrate in office
+    this.server.to(`office:${workspaceId}`).emit('office:announcement', {
+      type: 'sprint_started',
+      message: `🚀 Sprint "${sprintName}" has started!`,
+    });
+  }
+
+  @SubscribeMessage('sprint:completed')
+  handleSprintCompleted(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: {
+      workspaceId: string;
+      sprintId: string;
+      sprintName: string;
+      stats: { totalTasks: number; completedTasks: number };
+      userId: string;
+    },
+  ): void {
+    const { workspaceId, sprintId, sprintName, stats, userId } = data;
+    if (!workspaceId) return;
+
+    this.server.to(`tasks:${workspaceId}`).emit('sprint:completed', {
+      sprintId,
+      sprintName,
+      stats,
+      completedBy: userId,
+      timestamp: new Date().toISOString(),
+    });
+    
+    // Big celebration in office
+    this.server.to(`office:${workspaceId}`).emit('office:celebration', {
+      type: 'sprint_completed',
+      message: `🎉 Sprint "${sprintName}" completed! ${stats.completedTasks}/${stats.totalTasks} tasks done!`,
+    });
+  }
+
+  // Helper: Find socket by user ID
+  private findUserSocket(userId: string): Socket | undefined {
+    const user = this.onlineUsers.get(userId);
+    if (!user) return undefined;
+    
+    return this.server.sockets.sockets.get(user.socketId);
+  }
 }

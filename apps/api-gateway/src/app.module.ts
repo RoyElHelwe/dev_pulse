@@ -8,6 +8,7 @@ import { AuthModule } from './auth/auth.module';
 import { WorkspaceGatewayModule } from './workspace-gateway/workspace-gateway.module';
 import { InvitationGatewayModule } from './invitation-gateway/invitation-gateway.module';
 import { OfficeGatewayModule } from './office-gateway/office-gateway.module';
+import { TaskGatewayModule } from './task-gateway/task-gateway.module';
 
 @Module({
   imports: [
@@ -39,6 +40,9 @@ import { OfficeGatewayModule } from './office-gateway/office-gateway.module';
 
     // Office Gateway
     OfficeGatewayModule,
+
+    // Task Gateway (Task Management)
+    TaskGatewayModule,
   ],
   controllers: [AppController],
   providers: [AppService],

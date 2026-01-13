@@ -4,8 +4,10 @@ import { useEffect, useMemo, useState, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { VirtualOffice } from '@/components/game/VirtualOffice'
 import { MobileJoystick } from '@/components/game/MobileJoystick'
+import { TaskBoardPanel, TaskBoardButton } from '@/components/tasks'
 import { useOfficeSocket } from '@/lib/hooks/use-office-socket'
 import { useAuth } from '@/lib/hooks/use-auth'
+import { useTasks } from '@/lib/hooks/use-tasks'
 import { PlayerData, Position, PlayerDirection, getAvatarColor } from '@/lib/game/types'
 
 export default function OfficePage() {
@@ -17,8 +19,14 @@ export default function OfficePage() {
   const [chatInput, setChatInput] = useState('')
   const [showMobileChat, setShowMobileChat] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
+  const [showTaskBoard, setShowTaskBoard] = useState(false)
+  const [userRole, setUserRole] = useState<string>('MEMBER')
+  const [workspaceMembers, setWorkspaceMembers] = useState<{ id: string; name: string; email: string }[]>([])
   const chatEndRef = useRef<HTMLDivElement>(null)
   const virtualOfficeRef = useRef<any>(null)
+  
+  // Task management hook
+  const { board, fetchBoard } = useTasks({ autoFetch: false })
   
   // Detect mobile device
   useEffect(() => {
@@ -42,6 +50,29 @@ export default function OfficePage() {
           if (data.hasWorkspace) {
             setWorkspaceId(data.workspace.id)
             
+            // Set user role from workspace membership
+            if (data.role) {
+              setUserRole(data.role)
+            }
+            
+            // Fetch workspace members
+            try {
+              const membersRes = await fetch(
+                `${process.env.NEXT_PUBLIC_API_URL}/workspaces/${data.workspace.id}/members`,
+                { credentials: 'include' }
+              )
+              if (membersRes.ok) {
+                const membersData = await membersRes.json()
+                setWorkspaceMembers(membersData.map((m: any) => ({
+                  id: m.user.id,
+                  name: m.user.name || m.user.email,
+                  email: m.user.email,
+                })))
+              }
+            } catch (membersError) {
+              console.error('Failed to load workspace members:', membersError)
+            }
+            
             // Load office layout
             try {
               const layoutRes = await fetch(
@@ -58,6 +89,9 @@ export default function OfficePage() {
             } catch (layoutError) {
               console.error('Failed to load office layout:', layoutError)
             }
+            
+            // Fetch tasks for the task board
+            fetchBoard()
           } else {
             // No workspace yet, redirect to onboarding
             console.log('No workspace found, redirecting to onboarding')
@@ -80,7 +114,7 @@ export default function OfficePage() {
     if (isAuthenticated && !authLoading) {
       fetchWorkspace()
     }
-  }, [isAuthenticated, authLoading, router])
+  }, [isAuthenticated, authLoading, router, fetchBoard])
   
   const avatarColor = user?.id ? getAvatarColor(user.id) : '#6366f1'
   
@@ -318,6 +352,13 @@ export default function OfficePage() {
       {/* Mobile Action Buttons */}
       {isMobile && (
         <div className="fixed bottom-6 right-6 z-30 flex flex-col gap-3">
+          {/* Task Board toggle */}
+          <TaskBoardButton
+            onClick={() => setShowTaskBoard(true)}
+            taskCount={board ? board.TODO.length + board.IN_PROGRESS.length : 0}
+            hasActiveTask={board ? board.IN_PROGRESS.some(t => t.assigneeId === user?.id) : false}
+          />
+          
           {/* Chat toggle */}
           <button
             onClick={() => setShowMobileChat(!showMobileChat)}
@@ -515,6 +556,27 @@ export default function OfficePage() {
           <p className="text-sm text-white">{msg.message}</p>
         </div>
       ))}
+
+      {/* Desktop Task Board Button */}
+      {!isMobile && (
+        <div className="fixed bottom-6 right-6 z-30">
+          <TaskBoardButton
+            onClick={() => setShowTaskBoard(true)}
+            taskCount={board ? board.TODO.length + board.IN_PROGRESS.length : 0}
+            hasActiveTask={board ? board.IN_PROGRESS.some(t => t.assigneeId === user?.id) : false}
+          />
+        </div>
+      )}
+
+      {/* Task Board Panel */}
+      <TaskBoardPanel
+        workspaceId={workspaceId!}
+        userId={user?.id || ''}
+        userRole={userRole}
+        isOpen={showTaskBoard}
+        onClose={() => setShowTaskBoard(false)}
+        workspaceMembers={workspaceMembers}
+      />
     </div>
   )
 }

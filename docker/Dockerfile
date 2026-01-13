@@ -29,6 +29,7 @@ COPY apps/api-gateway/package.json ./apps/api-gateway/
 COPY apps/web/package.json ./apps/web/
 COPY services/auth-service/package.json ./services/auth-service/
 COPY services/workspace-service/package.json ./services/workspace-service/
+COPY services/task-service/package.json ./services/task-service/
 COPY packages/database/package.json ./packages/database/
 COPY packages/backend-common/package.json ./packages/backend-common/
 COPY packages/shared-types/package.json ./packages/shared-types/
@@ -85,6 +86,13 @@ RUN pnpm --filter @ft-trans/auth-service build
 FROM builder AS workspace-service-builder
 
 RUN pnpm --filter @ft-trans/workspace-service build
+
+# =============================================================================
+# TASK-SERVICE BUILD
+# =============================================================================
+FROM builder AS task-service-builder
+
+RUN pnpm --filter @ft-trans/task-service build
 
 # =============================================================================
 # WEB BUILD
@@ -190,6 +198,38 @@ EXPOSE 3002
 CMD ["node", "dist/main.js"]
 
 # =============================================================================
+# TASK-SERVICE PRODUCTION
+# =============================================================================
+FROM base AS task-service
+
+ENV NODE_ENV=production
+
+WORKDIR /app
+
+# Copy package files
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=deps /app/package.json ./
+COPY --from=deps /app/pnpm-workspace.yaml ./
+COPY --from=deps /app/services/task-service/package.json ./services/task-service/
+COPY --from=deps /app/packages ./packages
+
+# Copy Prisma generated client
+COPY --from=prisma /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=prisma /app/prisma ./prisma
+
+# Copy built application
+COPY --from=task-service-builder /app/services/task-service/dist ./services/task-service/dist
+COPY --from=builder /app/packages/database/dist ./packages/database/dist
+COPY --from=builder /app/packages/backend-common/dist ./packages/backend-common/dist
+COPY --from=builder /app/packages/shared-types/dist ./packages/shared-types/dist
+
+WORKDIR /app/services/task-service
+
+EXPOSE 3003
+
+CMD ["node", "dist/main.js"]
+
+# =============================================================================
 # WEB PRODUCTION (Next.js standalone)
 # =============================================================================
 FROM base AS web
@@ -241,6 +281,15 @@ FROM builder AS workspace-service-dev
 WORKDIR /app/services/workspace-service
 
 EXPOSE 3002
+
+CMD ["pnpm", "run", "dev"]
+
+# TASK-SERVICE DEV
+FROM builder AS task-service-dev
+
+WORKDIR /app/services/task-service
+
+EXPOSE 3003
 
 CMD ["pnpm", "run", "dev"]
 
