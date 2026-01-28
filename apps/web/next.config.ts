@@ -15,21 +15,21 @@ const nextConfig = {
       },
     ]
   },
-  // Allow development access from network IPs
-  ...(process.env.NODE_ENV === 'development' && {
-    allowedDevOrigins: [
-      `http://${process.env.HOST_IP || 'localhost'}:3000`,
-      `https://${process.env.HOST_IP || 'localhost'}:3000`,
-      'http://localhost:3000',
-      'https://localhost:3000',
-    ],
-  }),
-  webpack: (config: any) => {
+  // Allow development access from network IPs - include all possible origins
+  allowedDevOrigins: [
+    'http://localhost:3000',
+    'https://localhost:3000',
+    'http://10.18.200.248:3000',
+    'https://10.18.200.248:3000',
+    '10.18.200.248',
+  ],
+  webpack: (config: any, { dev, isServer }: { dev: boolean; isServer: boolean }) => {
     // Phaser.js webpack configuration
     config.resolve.alias = {
       ...config.resolve.alias,
       phaser: 'phaser/dist/phaser.js',
     }
+    
     return config
   },
 }

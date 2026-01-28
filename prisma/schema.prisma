@@ -148,6 +148,23 @@ model WorkspaceMember {
   @@map("workspace_members")
 }
 
+// Work time tracking - stores daily aggregated work time per user
+model WorkTime {
+  id          String   @id @default(cuid())
+  workspaceId String
+  userId      String
+  date        DateTime @db.Date  // Date only (YYYY-MM-DD)
+  duration    Int      @default(0) // Total seconds worked that day
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([workspaceId, userId, date])  // One record per user per day
+  @@index([workspaceId, userId])
+  @@index([workspaceId, date])
+  @@map("work_times")
+}
+
 model Invitation {
   id          String   @id @default(cuid())
   workspaceId String

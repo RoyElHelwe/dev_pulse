@@ -140,8 +140,9 @@ export class Player extends Phaser.GameObjects.Container {
       available: GAME_CONFIG.COLORS.STATUS_ONLINE,
       away: GAME_CONFIG.COLORS.STATUS_AWAY,
       busy: GAME_CONFIG.COLORS.STATUS_BUSY,
-      dnd: GAME_CONFIG.COLORS.STATUS_BUSY,
+      dnd: GAME_CONFIG.COLORS.STATUS_DND,
       offline: GAME_CONFIG.COLORS.STATUS_OFFLINE,
+      selected: GAME_CONFIG.COLORS.STATUS_SELECTED,
     }
     
     const halfSize = GAME_CONFIG.PLAYER_SIZE / 2

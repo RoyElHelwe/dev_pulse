@@ -6,6 +6,7 @@ export class OfficeBuilder {
   private scene: Phaser.Scene
   private graphics: Phaser.GameObjects.Graphics
   private collisionBodies: Phaser.GameObjects.Rectangle[] = []
+  private deskZones: { x: number; y: number; width: number; height: number }[] = []
   private layoutWidth: number = GAME_CONFIG.WIDTH
   private layoutHeight: number = GAME_CONFIG.HEIGHT
   
@@ -389,6 +390,9 @@ export class OfficeBuilder {
     const { x, y } = desk.position;
     const { width, height } = desk.dimensions;
     
+    // Track desk zone for interaction
+    this.deskZones.push({ x, y, width, height })
+    
     // Desk body
     this.graphics.fillStyle(COLORS.DESK)
     this.graphics.fillRoundedRect(x, y, width, height, 4)
@@ -648,5 +652,9 @@ export class OfficeBuilder {
     this.addWallCollision(width - TILE_SIZE / 2, height / 2, TILE_SIZE, height)
     
     return this.collisionBodies
+  }
+
+  public getDeskZones(): { x: number; y: number; width: number; height: number }[] {
+    return this.deskZones
   }
 }

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useCallback, useState } from 'react'
+import { useEffect, useRef, useCallback, useState, forwardRef, useImperativeHandle } from 'react'
 import * as Phaser from 'phaser'
 import { GAME_CONFIG } from '@/lib/game/constants'
 import { OfficeScene, OfficeSceneConfig } from '@/lib/game/scenes/OfficeScene'
@@ -15,10 +15,24 @@ interface VirtualOfficeProps {
   players?: PlayerData[]  // Remote players to display
   onPlayerMove?: (position: Position, direction: PlayerDirection) => void
   onReady?: () => void
+  onLogin?: () => void  // Called when player logs in at desk
+  onStatusChange?: (status: string) => void  // Called when status changes in game
+  initialStatus?: string  // Initial status (default: 'selected')
   className?: string
 }
 
-export function VirtualOffice({
+// Export types and methods for WebSocket integration
+export type VirtualOfficeRef = {
+  addRemotePlayer: (playerData: PlayerData) => void
+  updateRemotePlayer: (playerId: string, data: Partial<PlayerData>) => void
+  removeRemotePlayer: (playerId: string) => void
+  syncPlayers: (players: PlayerData[]) => void
+  setLocalStatus: (status: string) => void
+  disableKeyboard: () => void
+  enableKeyboard: () => void
+}
+
+export const VirtualOffice = forwardRef<VirtualOfficeRef, VirtualOfficeProps>(({
   userId,
   username,
   email,
@@ -27,8 +41,11 @@ export function VirtualOffice({
   players = [],
   onPlayerMove,
   onReady,
+  onLogin,
+  onStatusChange,
+  initialStatus = 'selected',
   className = '',
-}: VirtualOfficeProps) {
+}, ref) => {
   const gameRef = useRef<Phaser.Game | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const sceneRef = useRef<OfficeScene | null>(null)
@@ -43,10 +60,17 @@ export function VirtualOffice({
   const enableKeyboard = useCallback(() => {
     sceneRef.current?.enableKeyboard()
   }, [])
+
+  // Expose status change method
+  const setLocalStatus = useCallback((status: string) => {
+    sceneRef.current?.setLocalPlayerStatus(status)
+  }, [])
   
   // Use refs for callbacks to avoid re-initializing the game
   const onPlayerMoveRef = useRef(onPlayerMove)
   const onReadyRef = useRef(onReady)
+  const onLoginRef = useRef(onLogin)
+  const onStatusChangeRef = useRef(onStatusChange)
   
   // Update refs when callbacks change
   useEffect(() => {
@@ -56,6 +80,33 @@ export function VirtualOffice({
   useEffect(() => {
     onReadyRef.current = onReady
   }, [onReady])
+
+  useEffect(() => {
+    onLoginRef.current = onLogin
+  }, [onLogin])
+
+  useEffect(() => {
+    onStatusChangeRef.current = onStatusChange
+  }, [onStatusChange])
+  
+  // Expose methods via ref
+  useImperativeHandle(ref, () => ({
+    addRemotePlayer: (playerData: PlayerData) => {
+      sceneRef.current?.addRemotePlayer(playerData)
+    },
+    updateRemotePlayer: (playerId: string, data: Partial<PlayerData>) => {
+      sceneRef.current?.updateRemotePlayer(playerId, data)
+    },
+    removeRemotePlayer: (playerId: string) => {
+      sceneRef.current?.removeRemotePlayer(playerId)
+    },
+    syncPlayers: (players: PlayerData[]) => {
+      sceneRef.current?.syncRemotePlayers(players)
+    },
+    setLocalStatus,
+    disableKeyboard,
+    enableKeyboard,
+  }), [setLocalStatus, disableKeyboard, enableKeyboard])
   
   const initGame = useCallback(() => {
     if (!containerRef.current || gameRef.current) return
@@ -70,7 +121,7 @@ export function VirtualOffice({
           y: GAME_CONFIG.DEFAULT_OFFICE.SPAWN_Y,
         },
         direction: 'down',
-        status: 'available',
+        status: initialStatus as any,  // Start with 'selected' status
         workspaceId,
       }
       
@@ -83,6 +134,12 @@ export function VirtualOffice({
         onReady: () => {
           setIsLoading(false)
           onReadyRef.current?.()
+        },
+        onLogin: () => {
+          onLoginRef.current?.()
+        },
+        onStatusChange: (status) => {
+          onStatusChangeRef.current?.(status)
         },
       }
       
@@ -282,12 +339,6 @@ export function VirtualOffice({
       />
     </div>
   )
-}
+})
 
-// Export types and methods for WebSocket integration
-export type VirtualOfficeRef = {
-  addRemotePlayer: (playerData: PlayerData) => void
-  updateRemotePlayer: (playerId: string, data: Partial<PlayerData>) => void
-  removeRemotePlayer: (playerId: string) => void
-  syncPlayers: (players: PlayerData[]) => void
-}
+VirtualOffice.displayName = 'VirtualOffice'

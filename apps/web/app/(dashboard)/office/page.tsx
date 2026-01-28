@@ -12,7 +12,7 @@ import { PlayerData, Position, PlayerDirection, getAvatarColor } from '@/lib/gam
 
 export default function OfficePage() {
   const router = useRouter()
-  const { user, isAuthenticated, isLoading: authLoading } = useAuth()
+  const { user, isAuthenticated, isLoading: authLoading, _hasHydrated } = useAuth()
   const [workspaceId, setWorkspaceId] = useState<string | null>(null)
   const [officeLayout, setOfficeLayout] = useState<any>(null)
   const [loading, setLoading] = useState(true)
@@ -25,8 +25,47 @@ export default function OfficePage() {
   const chatEndRef = useRef<HTMLDivElement>(null)
   const virtualOfficeRef = useRef<any>(null)
   
+  // Login and work time tracking state
+  const [isLoggedIn, setIsLoggedIn] = useState(false)
+  const [currentStatus, setCurrentStatus] = useState<string>('selected')
+  const [workStartTime, setWorkStartTime] = useState<number | null>(null)
+  const [workDuration, setWorkDuration] = useState<number>(0) // seconds - loaded from DB
+  const workTimerRef = useRef<NodeJS.Timeout | null>(null)
+  const workDurationRef = useRef<number>(0)
+  const lastSavedDurationRef = useRef<number>(0)
+  const saveWorkTimeRef = useRef<() => Promise<void>>(async () => {})
+  
+  // Keep workDurationRef in sync with workDuration
+  useEffect(() => {
+    workDurationRef.current = workDuration
+  }, [workDuration])
+  
   // Task management hook
   const { board, fetchBoard } = useTasks({ autoFetch: false })
+  
+  // Get avatar color
+  const avatarColor = user?.id ? getAvatarColor(user.id) : '#6366f1'
+  
+  // Socket connection for real-time features
+  const {
+    isConnected,
+    players,
+    nearbyPlayers,
+    chatMessages,
+    pendingInteractions,
+    sendPosition,
+    sendStatus,
+    sendChat,
+    sendInteraction,
+    clearInteraction,
+  } = useOfficeSocket({
+    workspaceId: workspaceId || '',
+    userId: user?.id || '',
+    userName: user?.name || user?.email || '',
+    userEmail: user?.email,
+    avatarColor,
+    enabled: !!workspaceId && !!user?.id,
+  })
   
   // Detect mobile device
   useEffect(() => {
@@ -36,6 +75,63 @@ export default function OfficePage() {
     checkMobile()
     window.addEventListener('resize', checkMobile)
     return () => window.removeEventListener('resize', checkMobile)
+  }, [])
+
+  // Fetch today's work time from database on mount (user must re-login on refresh)
+  useEffect(() => {
+    if (!workspaceId || !user?.id) return
+    
+    const fetchTodayWorkTime = async () => {
+      try {
+        const today = new Date().toISOString().split('T')[0]
+        const res = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL}/workspaces/${workspaceId}/work-time?userId=${user.id}&startDate=${today}&endDate=${today}`,
+          { credentials: 'include' }
+        )
+        if (res.ok) {
+          const data = await res.json()
+          if (data.totalDuration > 0) {
+            setWorkDuration(data.totalDuration)
+            workDurationRef.current = data.totalDuration
+            lastSavedDurationRef.current = data.totalDuration
+            console.log(`[Office] Loaded today's work time from DB: ${data.totalDuration}s`)
+          }
+        }
+      } catch (error) {
+        console.error('[Office] Failed to fetch today work time:', error)
+      }
+    }
+    
+    fetchTodayWorkTime()
+  }, [workspaceId, user?.id])
+  
+  // Reset work time at 11:59 PM each day
+  useEffect(() => {
+    const checkForReset = () => {
+      const now = new Date()
+      const hours = now.getHours()
+      const minutes = now.getMinutes()
+      
+      // Reset at 23:59 (11:59 PM)
+      if (hours === 23 && minutes === 59) {
+        console.log('[Office] Resetting work time for new day')
+        setWorkDuration(0)
+        workDurationRef.current = 0
+        lastSavedDurationRef.current = 0
+        setIsLoggedIn(false)
+        setCurrentStatus('selected')
+        setWorkStartTime(null)
+        if (workTimerRef.current) {
+          clearInterval(workTimerRef.current)
+          workTimerRef.current = null
+        }
+      }
+    }
+    
+    // Check every minute
+    const resetInterval = setInterval(checkForReset, 60000)
+    
+    return () => clearInterval(resetInterval)
   }, [])
   
   // Fetch workspace info
@@ -111,32 +207,12 @@ export default function OfficePage() {
       }
     }
     
-    if (isAuthenticated && !authLoading) {
+    // Only fetch after hydration is complete and user is authenticated
+    if (_hasHydrated && isAuthenticated && !authLoading) {
       fetchWorkspace()
     }
-  }, [isAuthenticated, authLoading, router, fetchBoard])
-  
-  const avatarColor = user?.id ? getAvatarColor(user.id) : '#6366f1'
-  
-  const {
-    isConnected,
-    players,
-    nearbyPlayers,
-    chatMessages,
-    pendingInteractions,
-    sendPosition,
-    sendStatus,
-    sendChat,
-    sendInteraction,
-    clearInteraction,
-  } = useOfficeSocket({
-    workspaceId: workspaceId || '',
-    userId: user?.id || '',
-    userName: user?.name || user?.email || '',
-    userEmail: user?.email,
-    avatarColor,
-    enabled: !!workspaceId && !!user?.id,
-  })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [_hasHydrated, isAuthenticated, authLoading])
   
   // Convert Map to array for the game
   const playerList = useMemo(() => Array.from(players.values()), [players])
@@ -160,6 +236,109 @@ export default function OfficePage() {
   const handleReady = useCallback(() => {
     console.log('Virtual office ready')
   }, [])
+
+  // Handle desk login - starts the work timer (continues from DB-loaded duration)
+  const handleLogin = useCallback(() => {
+    const now = Date.now()
+    setIsLoggedIn(true)
+    setCurrentStatus('available')
+    setWorkStartTime(now)
+    // Don't reset duration - continue from what was loaded from DB
+    
+    // Start the work timer - updates every second
+    if (workTimerRef.current) {
+      clearInterval(workTimerRef.current)
+    }
+    workTimerRef.current = setInterval(() => {
+      setWorkDuration(prev => prev + 1)
+    }, 1000)
+    
+    // Send initial status to socket
+    sendStatus('available')
+    
+    console.log(`[Office] User logged in at desk, continuing from ${workDurationRef.current}s`)
+  }, [sendStatus])
+
+  // Handle status change from game or dropdown
+  const handleStatusChange = useCallback((status: string) => {
+    if (!isLoggedIn && status !== 'selected') {
+      // Can't change status without logging in first
+      return
+    }
+    setCurrentStatus(status)
+    sendStatus(status)
+    // Update game visual
+    virtualOfficeRef.current?.setLocalStatus?.(status)
+  }, [isLoggedIn, sendStatus])
+
+  // Save work time to database (batched - every 60 seconds or on unmount)
+  const saveWorkTime = useCallback(async () => {
+    if (!workspaceId || !user?.id) return
+    
+    const currentDuration = workDurationRef.current
+    const durationToSave = currentDuration - lastSavedDurationRef.current
+    
+    if (durationToSave < 1) return
+    
+    try {
+      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/workspaces/${workspaceId}/work-time`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          userId: user.id,
+          duration: durationToSave, // seconds since last save
+          date: new Date().toISOString().split('T')[0], // YYYY-MM-DD
+        }),
+      })
+      lastSavedDurationRef.current = currentDuration
+      console.log(`[Office] Saved ${durationToSave}s of work time`)
+    } catch (error) {
+      console.error('[Office] Failed to save work time:', error)
+    }
+  }, [workspaceId, user?.id])
+
+  // Store saveWorkTime in ref to avoid stale closures
+  useEffect(() => {
+    saveWorkTimeRef.current = saveWorkTime
+  }, [saveWorkTime])
+
+  // Auto-save work time every 60 seconds
+  useEffect(() => {
+    if (!isLoggedIn) return
+    
+    const saveInterval = setInterval(() => {
+      saveWorkTimeRef.current()
+    }, 60000) // Save every 60 seconds
+    
+    return () => clearInterval(saveInterval)
+  }, [isLoggedIn])
+
+  // Cleanup timer and save on unmount
+  useEffect(() => {
+    return () => {
+      if (workTimerRef.current) {
+        clearInterval(workTimerRef.current)
+      }
+      // Save remaining work time on unmount
+      saveWorkTimeRef.current()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Format work duration for display
+  const formatWorkDuration = (seconds: number): string => {
+    const hrs = Math.floor(seconds / 3600)
+    const mins = Math.floor((seconds % 3600) / 60)
+    const secs = seconds % 60
+    if (hrs > 0) {
+      return `${hrs}h ${mins}m ${secs}s`
+    }
+    if (mins > 0) {
+      return `${mins}m ${secs}s`
+    }
+    return `${secs}s`
+  }
   
   const handleSendChat = (e: React.FormEvent) => {
     e.preventDefault()
@@ -179,8 +358,8 @@ export default function OfficePage() {
     }
   }, [])
   
-  // Show loading while auth or workspace is loading
-  if (authLoading || loading) {
+  // Show loading while hydrating, auth, or workspace is loading
+  if (!_hasHydrated || authLoading || loading) {
     return (
       <div className="flex items-center justify-center h-screen w-screen bg-gray-900">
         <div className="text-center">
@@ -191,7 +370,7 @@ export default function OfficePage() {
     )
   }
   
-  // Redirect if not authenticated
+  // Redirect if not authenticated (only after hydration)
   if (!isAuthenticated || !user) {
     router.push('/login')
     return null
@@ -214,20 +393,30 @@ export default function OfficePage() {
       {isMobile && (
         <div className="absolute top-0 left-0 right-0 z-30 bg-gray-900/80 backdrop-blur-sm border-b border-gray-700/50">
           <div className="flex items-center justify-between px-3 py-2">
-            {/* Connection status */}
-            <div className={`flex items-center gap-1.5 px-2 py-1 rounded-full text-xs ${
-              isConnected ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'
-            }`}>
-              <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500 animate-pulse' : 'bg-yellow-500'}`}></span>
-              <span>{isConnected ? `${players.size + 1} online` : 'Connecting...'}</span>
+            {/* Connection status & work timer */}
+            <div className="flex items-center gap-2">
+              <div className={`flex items-center gap-1.5 px-2 py-1 rounded-full text-xs ${
+                isConnected ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'
+              }`}>
+                <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500 animate-pulse' : 'bg-yellow-500'}`}></span>
+                <span>{isConnected ? `${players.size + 1} online` : 'Connecting...'}</span>
+              </div>
+              {isLoggedIn && (
+                <div className="flex items-center gap-1 px-2 py-1 rounded-full text-xs bg-blue-500/20 text-blue-400">
+                  <span>⏱️</span>
+                  <span>{formatWorkDuration(workDuration)}</span>
+                </div>
+              )}
             </div>
             
             {/* Status selector */}
             <select
-              className="px-2 py-1.5 bg-gray-800 border border-gray-700 rounded-lg text-xs text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              defaultValue="available"
-              onChange={(e) => sendStatus(e.target.value)}
+              className="px-2 py-1.5 bg-gray-800 border border-gray-700 rounded-lg text-xs text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+              value={currentStatus}
+              onChange={(e) => handleStatusChange(e.target.value)}
+              disabled={!isLoggedIn}
             >
+              {!isLoggedIn && <option value="selected">⚪ Not Logged In</option>}
               <option value="available">🟢 Available</option>
               <option value="busy">🔴 Busy</option>
               <option value="away">🟡 Away</option>
@@ -249,16 +438,33 @@ export default function OfficePage() {
             </span>
           </div>
           
+          {/* Work timer display */}
+          {isLoggedIn && (
+            <div className="flex items-center gap-2 px-3 py-2 rounded-lg backdrop-blur-md bg-blue-500/20 border border-blue-500/30">
+              <span className="text-blue-400">⏱️</span>
+              <span className="text-sm font-medium text-blue-400">{formatWorkDuration(workDuration)}</span>
+            </div>
+          )}
+          
           <select
-            className="px-3 py-2 bg-gray-800/90 backdrop-blur-md border border-gray-700 rounded-lg text-sm text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            defaultValue="available"
-            onChange={(e) => sendStatus(e.target.value)}
+            className="px-3 py-2 bg-gray-800/90 backdrop-blur-md border border-gray-700 rounded-lg text-sm text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+            value={currentStatus}
+            onChange={(e) => handleStatusChange(e.target.value)}
+            disabled={!isLoggedIn}
           >
+            {!isLoggedIn && <option value="selected">⚪ Not Logged In</option>}
             <option value="available">🟢 Available</option>
             <option value="busy">🔴 Busy</option>
             <option value="away">🟡 Away</option>
             <option value="dnd">⛔ DND</option>
           </select>
+          
+          {/* Login hint when not logged in */}
+          {!isLoggedIn && (
+            <div className="px-3 py-2 rounded-lg backdrop-blur-md bg-yellow-500/20 border border-yellow-500/30">
+              <span className="text-sm text-yellow-400">Go to a desk and press E to login</span>
+            </div>
+          )}
         </div>
       )}
       
@@ -335,6 +541,9 @@ export default function OfficePage() {
           players={playerList}
           onPlayerMove={handlePlayerMove}
           onReady={handleReady}
+          onLogin={handleLogin}
+          onStatusChange={handleStatusChange}
+          initialStatus="selected"
           className="w-full h-full"
         />
       </main>

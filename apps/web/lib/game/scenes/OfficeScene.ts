@@ -9,6 +9,8 @@ export interface OfficeSceneConfig {
   officeLayout?: any
   onPlayerMove?: (position: Position, direction: PlayerDirection) => void
   onReady?: () => void
+  onLogin?: () => void  // Called when player logs in at a desk
+  onStatusChange?: (status: string) => void  // Called when status changes
 }
 
 export class OfficeScene extends Phaser.Scene {
@@ -19,12 +21,19 @@ export class OfficeScene extends Phaser.Scene {
   
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys
   private wasd!: { W: Phaser.Input.Keyboard.Key; A: Phaser.Input.Keyboard.Key; S: Phaser.Input.Keyboard.Key; D: Phaser.Input.Keyboard.Key }
+  private interactKey!: Phaser.Input.Keyboard.Key  // E key for desk interaction
   
   private config!: OfficeSceneConfig
   private lastPosition: Position = { x: 0, y: 0 }
   private lastDirection: PlayerDirection = 'down'
   private moveThrottle: number = 50 // ms
   private lastMoveEmit: number = 0
+  
+  // Login state
+  private isLoggedIn: boolean = false
+  private nearDesk: boolean = false
+  private interactionPrompt!: Phaser.GameObjects.Text
+  private deskZones: { x: number; y: number; width: number; height: number }[] = []
   
   // Mobile joystick input
   private mobileInput: { direction: PlayerDirection | null; velocity: { x: number; y: number } } = {
@@ -51,6 +60,9 @@ export class OfficeScene extends Phaser.Scene {
     // Get collision bodies
     this.collisionBodies = this.officeBuilder.getCollisionBodies()
     
+    // Get desk zones for interaction
+    this.deskZones = this.officeBuilder.getDeskZones()
+    
     // Create local player
     this.createLocalPlayer()
     
@@ -59,6 +71,9 @@ export class OfficeScene extends Phaser.Scene {
     
     // Setup camera
     this.setupCamera()
+    
+    // Create interaction prompt (hidden by default)
+    this.createInteractionPrompt()
     
     // Add collision between player and walls
     this.collisionBodies.forEach(body => {
@@ -92,7 +107,7 @@ export class OfficeScene extends Phaser.Scene {
   private setupInput(): void {
     // Disable Phaser's default keyboard capture to allow HTML inputs to work
     if (this.input.keyboard) {
-      this.input.keyboard.removeCapture('W,A,S,D,UP,DOWN,LEFT,RIGHT')
+      this.input.keyboard.removeCapture('W,A,S,D,UP,DOWN,LEFT,RIGHT,E')
     }
     
     // Arrow keys
@@ -105,6 +120,16 @@ export class OfficeScene extends Phaser.Scene {
       S: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.S, false),
       D: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.D, false),
     }
+    
+    // E key for desk interaction
+    this.interactKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.E, false)
+    
+    // Listen for E key press to login at desk
+    this.interactKey.on('down', () => {
+      if (this.nearDesk && !this.isLoggedIn && this.keyboardEnabled) {
+        this.handleDeskLogin()
+      }
+    })
     
     // Listen for mobile joystick events
     if (typeof window !== 'undefined') {
@@ -149,9 +174,96 @@ export class OfficeScene extends Phaser.Scene {
     instructions.setDepth(1000)
   }
   
+  private createInteractionPrompt(): void {
+    this.interactionPrompt = this.add.text(0, 0, 'Press E to login', {
+      fontSize: '14px',
+      fontFamily: 'Arial, sans-serif',
+      color: '#ffffff',
+      backgroundColor: 'rgba(59, 130, 246, 0.9)',
+      padding: { x: 12, y: 6 },
+    })
+    this.interactionPrompt.setOrigin(0.5, 1)
+    this.interactionPrompt.setDepth(1001)
+    this.interactionPrompt.setVisible(false)
+  }
+  
+  private checkNearDesk(): void {
+    const playerPos = this.localPlayer.getPosition()
+    const interactionRadius = 60 // pixels
+    
+    let foundDesk = false
+    for (const desk of this.deskZones) {
+      // Check if player is within interaction range of the desk center
+      const deskCenterX = desk.x + desk.width / 2
+      const deskCenterY = desk.y + desk.height / 2
+      const distance = Math.sqrt(
+        Math.pow(playerPos.x - deskCenterX, 2) + 
+        Math.pow(playerPos.y - deskCenterY, 2)
+      )
+      
+      if (distance < interactionRadius) {
+        foundDesk = true
+        break
+      }
+    }
+    
+    this.nearDesk = foundDesk
+    
+    // Show/hide interaction prompt
+    if (this.nearDesk && !this.isLoggedIn) {
+      this.interactionPrompt.setPosition(this.localPlayer.x, this.localPlayer.y - 50)
+      this.interactionPrompt.setVisible(true)
+    } else {
+      this.interactionPrompt.setVisible(false)
+    }
+  }
+  
+  private handleDeskLogin(): void {
+    this.isLoggedIn = true
+    this.interactionPrompt.setVisible(false)
+    
+    // Change status to available
+    this.localPlayer.setStatus('available')
+    
+    // Notify parent component
+    if (this.config.onLogin) {
+      this.config.onLogin()
+    }
+    if (this.config.onStatusChange) {
+      this.config.onStatusChange('available')
+    }
+    
+    // Show login feedback
+    const loginText = this.add.text(
+      this.localPlayer.x,
+      this.localPlayer.y - 70,
+      '✓ Logged in!',
+      {
+        fontSize: '16px',
+        fontFamily: 'Arial, sans-serif',
+        color: '#ffffff',
+        backgroundColor: 'rgba(34, 197, 94, 0.9)',
+        padding: { x: 12, y: 6 },
+      }
+    )
+    loginText.setOrigin(0.5, 1)
+    loginText.setDepth(1002)
+    
+    // Fade out the text
+    this.tweens.add({
+      targets: loginText,
+      alpha: 0,
+      y: loginText.y - 30,
+      duration: 1500,
+      ease: 'Power2',
+      onComplete: () => loginText.destroy()
+    })
+  }
+  
   update(time: number, delta: number): void {
     this.handleMovement()
     this.checkAndEmitPosition(time)
+    this.checkNearDesk()
   }
   
   private handleMovement(): void {
@@ -325,5 +437,23 @@ export class OfficeScene extends Phaser.Scene {
 
   public enableKeyboard(): void {
     this.keyboardEnabled = true
+  }
+
+  // Update local player status (for status dropdown changes)
+  public setLocalPlayerStatus(status: string): void {
+    this.localPlayer.setStatus(status)
+  }
+
+  // Check if player is logged in
+  public getIsLoggedIn(): boolean {
+    return this.isLoggedIn
+  }
+
+  // Set logged in state (useful when restoring from saved state)
+  public setIsLoggedIn(loggedIn: boolean): void {
+    this.isLoggedIn = loggedIn
+    if (loggedIn) {
+      this.interactionPrompt?.setVisible(false)
+    }
   }
 }

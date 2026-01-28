@@ -68,6 +68,8 @@ export const GAME_CONFIG = {
     STATUS_AWAY: 0xffc107,
     STATUS_BUSY: 0xf44336,
     STATUS_OFFLINE: 0x9e9e9e,
+    STATUS_SELECTED: 0x9e9e9e, // Gray - not logged in yet
+    STATUS_DND: 0xf44336,
   },
   
   // Default office layout

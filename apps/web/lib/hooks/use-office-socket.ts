@@ -257,6 +257,12 @@ export function useOfficeSocket({
     setPendingInteractions(prev => prev.filter(i => i.senderId !== senderId))
   }, [])
   
+  // Create a ref for sendStatus to use in event listeners
+  const sendStatusRef = useRef(sendStatus)
+  useEffect(() => {
+    sendStatusRef.current = sendStatus
+  }, [sendStatus])
+  
   // Auto-connect when enabled
   useEffect(() => {
     if (enabled) {
@@ -266,17 +272,18 @@ export function useOfficeSocket({
     return () => {
       disconnect()
     }
-  }, [enabled, connect, disconnect])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enabled])
   
   // Handle page visibility changes
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.hidden) {
         // Page is hidden, could reduce update frequency or send away status
-        sendStatus('away')
+        sendStatusRef.current('away')
       } else {
         // Page is visible again
-        sendStatus('available')
+        sendStatusRef.current('available')
       }
     }
     
@@ -285,7 +292,7 @@ export function useOfficeSocket({
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange)
     }
-  }, [sendStatus])
+  }, [])
   
   return {
     isConnected,

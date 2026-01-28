@@ -13,7 +13,7 @@ export type { Position };
 // PLAYER TYPES
 // ============================================
 
-export type PlayerStatus = 'online' | 'available' | 'away' | 'busy' | 'offline' | 'dnd';
+export type PlayerStatus = 'online' | 'available' | 'away' | 'busy' | 'offline' | 'dnd' | 'selected';
 export type PlayerDirection = 'up' | 'down' | 'left' | 'right';
 
 export interface PlayerData {

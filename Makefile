@@ -78,7 +78,7 @@ dev: prisma-generate
 	@echo "⏳ Waiting for database to be ready..."
 	@sleep 5
 	@$(MAKE) prisma-push
-	docker compose up --build
+	docker compose up -d --build
 	
 # Start services in background
 dev-bg:

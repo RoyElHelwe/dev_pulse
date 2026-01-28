@@ -25,7 +25,7 @@ interface WorkspaceInfo {
 export function AppLayout({ children }: AppLayoutProps) {
   const router = useRouter()
   const pathname = usePathname()
-  const { user, isAuthenticated, isLoading, checkAuth } = useAuth()
+  const { user, isAuthenticated, isLoading, checkAuth, _hasHydrated } = useAuth()
   const [workspace, setWorkspace] = useState<WorkspaceInfo | null>(null)
   const [workspaceLoading, setWorkspaceLoading] = useState(true)
   const initializedRef = useRef(false)
@@ -55,13 +55,13 @@ export function AppLayout({ children }: AppLayoutProps) {
   }, [pathname, isMobile])
 
   useEffect(() => {
-    // Allow re-initialization when navigating away from onboarding
-    if (initializedRef.current && isOnboarding) return
+    // Don't run until zustand has hydrated from localStorage
+    if (!_hasHydrated) return
     
-    // Reset initialization when leaving onboarding
-    if (!isOnboarding && !initializedRef.current) {
-      initializedRef.current = true
-    }
+    // Only initialize once
+    if (initializedRef.current) return
+    
+    initializedRef.current = true
 
     const init = async () => {
       try {
@@ -107,7 +107,8 @@ export function AppLayout({ children }: AppLayoutProps) {
     }
 
     init()
-  }, [pathname, isOnboarding])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [_hasHydrated])
 
   // Role-based route protection
   useEffect(() => {
@@ -125,8 +126,8 @@ export function AppLayout({ children }: AppLayoutProps) {
     setIsRoleChecked(true)
   }, [pathname, workspace, workspaceLoading, router, isOnboarding, isOfficePage])
 
-  // Show loading while checking auth (but not on onboarding or office page)
-  if (isLoading || (workspaceLoading && !isOnboarding && !isOfficePage)) {
+  // Show loading while hydrating or checking auth (but not on onboarding or office page)
+  if (!_hasHydrated || isLoading || (workspaceLoading && !isOnboarding && !isOfficePage)) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <LoadingSpinner message="Loading your workspace..." />
@@ -134,7 +135,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     )
   }
 
-  // Not authenticated
+  // Not authenticated (only check after hydration)
   if (!isAuthenticated || !user) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">

@@ -1,7 +1,7 @@
 'use client'
 
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
+import { persist, createJSONStorage } from 'zustand/middleware'
 import type { PublicUser } from '../types'
 import { authService } from '../auth-service'
 
@@ -10,11 +10,13 @@ interface AuthState {
   isAuthenticated: boolean
   isLoading: boolean
   error: string | null
+  _hasHydrated: boolean
   
   // Actions
   setUser: (user: PublicUser | null) => void
   setLoading: (loading: boolean) => void
   setError: (error: string | null) => void
+  setHasHydrated: (state: boolean) => void
   checkAuth: () => Promise<void>
   logout: () => Promise<void>
   refreshSession: () => Promise<void>
@@ -25,8 +27,9 @@ export const useAuth = create<AuthState>()(
     (set) => ({
       user: null,
       isAuthenticated: false,
-      isLoading: false,
+      isLoading: true, // Start as true to prevent flicker
       error: null,
+      _hasHydrated: false,
 
       setUser: (user) =>
         set({
@@ -38,6 +41,8 @@ export const useAuth = create<AuthState>()(
       setLoading: (loading) => set({ isLoading: loading }),
 
       setError: (error) => set({ error }),
+      
+      setHasHydrated: (state) => set({ _hasHydrated: state }),
 
       checkAuth: async () => {
         try {
@@ -104,10 +109,15 @@ export const useAuth = create<AuthState>()(
     }),
     {
       name: 'auth-storage',
+      storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
         user: state.user,
         isAuthenticated: state.isAuthenticated,
       }),
+      onRehydrateStorage: () => (state) => {
+        state?.setHasHydrated(true)
+        state?.setLoading(false)
+      },
     }
   )
 )
