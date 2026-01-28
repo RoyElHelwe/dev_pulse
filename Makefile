@@ -48,8 +48,15 @@ help:
 # =============================================================================
 
 # First time setup
-setup: install prisma-generate
+setup: install ssl-certs prisma-generate
 	@echo "✅ Setup complete! Run 'make dev' to start development"
+
+# Generate SSL certificates for HTTPS
+ssl-certs:
+	@echo "🔐 Generating SSL certificates..."
+	@chmod +x scripts/generate-ssl-cert.sh
+	@./scripts/generate-ssl-cert.sh
+	@echo "✅ SSL certificates generated"
 
 # Install dependencies using Docker
 install:
