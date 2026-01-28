@@ -1,13 +1,39 @@
 import { Injectable } from '@nestjs/common';
-import { Resend } from 'resend';
+import * as nodemailer from 'nodemailer';
+import type { Transporter } from 'nodemailer';
 
 @Injectable()
 export class EmailService {
-  private resend: Resend;
+  private transporter: Transporter;
 
   constructor() {
-    const apiKey = process.env.RESEND_API_KEY!;
-    this.resend = new Resend(apiKey);
+    // Create transporter based on environment
+    const isDevelopment = process.env.NODE_ENV !== 'production';
+    
+    if (isDevelopment) {
+      // For development: Use any SMTP server or Gmail
+      // You can configure this with your own SMTP credentials
+      this.transporter = nodemailer.createTransport({
+        host: process.env.SMTP_HOST || 'smtp.gmail.com',
+        port: parseInt(process.env.SMTP_PORT || '587'),
+        secure: false, // true for 465, false for other ports
+        auth: {
+          user: process.env.SMTP_USER,
+          pass: process.env.SMTP_PASS,
+        },
+      });
+    } else {
+      // For production: Use your production SMTP service
+      this.transporter = nodemailer.createTransport({
+        host: process.env.SMTP_HOST,
+        port: parseInt(process.env.SMTP_PORT || '587'),
+        secure: process.env.SMTP_SECURE === 'true',
+        auth: {
+          user: process.env.SMTP_USER,
+          pass: process.env.SMTP_PASS,
+        },
+      });
+    }
   }
 
   /**
@@ -20,9 +46,9 @@ export class EmailService {
     const { to, resetUrl } = data;
 
     try {
-      const result = await this.resend.emails.send({
-        from: process.env.EMAIL_FROM!,
-        to: [to],
+      const result = await this.transporter.sendMail({
+        from: process.env.EMAIL_FROM || '"FT Transcendence" <noreply@fttranscendence.com>',
+        to,
         subject: 'Reset Your Password',
         html: this.getPasswordResetEmailTemplate({ resetUrl }),
       });

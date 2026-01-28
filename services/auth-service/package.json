@@ -37,13 +37,14 @@
     "otpauth": "^9.3.5",
     "qrcode": "^1.5.4",
     "cookie-parser": "^1.4.7",
-    "resend": "^6.6.0",
+    "nodemailer": "^6.9.8",
     "reflect-metadata": "^0.2.2"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
     "@types/qrcode": "^1.5.5",
     "@types/cookie-parser": "^1.4.10",
-    "@types/express": "^5.0.6"
+    "@types/express": "^5.0.6",
+    "@types/nodemailer": "^6.4.14"
   }
 }

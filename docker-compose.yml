@@ -155,7 +155,11 @@ services:
       - PORT=${AUTH_PORT:-3001}
       - COOKIE_DOMAIN=${COOKIE_DOMAIN:-localhost}
       - FRONTEND_URL=${FRONTEND_URL:-http://localhost:3000}
-      - RESEND_API_KEY=${RESEND_API_KEY:-}
+      - SMTP_HOST=${SMTP_HOST:-smtp.gmail.com}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_SECURE=${SMTP_SECURE:-false}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASS=${SMTP_PASS:-}
       - EMAIL_FROM=${EMAIL_FROM:-noreply@localhost}
     depends_on:
       postgres:
@@ -191,7 +195,11 @@ services:
       - DATABASE_URL=${DATABASE_URL_DOCKER:-postgresql://dev:dev@postgres:5432/ft_trans}
       - NATS_URL=${NATS_URL_DOCKER:-nats://nats:4222}
       - PORT=${WORKSPACE_PORT:-3002}
-      - RESEND_API_KEY=${RESEND_API_KEY:-}
+      - SMTP_HOST=${SMTP_HOST:-smtp.gmail.com}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_SECURE=${SMTP_SECURE:-false}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASS=${SMTP_PASS:-}
       - EMAIL_FROM=${EMAIL_FROM:-noreply@localhost}
       - APP_URL=${APP_URL:-http://localhost:3000}
     depends_on:
