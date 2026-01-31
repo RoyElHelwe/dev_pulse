@@ -1,6 +1,6 @@
 'use client'
 
-import { ReactNode, useEffect, useState, useRef } from 'react'
+import { ReactNode, useEffect, useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { Header } from './header'
 import { Sidebar, MobileNav } from './sidebar'
@@ -28,14 +28,72 @@ export function AppLayout({ children }: AppLayoutProps) {
   const { user, isAuthenticated, isLoading, checkAuth, _hasHydrated } = useAuth()
   const [workspace, setWorkspace] = useState<WorkspaceInfo | null>(null)
   const [workspaceLoading, setWorkspaceLoading] = useState(true)
-  const initializedRef = useRef(false)
   const [isRoleChecked, setIsRoleChecked] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [isMobile, setIsMobile] = useState(false)
+  const [initTrigger, setInitTrigger] = useState(0)
+  const [isBackNavigation, setIsBackNavigation] = useState(false)
 
   // Skip workspace checks on onboarding page
   const isOnboarding = pathname === '/onboarding'
   const isOfficePage = pathname === '/office'
+
+  // If the user already has a workspace, they should not be able to return to onboarding
+  // via browser back/forward navigation.
+  useEffect(() => {
+    if (!isOnboarding) return
+    if (!_hasHydrated) return
+    if (!isAuthenticated || !user) return
+
+    // If workspace already loaded, immediately bump them back to the app.
+    if (workspace?.id) {
+      router.replace('/dashboard')
+    }
+  }, [_hasHydrated, isAuthenticated, user, isOnboarding, workspace?.id, router])
+
+  // Handle browser back/forward navigation and bfcache restoration.
+  // Important: Don't force a global re-init when the user navigates within onboarding.
+  // Next's `usePathname()` will update on navigation; we only want to refresh workspace state
+  // when leaving onboarding/office to the app area.
+  useEffect(() => {
+    const shouldSkip = () => {
+      const currentPath = window.location.pathname
+      return currentPath === '/onboarding' || currentPath === '/office'
+    }
+
+    const resetAppStateForNav = () => {
+      // If we navigated *to* onboarding/office, stop any workspace loading state.
+      if (shouldSkip()) {
+        setWorkspaceLoading(false)
+        setIsRoleChecked(true) // avoid role-gate spinner while on onboarding/office
+        setIsBackNavigation(false)
+        return
+      }
+
+      // Otherwise, re-check workspace/role for protected areas.
+      setIsRoleChecked(false)
+      setWorkspaceLoading(true)
+      setIsBackNavigation(true)
+      setInitTrigger((prev) => prev + 1)
+    }
+
+    const handlePageShow = (event: PageTransitionEvent) => {
+      if (!event.persisted) return
+      resetAppStateForNav()
+    }
+
+    const handlePopState = () => {
+      resetAppStateForNav()
+    }
+
+    window.addEventListener('pageshow', handlePageShow)
+    window.addEventListener('popstate', handlePopState)
+
+    return () => {
+      window.removeEventListener('pageshow', handlePageShow)
+      window.removeEventListener('popstate', handlePopState)
+    }
+  }, [])
 
   // Detect mobile device
   useEffect(() => {
@@ -57,11 +115,6 @@ export function AppLayout({ children }: AppLayoutProps) {
   useEffect(() => {
     // Don't run until zustand has hydrated from localStorage
     if (!_hasHydrated) return
-    
-    // Only initialize once
-    if (initializedRef.current) return
-    
-    initializedRef.current = true
 
     const init = async () => {
       try {
@@ -74,6 +127,8 @@ export function AppLayout({ children }: AppLayoutProps) {
       // Skip workspace fetch on onboarding or office page
       if (isOnboarding || isOfficePage) {
         setWorkspaceLoading(false)
+        setIsRoleChecked(true)
+        setIsBackNavigation(false)
         return
       }
 
@@ -83,7 +138,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/workspaces/status`, {
           credentials: 'include',
         })
-        
+
         if (res.ok) {
           const data = await res.json()
           if (data.hasWorkspace && data.workspace) {
@@ -94,21 +149,26 @@ export function AppLayout({ children }: AppLayoutProps) {
               role: data.role as WorkspaceRole,
               isOwner: data.isOwner || data.role === 'OWNER',
             })
+            setWorkspaceLoading(false)
           } else {
-            // No workspace, redirect to onboarding
+            // No workspace exists -> always go to onboarding (don't special-case back nav here)
+            setWorkspaceLoading(false)
             router.push('/onboarding')
           }
+        } else {
+          setWorkspaceLoading(false)
         }
       } catch (error) {
         console.error('Failed to fetch workspace:', error)
-      } finally {
         setWorkspaceLoading(false)
+      } finally {
+        setIsBackNavigation(false)
       }
     }
 
     init()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [_hasHydrated])
+  }, [_hasHydrated, initTrigger, isOnboarding, isOfficePage])
 
   // Role-based route protection
   useEffect(() => {
