@@ -58,9 +58,15 @@ docker-compose logs -f
 docker-compose ps
 ```
 
+> **Note on SSL Certificates**: The web container will automatically generate self-signed SSL certificates on first run. If you want to generate them manually before starting Docker, run:
+> ```bash
+> pnpm run generate:certs
+> ```
+> The web service will work with or without SSL certificates (fallback to HTTP if not found).
+
 ### 3. Access the Application
 
-- **Frontend**: http://localhost:3000
+- **Frontend**: https://localhost:3000 (or http://localhost:3000 if no SSL certs)
 - **API Gateway**: http://localhost:4000
 - **API Documentation**: http://localhost:4000/api/docs
 - **Mailpit UI**: http://localhost:8025

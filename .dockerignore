@@ -4,18 +4,13 @@
 
 # Dependencies (will be installed fresh)
 node_modules
-**/node_modules
 **/.pnpm-store
 
 # Build outputs (will be built fresh)
 dist
-**/dist
 .next
-**/.next
 .turbo
-**/.turbo
 coverage
-**/coverage
 build
 out
 
@@ -71,9 +66,12 @@ apps/api-gateway/prisma/
 services/auth-service/prisma/
 services/workspace-service/prisma/
 
-# Scripts
-scripts/
-*.sh
+# Scripts (keep generate-ssl-cert.sh for Docker builds)
+scripts/setup.sh
+scripts/setup.ps1
+scripts/change-network-ip.sh
+scripts/show-network-access.sh
+scripts/sync-node-modules.ps1
 *.ps1
 
 # Misc

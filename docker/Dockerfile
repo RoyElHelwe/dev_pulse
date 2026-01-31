@@ -12,6 +12,9 @@ FROM node:22-alpine AS base
 RUN apk add --no-cache libc6-compat openssl python3 make g++
 RUN corepack enable && corepack prepare pnpm@9.14.4 --activate
 
+# Create non-root user for security
+RUN addgroup -g 1001 -S nodejs && adduser -S nodejs -u 1001
+
 WORKDIR /app
 
 # =============================================================================
@@ -132,6 +135,8 @@ WORKDIR /app/apps/api-gateway
 
 EXPOSE 4000
 
+USER nodejs
+
 CMD ["node", "dist/main.js"]
 
 # =============================================================================
@@ -162,6 +167,8 @@ COPY --from=builder /app/packages/backend-common/dist ./packages/backend-common/
 WORKDIR /app/services/auth-service
 
 EXPOSE 3001
+
+USER nodejs
 
 CMD ["node", "dist/main.js"]
 
@@ -195,6 +202,8 @@ WORKDIR /app/services/workspace-service
 
 EXPOSE 3002
 
+USER nodejs
+
 CMD ["node", "dist/main.js"]
 
 # =============================================================================
@@ -227,6 +236,8 @@ WORKDIR /app/services/task-service
 
 EXPOSE 3003
 
+USER nodejs
+
 CMD ["node", "dist/main.js"]
 
 # =============================================================================
@@ -250,6 +261,8 @@ ENV HOSTNAME="0.0.0.0"
 ENV PORT=3000
 
 EXPOSE 3000
+
+USER nodejs
 
 CMD ["node", "server.js"]
 
@@ -294,13 +307,12 @@ EXPOSE 3003
 CMD ["pnpm", "run", "dev"]
 
 # WEB DEV
-FROM deps AS web-dev
+FROM builder AS web-dev
 
-WORKDIR /app
-
-COPY . .
-
-RUN pnpm --filter @dev-pulse/shared-types build
+# Generate SSL certificates if they don't exist
+# Use sh instead of bash since Alpine doesn't have bash by default
+RUN chmod +x /app/scripts/generate-ssl-cert.sh && \
+    (sh /app/scripts/generate-ssl-cert.sh || true)
 
 WORKDIR /app/apps/web
 

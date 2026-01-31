@@ -17,6 +17,11 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     networks:
       - ft_trans_network
 
@@ -33,6 +38,11 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     networks:
       - ft_trans_network
     restart: "no"
@@ -51,12 +61,17 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     networks:
       - ft_trans_network
 
   # NATS Message Bus
   nats:
-    image: nats:latest
+    image: nats:2-alpine
     container_name: ft_trans_nats
     restart: unless-stopped
     ports:
@@ -64,12 +79,23 @@ services:
       - '8222:8222'
       - '6222:6222'
     command: '--http_port 8222 --js'
+    healthcheck:
+      test: ['CMD', 'nats-server', '--help']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     networks:
       - ft_trans_network
 
   # Mailpit - Email Testing
   mailpit:
-    image: axllent/mailpit:latest
+    image: axllent/mailpit:v1.18.1
     container_name: ft_trans_mailpit
     restart: unless-stopped
     ports:
@@ -79,6 +105,11 @@ services:
       MP_MAX_MESSAGES: 5000
       MP_SMTP_AUTH_ACCEPT_ANY: 1
       MP_SMTP_AUTH_ALLOW_INSECURE: 1
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     networks:
       - ft_trans_network
 
@@ -99,8 +130,6 @@ services:
       - ./packages/shared-types/src:/app/packages/shared-types/src
       - ./prisma:/app/prisma
       - ./certs:/app/certs:ro
-      - /app/node_modules
-      - /app/apps/api-gateway/node_modules
     environment:
       - NODE_ENV=${NODE_ENV:-development}
       - DATABASE_URL=${DATABASE_URL_DOCKER:-postgresql://dev:dev@postgres:5432/ft_trans}
@@ -120,13 +149,18 @@ services:
       redis:
         condition: service_healthy
       nats:
-        condition: service_started
+        condition: service_healthy
       auth-service:
         condition: service_started
       workspace-service:
         condition: service_started
       task-service:
         condition: service_started
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     networks:
       - ft_trans_network
 
@@ -146,8 +180,6 @@ services:
       - ./packages/backend-common/src:/app/packages/backend-common/src
       - ./prisma:/app/prisma
       - ./certs:/app/certs:ro
-      - /app/node_modules
-      - /app/services/auth-service/node_modules
     environment:
       - NODE_ENV=${NODE_ENV:-development}
       - DATABASE_URL=${DATABASE_URL_DOCKER:-postgresql://dev:dev@postgres:5432/ft_trans}
@@ -165,13 +197,16 @@ services:
       postgres:
         condition: service_healthy
       nats:
-        condition: service_started
+        condition: service_healthy
       prisma-migrate:
         condition: service_completed_successfully
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     networks:
       - ft_trans_network
-
-  # Workspace Service (Microservice)
   workspace-service:
     build:
       context: .
@@ -188,8 +223,6 @@ services:
       - ./packages/shared-types/src:/app/packages/shared-types/src
       - ./prisma:/app/prisma
       - ./certs:/app/certs:ro
-      - /app/node_modules
-      - /app/services/workspace-service/node_modules
     environment:
       - NODE_ENV=${NODE_ENV:-development}
       - DATABASE_URL=${DATABASE_URL_DOCKER:-postgresql://dev:dev@postgres:5432/ft_trans}
@@ -206,9 +239,14 @@ services:
       postgres:
         condition: service_healthy
       nats:
-        condition: service_started
+        condition: service_healthy
       prisma-migrate:
         condition: service_completed_successfully
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     networks:
       - ft_trans_network
 
@@ -229,8 +267,6 @@ services:
       - ./packages/shared-types/src:/app/packages/shared-types/src
       - ./prisma:/app/prisma
       - ./certs:/app/certs:ro
-      - /app/node_modules
-      - /app/services/task-service/node_modules
     environment:
       - NODE_ENV=${NODE_ENV:-development}
       - DATABASE_URL=${DATABASE_URL_DOCKER:-postgresql://dev:dev@postgres:5432/ft_trans}
@@ -245,11 +281,16 @@ services:
       postgres:
         condition: service_healthy
       nats:
-        condition: service_started
+        condition: service_healthy
       redis:
         condition: service_healthy
       prisma-migrate:
         condition: service_completed_successfully
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     networks:
       - ft_trans_network
 
@@ -263,7 +304,6 @@ services:
     restart: unless-stopped
     ports:
       - '3000:3000'
-    command: ["node", "server.js"]
     volumes:
       - ./apps/web/app:/app/apps/web/app
       - ./apps/web/components:/app/apps/web/components
@@ -273,8 +313,6 @@ services:
       - ./apps/web/server.js:/app/apps/web/server.js
       - ./packages/shared-types/src:/app/packages/shared-types/src
       - ./certs:/app/certs:ro
-      - /app/node_modules
-      - /app/apps/web/node_modules
     environment:
       - NODE_ENV=${NODE_ENV:-development}
       - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:4000}
@@ -283,6 +321,11 @@ services:
       - PORT=3000
     depends_on:
       - api-gateway
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     networks:
       - ft_trans_network
 
