@@ -308,6 +308,14 @@ export class WebsocketGateway
     this.socketToUser.set(client.id, userId);
     this.userWorkspaces.set(userId, workspaceId);
     
+    // IMPORTANT: Also register in onlineUsers for voice call support
+    this.onlineUsers.set(userId, {
+      userId,
+      socketId: client.id,
+      workspaceId,
+      lastActivity: new Date(),
+    });
+    
     // Join office room
     client.join(roomKey);
     
@@ -368,6 +376,7 @@ export class WebsocketGateway
     
     // Check proximity with other players
     this.checkProximity(workspaceId, userId, client);
+    this.checkVoiceProximity(workspaceId, userId, client);
   }
 
   @SubscribeMessage('office:status')
@@ -936,5 +945,293 @@ export class WebsocketGateway
     if (!user) return undefined;
     
     return this.server.sockets.sockets.get(user.socketId);
+  }
+
+  // ============================================
+  // Voice Call Events (WebRTC Signaling)
+  // ============================================
+
+  // Voice call threshold for proximity voice chat (pixels)
+  private readonly VOICE_PROXIMITY_THRESHOLD = 200;
+
+  // Track active voice calls: Map<`call:${workspaceId}:${oderId}`, Set<userId>>
+  private activeCalls: Map<string, Set<string>> = new Map();
+
+  @SubscribeMessage('voice:call-invite')
+  handleVoiceCallInvite(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: {
+      workspaceId: string;
+      targetUserId: string;
+      callerId: string;
+      callerName: string;
+      callType: 'voice' | 'proximity';
+    },
+  ): void {
+    const { workspaceId, targetUserId, callerId, callerName, callType } = data;
+    
+    this.logger.log(`[Voice] Call invite from ${callerName} to ${targetUserId}`);
+    
+    // Find target user's socket
+    const targetSocket = this.findUserSocket(targetUserId);
+    if (!targetSocket) {
+      client.emit('voice:call-error', { message: 'User is offline' });
+      return;
+    }
+    
+    // Send invitation to target
+    targetSocket.emit('voice:call-invitation', {
+      callerId,
+      callerName,
+      callType,
+      timestamp: new Date().toISOString(),
+    });
+    
+    this.logger.log(`[Voice] Invitation sent to ${targetUserId}`);
+  }
+
+  @SubscribeMessage('voice:call-accept')
+  handleVoiceCallAccept(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: {
+      workspaceId: string;
+      callerId: string;
+      calleeId: string;
+      calleeName: string;
+    },
+  ): void {
+    const { workspaceId, callerId, calleeId, calleeName } = data;
+    
+    this.logger.log(`[Voice] Call accepted by ${calleeName}`);
+    
+    // Find caller's socket
+    const callerSocket = this.findUserSocket(callerId);
+    if (!callerSocket) {
+      client.emit('voice:call-error', { message: 'Caller disconnected' });
+      return;
+    }
+    
+    // Notify caller that call was accepted
+    callerSocket.emit('voice:call-accepted', {
+      calleeId,
+      calleeName,
+    });
+    
+    // Track active call
+    const callKey = `call:${workspaceId}`;
+    if (!this.activeCalls.has(callKey)) {
+      this.activeCalls.set(callKey, new Set());
+    }
+    this.activeCalls.get(callKey)!.add(callerId);
+    this.activeCalls.get(callKey)!.add(calleeId);
+  }
+
+  @SubscribeMessage('voice:call-decline')
+  handleVoiceCallDecline(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: {
+      workspaceId: string;
+      callerId: string;
+      calleeId: string;
+    },
+  ): void {
+    const { callerId } = data;
+    
+    this.logger.log(`[Voice] Call declined`);
+    
+    // Find caller's socket
+    const callerSocket = this.findUserSocket(callerId);
+    if (callerSocket) {
+      callerSocket.emit('voice:call-declined', {});
+    }
+  }
+
+  @SubscribeMessage('voice:call-end')
+  handleVoiceCallEnd(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: {
+      workspaceId: string;
+      targetUserId: string;
+      fromUserId: string;
+    },
+  ): void {
+    const { workspaceId, targetUserId, fromUserId } = data;
+    
+    this.logger.log(`[Voice] Call ended by ${fromUserId}`);
+    
+    // Find target's socket
+    const targetSocket = this.findUserSocket(targetUserId);
+    if (targetSocket) {
+      targetSocket.emit('voice:call-ended', { fromUserId });
+    }
+    
+    // Remove from active calls
+    const callKey = `call:${workspaceId}`;
+    const activeCall = this.activeCalls.get(callKey);
+    if (activeCall) {
+      activeCall.delete(fromUserId);
+      activeCall.delete(targetUserId);
+      if (activeCall.size === 0) {
+        this.activeCalls.delete(callKey);
+      }
+    }
+  }
+
+  @SubscribeMessage('voice:signal')
+  handleVoiceSignal(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: {
+      workspaceId: string;
+      targetUserId: string;
+      signalData: any; // SimplePeer signal data (SDP or ICE candidate)
+      fromUserId: string;
+      fromUserName: string;
+    },
+  ): void {
+    const { targetUserId, signalData, fromUserId, fromUserName } = data;
+    
+    // Find target's socket
+    const targetSocket = this.findUserSocket(targetUserId);
+    if (!targetSocket) {
+      this.logger.warn(`[Voice] Target user ${targetUserId} not found for signal`);
+      return;
+    }
+    
+    // Forward WebRTC signal
+    targetSocket.emit('voice:signal', {
+      fromUserId,
+      fromUserName,
+      signalData,
+    });
+  }
+
+  // ============================================
+  // Proximity Voice Chat
+  // ============================================
+
+  @SubscribeMessage('voice:enable-proximity')
+  handleEnableProximityVoice(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: {
+      workspaceId: string;
+      userId: string;
+    },
+  ): void {
+    const { workspaceId, userId } = data;
+    const roomKey = `office:${workspaceId}`;
+    
+    const officeRoom = this.officePlayers.get(roomKey);
+    if (!officeRoom) return;
+    
+    const player = officeRoom.get(userId);
+    if (!player) return;
+    
+    this.logger.log(`[Voice] Proximity voice enabled for ${player.name}`);
+    
+    // Find nearby players and trigger connections
+    const nearbyPlayers = this.getPlayersInVoiceRange(workspaceId, userId);
+    
+    nearbyPlayers.forEach(nearbyPlayerId => {
+      const nearbyPlayer = officeRoom.get(nearbyPlayerId);
+      if (nearbyPlayer) {
+        // Notify both players to establish voice connection
+        client.emit('voice:proximity-enter', {
+          userId: nearbyPlayerId,
+          userName: nearbyPlayer.name,
+          position: nearbyPlayer.position,
+        });
+        
+        const nearbySocket = this.findUserSocket(nearbyPlayerId);
+        if (nearbySocket) {
+          nearbySocket.emit('voice:proximity-enter', {
+            userId,
+            userName: player.name,
+            position: player.position,
+          });
+        }
+      }
+    });
+  }
+
+  @SubscribeMessage('voice:disable-proximity')
+  handleDisableProximityVoice(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: {
+      workspaceId: string;
+      userId: string;
+    },
+  ): void {
+    const { workspaceId, userId } = data;
+    const roomKey = `office:${workspaceId}`;
+    
+    const officeRoom = this.officePlayers.get(roomKey);
+    if (!officeRoom) return;
+    
+    this.logger.log(`[Voice] Proximity voice disabled for ${userId}`);
+    
+    // Notify all nearby players to disconnect voice
+    const nearbyPlayers = this.getPlayersInVoiceRange(workspaceId, userId);
+    
+    nearbyPlayers.forEach(nearbyPlayerId => {
+      const nearbySocket = this.findUserSocket(nearbyPlayerId);
+      if (nearbySocket) {
+        nearbySocket.emit('voice:proximity-exit', { userId });
+      }
+    });
+  }
+
+  // Helper: Get players within voice chat range
+  private getPlayersInVoiceRange(workspaceId: string, userId: string): string[] {
+    const roomKey = `office:${workspaceId}`;
+    const officeRoom = this.officePlayers.get(roomKey);
+    if (!officeRoom) return [];
+    
+    const player = officeRoom.get(userId);
+    if (!player) return [];
+    
+    const nearby: string[] = [];
+    
+    officeRoom.forEach((otherPlayer, otherId) => {
+      if (otherId === userId) return;
+      
+      const distance = this.calculateDistance(player.position, otherPlayer.position);
+      if (distance <= this.VOICE_PROXIMITY_THRESHOLD) {
+        nearby.push(otherId);
+      }
+    });
+    
+    return nearby;
+  }
+
+  // Helper: Check voice proximity changes on player move
+  checkVoiceProximity(workspaceId: string, userId: string, client: Socket): void {
+    const roomKey = `office:${workspaceId}`;
+    const officeRoom = this.officePlayers.get(roomKey);
+    if (!officeRoom) return;
+    
+    const player = officeRoom.get(userId);
+    if (!player) return;
+    
+    // Get all players in voice range
+    officeRoom.forEach((otherPlayer, otherId) => {
+      if (otherId === userId) return;
+      
+      const distance = this.calculateDistance(player.position, otherPlayer.position);
+      
+      // Update position for spatial audio
+      const otherSocket = this.findUserSocket(otherId);
+      if (otherSocket) {
+        // Send position update for spatial audio calculation
+        otherSocket.emit('voice:position-update', {
+          userId,
+          position: player.position,
+        });
+      }
+      
+      client.emit('voice:position-update', {
+        userId: otherId,
+        position: otherPlayer.position,
+      });
+    });
   }
 }

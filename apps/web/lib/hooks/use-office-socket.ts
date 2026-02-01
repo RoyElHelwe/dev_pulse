@@ -40,6 +40,7 @@ interface OfficeSocketHook {
   nearbyPlayers: Set<string>
   chatMessages: ChatMessage[]
   pendingInteractions: InteractionEvent[]
+  socket: Socket | null
   sendPosition: (position: Position, direction: PlayerDirection) => void
   sendStatus: (status: string) => void
   sendChat: (message: string, targetUserId?: string) => void
@@ -59,6 +60,7 @@ export function useOfficeSocket({
 }: UseOfficeSocketOptions): OfficeSocketHook {
   const socketRef = useRef<Socket | null>(null)
   const [isConnected, setIsConnected] = useState(false)
+  const [socket, setSocket] = useState<Socket | null>(null)  // Add state for socket
   const [players, setPlayers] = useState<Map<string, PlayerData>>(new Map())
   const [nearbyPlayers, setNearbyPlayers] = useState<Set<string>>(new Set())
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
@@ -87,6 +89,7 @@ export function useOfficeSocket({
     socket.on('connect', () => {
       console.log('Office socket connected')
       setIsConnected(true)
+      setSocket(socket)  // Update state so consumers get the connected socket
       
       // Join the office room with full player info
       socket.emit('office:join', { 
@@ -202,6 +205,7 @@ export function useOfficeSocket({
       socketRef.current.emit('office:leave', { workspaceId, userId })
       socketRef.current.disconnect()
       socketRef.current = null
+      setSocket(null)  // Clear socket state
       setIsConnected(false)
       setPlayers(new Map())
       setNearbyPlayers(new Set())
@@ -300,6 +304,7 @@ export function useOfficeSocket({
     nearbyPlayers,
     chatMessages,
     pendingInteractions,
+    socket,  // Return state variable, not ref, so consumers see updates
     sendPosition,
     sendStatus,
     sendChat,

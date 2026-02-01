@@ -5,7 +5,9 @@ import { useRouter } from 'next/navigation'
 import { VirtualOffice } from '@/components/game/VirtualOffice'
 import { MobileJoystick } from '@/components/game/MobileJoystick'
 import { TaskBoardPanel, TaskBoardButton } from '@/components/tasks'
+import { VoiceCallUI } from '@/components/voice'
 import { useOfficeSocket } from '@/lib/hooks/use-office-socket'
+import { useVoiceCall } from '@/lib/hooks/use-voice-call'
 import { useAuth } from '@/lib/hooks/use-auth'
 import { useTasks } from '@/lib/hooks/use-tasks'
 import { PlayerData, Position, PlayerDirection, getAvatarColor } from '@/lib/game/types'
@@ -53,6 +55,7 @@ export default function OfficePage() {
     nearbyPlayers,
     chatMessages,
     pendingInteractions,
+    socket,
     sendPosition,
     sendStatus,
     sendChat,
@@ -65,6 +68,35 @@ export default function OfficePage() {
     userEmail: user?.email,
     avatarColor,
     enabled: !!workspaceId && !!user?.id,
+  })
+  
+  // Voice call functionality with spatial audio
+  const {
+    callStatus,
+    isMuted,
+    isDeafened,
+    activeCall,
+    incomingCall,
+    connectedPeers,
+    proximityVoiceEnabled,
+    startCall,
+    acceptCall,
+    declineCall,
+    endCall,
+    toggleMute,
+    toggleDeafen,
+    toggleProximityVoice,
+    updatePeerPosition,
+    updateLocalPosition,
+  } = useVoiceCall({
+    socket,
+    userId: user?.id || '',
+    userName: user?.name || user?.email || '',
+    workspaceId: workspaceId || '',
+    enabled: isConnected && !!user?.id,  // Use isConnected instead of !!socket
+    maxAudioDistance: 300,
+    minAudioDistance: 50,
+    spatialAudioEnabled: true,
   })
   
   // Detect mobile device
@@ -224,6 +256,15 @@ export default function OfficePage() {
       .filter((p): p is PlayerData => !!p)
   }, [nearbyPlayers, players])
   
+  // Update peer positions for spatial audio when players move
+  useEffect(() => {
+    players.forEach((player) => {
+      if (player.position) {
+        updatePeerPosition(player.id, player.position)
+      }
+    })
+  }, [players, updatePeerPosition])
+  
   // Auto-scroll chat
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -231,7 +272,9 @@ export default function OfficePage() {
   
   const handlePlayerMove = useCallback((position: Position, direction: PlayerDirection) => {
     sendPosition(position, direction)
-  }, [sendPosition])
+    // Update local position for spatial audio
+    updateLocalPosition(position)
+  }, [sendPosition, updateLocalPosition])
   
   const handleReady = useCallback(() => {
     console.log('Virtual office ready')
@@ -633,9 +676,9 @@ export default function OfficePage() {
                     👋
                   </button>
                   <button
-                    onClick={() => sendInteraction(player.id, 'call-request')}
+                    onClick={() => startCall(player.id, player.name)}
                     className="p-2 bg-green-500/20 hover:bg-green-500/40 rounded-lg text-lg transition-colors active:scale-95"
-                    title="Request Call"
+                    title="Voice Call"
                   >
                     📞
                   </button>
@@ -785,6 +828,23 @@ export default function OfficePage() {
         isOpen={showTaskBoard}
         onClose={() => setShowTaskBoard(false)}
         workspaceMembers={workspaceMembers}
+      />
+
+      {/* Voice Call UI */}
+      <VoiceCallUI
+        callStatus={callStatus}
+        isMuted={isMuted}
+        isDeafened={isDeafened}
+        activeCall={activeCall}
+        incomingCall={incomingCall}
+        proximityVoiceEnabled={proximityVoiceEnabled}
+        connectedPeersCount={connectedPeers.size}
+        acceptCall={acceptCall}
+        declineCall={declineCall}
+        endCall={endCall}
+        toggleMute={toggleMute}
+        toggleDeafen={toggleDeafen}
+        toggleProximityVoice={toggleProximityVoice}
       />
     </div>
   )
