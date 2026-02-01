@@ -19,9 +19,9 @@ const nextConfig = {
   allowedDevOrigins: [
     'http://localhost:3000',
     'https://localhost:3000',
-    'http://10.18.200.248:3000',
-    'https://10.18.200.248:3000',
-    '10.18.200.248',
+    'http://10.12.4.9:3000',
+    'https://10.12.4.9:3000',
+    '10.12.4.9',
   ],
   webpack: (config: any, { dev, isServer }: { dev: boolean; isServer: boolean }) => {
     // Phaser.js webpack configuration
