@@ -137,15 +137,48 @@ docker-compose restart web
 
 ⚠️ **Important**: Self-signed certificates are for **development only**.
 
-For production:
-1. Use proper SSL certificates from a Certificate Authority (Let's Encrypt, etc.)
-2. Configure reverse proxy (nginx, Caddy) with SSL termination
-3. Update the `server.js` to use production certificates from environment variables
-4. Or remove custom server and let Next.js handle SSL via reverse proxy
+### Option A (Recommended): Reverse proxy with SSL termination (Let's Encrypt)
+
+In production you should terminate TLS in a reverse proxy (nginx, Caddy, Cloudflare, Cloud Run, etc.) and keep the Next.js container serving **plain HTTP**.
+
+This repo includes an nginx production service in `docker-compose.prod.yml`:
+- `nginx` listens on **80/443**
+- TLS certs are read from `/etc/letsencrypt/live/dev-pulse/*` inside the container
+- Requests are proxied to `web:3000`
+- The `web` service is forced to HTTP via `DISABLE_TLS=true`
+
+**What you must do:**
+1. Obtain valid certificates from a CA (e.g. Let's Encrypt) on the host
+2. Ensure your host cert path matches the volume mount in `docker-compose.prod.yml`:
+   - `/etc/letsencrypt:/etc/letsencrypt:ro`
+3. Ensure the domain folder name matches nginx config in `docker/nginx/conf.d/dev_pulse.conf`:
+   - `/etc/letsencrypt/live/dev-pulse/fullchain.pem`
+   - `/etc/letsencrypt/live/dev-pulse/privkey.pem`
+
+> Note: If you use a different domain name, update `docker/nginx/conf.d/dev_pulse.conf`.
+
+### Option B: Provide production certs directly to `apps/web/server.js`
+
+If you **do not** use a reverse proxy, you can run HTTPS directly in the Node custom server by passing certs via env vars:
+
+- `SSL_CERT_PATH` and `SSL_KEY_PATH` (recommended)
+  - Paths inside the container to a mounted certificate + key
+- Or `SSL_CERT` and `SSL_KEY`
+  - Inline PEM values (not recommended for large secrets)
+
+If you want to force HTTP (reverse proxy termination), set:
+- `DISABLE_TLS=true`
+
+### Option C: Remove custom server
+
+If you deploy Next.js behind a reverse proxy, you can also remove `apps/web/server.js` and run `next start` (or the standalone server) directly.
+This is a larger change and depends on whether you need custom behaviors from the current server.
 
 ## Files Modified
 
-- `apps/web/server.js` - Added SSL certificate detection and HTTP fallback
+- `apps/web/server.js` - Added production TLS support via env and reverse-proxy-friendly `DISABLE_TLS`
+- `docker-compose.prod.yml` - Added `nginx` reverse proxy service (SSL termination)
+- `docker/nginx/*` - Nginx reverse proxy configuration for production
 - `docker/Dockerfile` - Added certificate generation in web-dev stage
 - `package.json` - Added `generate:certs` script
 - `README.md` - Added SSL certificate documentation

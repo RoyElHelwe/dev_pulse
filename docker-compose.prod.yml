@@ -45,6 +45,9 @@ services:
       target: web
     volumes: []
     restart: always
+    environment:
+      # In production, terminate SSL at the reverse proxy (nginx/Caddy) and serve HTTP here.
+      - DISABLE_TLS=true
     deploy:
       resources:
         limits:
@@ -78,6 +81,24 @@ services:
           memory: 128M
         reservations:
           memory: 64M
+
+  # SSL termination reverse proxy (mount your Let's Encrypt certs here)
+  nginx:
+    build:
+      context: ./docker/nginx
+      dockerfile: Dockerfile
+    depends_on:
+      - web
+    restart: always
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      # Mount LE certs from the host (adjust path + domain folder name)
+      # Example (host): /etc/letsencrypt/live/dev-pulse/{fullchain.pem,privkey.pem}
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+      # Optional webroot for ACME HTTP-01 challenges
+      - ./docker/nginx/certbot-www:/var/www/certbot
 
   # Remove mailpit in production
   mailpit:
