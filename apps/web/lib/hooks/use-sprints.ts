@@ -2,8 +2,9 @@
 
 import { useState, useCallback } from 'react';
 import { Sprint, CreateSprintDto, UpdateSprintDto } from '@/lib/types/task';
+import { getApiUrl } from '@/lib/api-config';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+const API_URL = getApiUrl();
 
 export function useSprints() {
   const [sprints, setSprints] = useState<Sprint[]>([]);

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback, useEffect } from 'react';
+import { getApiUrl } from '@/lib/api-config'
 import {
   Task,
   KanbanBoard,
@@ -10,7 +11,7 @@ import {
   TaskStatus,
 } from '@/lib/types/task';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+const API_URL = getApiUrl() || 'http://localhost:4000';
 
 interface UseTasksOptions {
   sprintId?: string;

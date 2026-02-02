@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { getApiUrl } from '@/lib/api-config'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
@@ -16,7 +17,7 @@ import {
   ClockIcon
 } from '@/components/ui/icons'
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL!
+const API_BASE_URL = getApiUrl()
 
 type InvitationState = 
   | 'loading'

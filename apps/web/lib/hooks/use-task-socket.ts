@@ -3,6 +3,7 @@
 import { useEffect, useCallback, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { Task, TaskStatus } from '@/lib/types/task';
+import { getWsUrl } from '@/lib/api-config';
 
 interface TaskSocketEvents {
   onTaskCreated?: (data: { task: Task; createdBy: string; timestamp: string }) => void;
@@ -69,7 +70,7 @@ interface UseTaskSocketOptions {
   events?: TaskSocketEvents;
 }
 
-const WS_URL = process.env.NEXT_PUBLIC_WS_URL || 'http://localhost:4000';
+const WS_URL = getWsUrl();
 
 export function useTaskSocket({
   workspaceId,

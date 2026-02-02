@@ -320,6 +320,7 @@ services:
       - ./apps/web/public:/app/apps/web/public
       - ./apps/web/proxy.ts:/app/apps/web/proxy.ts
       - ./apps/web/server.js:/app/apps/web/server.js
+      - ./apps/web/next.config.ts:/app/apps/web/next.config.ts
       - ./packages/shared-types/src:/app/packages/shared-types/src
       - ./certs:/app/certs:ro
       # Anonymous volumes to prevent file watching in node_modules
@@ -327,6 +328,7 @@ services:
       - /app/node_modules
     environment:
       - NODE_ENV=${NODE_ENV:-development}
+      - HOST_IP=${HOST_IP:-10.12.1.7}
       - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:4000}
       - NEXT_PUBLIC_WS_URL=${NEXT_PUBLIC_WS_URL:-ws://localhost:4000}
       - HOSTNAME=0.0.0.0

@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { getApiUrl } from '@/lib/api-config'
 import { useRouter } from 'next/navigation'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -47,7 +48,7 @@ export default function InvitePage() {
 
   const checkOwnership = async () => {
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/workspaces/status`, {
+      const res = await fetch(`${getApiUrl()}/workspaces/status`, {
         credentials: 'include',
       })
 
@@ -88,7 +89,7 @@ export default function InvitePage() {
     setSending(true)
 
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/invitations/${workspace?.id}`, {
+      const res = await fetch(`${getApiUrl()}/invitations/${workspace?.id}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',

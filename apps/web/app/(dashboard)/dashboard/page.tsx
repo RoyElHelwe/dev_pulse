@@ -2,15 +2,16 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Avatar, AvatarGroup } from '@/components/ui/avatar'
+import { Avatar } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { useAuth } from '@/lib/hooks/use-auth'
 import { UsersIcon, UserPlusIcon, CheckCircleIcon, ClockIcon } from '@/components/ui/icons'
 import { getRolePermissions } from '@/lib/types'
 import { useOnlineStatusContext } from '@/lib/contexts/online-status-context'
-import Link from 'next/link'
+import { getApiUrl } from '@/lib/api-config'
 
 interface WorkspaceData {
   id: string
@@ -54,7 +55,7 @@ export default function DashboardPage() {
     const fetchData = async () => {
       try {
         // Fetch workspace status
-        const statusRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/workspaces/status`, {
+        const statusRes = await fetch(`${getApiUrl()}/workspaces/status`, {
           credentials: 'include',
         })
         
@@ -81,7 +82,7 @@ export default function DashboardPage() {
 
             // Fetch members
             const membersRes = await fetch(
-              `${process.env.NEXT_PUBLIC_API_URL}/workspaces/${statusData.workspace.id}/members`,
+              `${getApiUrl()}/workspaces/${statusData.workspace.id}/members`,
               { credentials: 'include' }
             )
             if (membersRes.ok) {

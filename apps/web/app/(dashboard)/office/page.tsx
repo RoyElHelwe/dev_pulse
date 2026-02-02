@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState, useRef, useCallback } from 'react'
+import { getApiUrl } from '@/lib/api-config'
 import { useRouter } from 'next/navigation'
 import { VirtualOffice } from '@/components/game/VirtualOffice'
 import { MobileJoystick } from '@/components/game/MobileJoystick'
@@ -117,7 +118,7 @@ export default function OfficePage() {
       try {
         const today = new Date().toISOString().split('T')[0]
         const res = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/workspaces/${workspaceId}/work-time?userId=${user.id}&startDate=${today}&endDate=${today}`,
+          `${getApiUrl()}/workspaces/${workspaceId}/work-time?userId=${user.id}&startDate=${today}&endDate=${today}`,
           { credentials: 'include' }
         )
         if (res.ok) {
@@ -170,7 +171,7 @@ export default function OfficePage() {
   useEffect(() => {
     const fetchWorkspace = async () => {
       try {
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/workspaces/status`, {
+        const res = await fetch(`${getApiUrl()}/workspaces/status`, {
           credentials: 'include',
         })
         if (res.ok) {
@@ -186,7 +187,7 @@ export default function OfficePage() {
             // Fetch workspace members
             try {
               const membersRes = await fetch(
-                `${process.env.NEXT_PUBLIC_API_URL}/workspaces/${data.workspace.id}/members`,
+                `${getApiUrl()}/workspaces/${data.workspace.id}/members`,
                 { credentials: 'include' }
               )
               if (membersRes.ok) {
@@ -204,7 +205,7 @@ export default function OfficePage() {
             // Load office layout
             try {
               const layoutRes = await fetch(
-                `${process.env.NEXT_PUBLIC_API_URL}/workspaces/${data.workspace.id}/office/layout`,
+                `${getApiUrl()}/workspaces/${data.workspace.id}/office/layout`,
                 { credentials: 'include' }
               )
               if (layoutRes.ok) {
@@ -324,7 +325,7 @@ export default function OfficePage() {
     if (durationToSave < 1) return
     
     try {
-      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/workspaces/${workspaceId}/work-time`, {
+      await fetch(`${getApiUrl()}/workspaces/${workspaceId}/work-time`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',

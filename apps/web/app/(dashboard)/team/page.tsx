@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { getApiUrl } from '@/lib/api-config'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Avatar } from '@/components/ui/avatar'
@@ -68,7 +69,7 @@ export default function TeamPage() {
   const fetchData = async () => {
     try {
       // Get workspace info
-      const statusRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/workspaces/status`, {
+      const statusRes = await fetch(`${getApiUrl()}/workspaces/status`, {
         credentials: 'include',
       })
       
@@ -85,7 +86,7 @@ export default function TeamPage() {
 
       // Fetch members
       const membersRes = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/workspaces/${statusData.workspace.id}/members`,
+        `${getApiUrl()}/workspaces/${statusData.workspace.id}/members`,
         { credentials: 'include' }
       )
       if (membersRes.ok) {
@@ -96,7 +97,7 @@ export default function TeamPage() {
       // Fetch pending invitations (owner only)
       if (statusData.isOwner || statusData.role === 'OWNER') {
         const invitesRes = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/invitations/workspace/${statusData.workspace.id}`,
+          `${getApiUrl()}/invitations/workspace/${statusData.workspace.id}`,
           { credentials: 'include' }
         )
         if (invitesRes.ok) {
@@ -113,7 +114,7 @@ export default function TeamPage() {
 
   const cancelInvitation = async (invitationId: string) => {
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/invitations/${invitationId}`, {
+      const res = await fetch(`${getApiUrl()}/invitations/${invitationId}`, {
         method: 'DELETE',
         credentials: 'include',
       })

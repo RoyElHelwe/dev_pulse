@@ -2,8 +2,9 @@
 
 import { useEffect, useRef, useCallback, useState } from 'react'
 import { io, Socket } from 'socket.io-client'
+import { getApiUrl } from '@/lib/api-config'
 
-const SOCKET_URL = process.env.NEXT_PUBLIC_API_URL!
+const SOCKET_URL = getApiUrl()
 const HEARTBEAT_INTERVAL = 25000 // 25 seconds
 
 interface UseOnlineStatusOptions {

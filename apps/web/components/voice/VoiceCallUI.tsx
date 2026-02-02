@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { CallStatus } from '@/lib/hooks/use-voice-call'
+import type { CallStatus } from '@/lib/hooks/types/voice-call.types'
 import { cn } from '@/lib/utils'
 
 // ============================================
@@ -170,7 +170,9 @@ function ActiveCallBar({
   }
 
   return (
-    <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-gray-900/95 backdrop-blur-md rounded-full shadow-lg border border-gray-700 px-4 py-2 flex items-center gap-3 animate-in slide-in-from-top">
+    <div
+      className="fixed left-1/2 top-[calc(4rem+0.75rem)] -translate-x-1/2 z-50 bg-gray-900/95 backdrop-blur-md rounded-full shadow-lg border border-gray-700 px-4 py-2 flex items-center gap-3 animate-in slide-in-from-top"
+    >
       {/* Status indicator */}
       <div className={cn(
         "w-2 h-2 rounded-full",
@@ -338,7 +340,7 @@ export function VoiceCallUI({
       
       {/* Call Status Toast */}
       {(callStatus === 'ended' || callStatus === 'declined' || callStatus === 'failed') && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-gray-900/95 backdrop-blur-md rounded-full shadow-lg border border-gray-700 px-4 py-2 animate-in fade-in slide-in-from-top">
+        <div className="fixed left-1/2 top-[calc(4rem+0.75rem)] -translate-x-1/2 z-50 bg-gray-900/95 backdrop-blur-md rounded-full shadow-lg border border-gray-700 px-4 py-2 animate-in fade-in slide-in-from-top">
           <span className={cn(
             "text-sm font-medium",
             callStatus === 'declined' ? "text-yellow-400" :

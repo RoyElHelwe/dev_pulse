@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { getApiUrl } from '@/lib/api-config'
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
@@ -36,7 +37,7 @@ export default function ResetPasswordPage() {
 
   const verifyToken = async () => {
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL!}/auth/verify-reset-token/${token}`, {
+      const response = await fetch(`${getApiUrl()}/auth/verify-reset-token/${token}`, {
         method: 'GET',
       });
 
@@ -74,7 +75,7 @@ export default function ResetPasswordPage() {
     setIsLoading(true);
 
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL!}/auth/reset-password`, {
+      const response = await fetch(`${getApiUrl()}/auth/reset-password`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

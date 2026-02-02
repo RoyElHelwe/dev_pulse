@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useCallback, useState } from 'react'
+import { getApiUrl } from '@/lib/api-config'
 import { io, Socket } from 'socket.io-client'
 import { PlayerData, Position, PlayerDirection } from '@/lib/game/types'
 
@@ -69,7 +70,7 @@ export function useOfficeSocket({
   const connect = useCallback(() => {
     if (socketRef.current?.connected) return
     
-    const socketUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'
+    const socketUrl = getApiUrl() || 'http://localhost:4000'
     
     socketRef.current = io(socketUrl, {
       path: '/socket.io',

@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { authService } from '@/lib/auth-service'
 import { registerSchema } from '@/lib/schemas'
 import { AlertCircleIcon, CheckCircleIcon, BuildingIcon } from '@/components/ui/icons'
+import { getApiUrl } from '@/lib/api-config'
 
 export default function RegisterPage() {
   const router = useRouter()
@@ -34,7 +35,7 @@ export default function RegisterPage() {
   // If there's an invitation token, fetch the workspace info
   useEffect(() => {
     if (invitationToken) {
-      fetch(`${process.env.NEXT_PUBLIC_API_URL}/invitations/validate/${invitationToken}`)
+      fetch(`${getApiUrl()}/invitations/validate/${invitationToken}`)
         .then(res => res.json())
         .then(data => {
           if (data.valid && data.invitation?.workspace) {

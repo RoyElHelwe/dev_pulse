@@ -71,6 +71,24 @@ let protocol = 'http';
 // Common request handler for both HTTP and HTTPS
 const requestHandler = async (req, res) => {
   try {
+    // Set CORS headers for development to allow network IP access
+    if (dev) {
+      const origin = req.headers.origin;
+      const allowedOrigins = [
+        'http://localhost:3000',
+        'https://localhost:3000',
+        `http://${process.env.HOST_IP || '10.12.1.7'}:3000`,
+        `https://${process.env.HOST_IP || '10.12.1.7'}:3000`,
+      ];
+      
+      if (origin && allowedOrigins.includes(origin)) {
+        res.setHeader('Access-Control-Allow-Origin', origin);
+        res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', 'X-Requested-With,Content-Type,Authorization');
+        res.setHeader('Access-Control-Allow-Credentials', 'true');
+      }
+    }
+    
     const parsedUrl = parse(req.url, true);
     await handle(req, res, parsedUrl);
   } catch (err) {

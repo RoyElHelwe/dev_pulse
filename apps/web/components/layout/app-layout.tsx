@@ -9,6 +9,7 @@ import { LoadingSpinner } from '@/components/ui/loading-spinner'
 import { ToastProvider } from '@/components/ui/toast'
 import { OnlineStatusProvider } from '@/lib/contexts/online-status-context'
 import { type WorkspaceRole, getRolePermissions } from '@/lib/types'
+import { getApiUrl } from '@/lib/api-config'
 
 interface AppLayoutProps {
   children: ReactNode
@@ -135,7 +136,7 @@ export function AppLayout({ children }: AppLayoutProps) {
       // Fetch workspace info
       setWorkspaceLoading(true)
       try {
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/workspaces/status`, {
+        const res = await fetch(`${getApiUrl()}/workspaces/status`, {
           credentials: 'include',
         })
 

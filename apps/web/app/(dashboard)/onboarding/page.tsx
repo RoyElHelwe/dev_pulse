@@ -1,6 +1,7 @@
 'use client'
 
 import { OnboardingWizard } from '@/components/game/OnboardingWizard'
+import { getApiUrl } from '@/lib/api-config'
 import { useRouter } from 'next/navigation'
 import { OfficeLayoutData } from '@/lib/game/generators'
 import { useCallback } from 'react'
@@ -17,7 +18,7 @@ export default function OnboardingPage() {
       const timestamp = Date.now();
       
       console.log('Creating workspace...')
-      const workspaceRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/workspaces`, {
+      const workspaceRes = await fetch(`${getApiUrl()}/workspaces`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -53,7 +54,7 @@ export default function OnboardingPage() {
       const generationMode = layout.templateId ? 'TEMPLATE' : 'AI_AUTO';
       
       const layoutRes = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/workspaces/${workspaceId}/office/layout`,
+        `${getApiUrl()}/workspaces/${workspaceId}/office/layout`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

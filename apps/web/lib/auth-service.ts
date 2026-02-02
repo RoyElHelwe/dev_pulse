@@ -11,12 +11,13 @@ import type {
   UserSession,
   ApiError,
 } from './types'
+import { getApiUrl } from './api-config'
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL!
+const getApiBaseUrl = () => getApiUrl()
 
 class AuthService {
   private isRefreshing = false
-  private refreshPromise: Promise<void> | null = null
+  private refreshPromise: Promise<RefreshTokenResponse> | null = null
 
   // Get authorization header (for backwards compatibility, but cookies are now used)
   private getAuthHeader(): HeadersInit {
@@ -94,7 +95,7 @@ class AuthService {
 
   // Register new user
   async register(data: RegisterRequest): Promise<RegisterResponse> {
-    const response = await fetch(`${API_BASE_URL}/auth/register`, {
+    const response = await fetch(`${getApiBaseUrl()}/auth/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include', // Include cookies
@@ -106,7 +107,7 @@ class AuthService {
 
   // Login
   async login(data: LoginRequest): Promise<LoginResponse> {
-    const response = await fetch(`${API_BASE_URL}/auth/login`, {
+    const response = await fetch(`${getApiBaseUrl()}/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include', // Include cookies
@@ -118,7 +119,7 @@ class AuthService {
 
   // Verify 2FA
   async verify2FA(data: Verify2FARequest): Promise<Verify2FAResponse> {
-    const response = await fetch(`${API_BASE_URL}/auth/2fa/verify`, {
+    const response = await fetch(`${getApiBaseUrl()}/auth/2fa/verify`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include', // Include cookies
@@ -130,7 +131,7 @@ class AuthService {
 
   // Setup 2FA
   async setup2FA(): Promise<Setup2FAResponse> {
-    const response = await fetch(`${API_BASE_URL}/auth/2fa/setup`, {
+    const response = await fetch(`${getApiBaseUrl()}/auth/2fa/setup`, {
       method: 'POST',
       headers: this.getAuthHeader(),
       credentials: 'include', // Include cookies
@@ -141,7 +142,7 @@ class AuthService {
 
   // Enable 2FA
   async enable2FA(token: string): Promise<{ success: boolean }> {
-    const response = await fetch(`${API_BASE_URL}/auth/2fa/enable`, {
+    const response = await fetch(`${getApiBaseUrl()}/auth/2fa/enable`, {
       method: 'POST',
       headers: this.getAuthHeader(),
       credentials: 'include', // Include cookies
@@ -153,7 +154,7 @@ class AuthService {
 
   // Disable 2FA
   async disable2FA(token: string): Promise<{ success: boolean }> {
-    const response = await fetch(`${API_BASE_URL}/auth/2fa/disable`, {
+    const response = await fetch(`${getApiBaseUrl()}/auth/2fa/disable`, {
       method: 'POST',
       headers: this.getAuthHeader(),
       credentials: 'include', // Include cookies
@@ -165,7 +166,7 @@ class AuthService {
 
   // Get current session info
   async getSession(): Promise<SessionInfo> {
-    const response = await fetch(`${API_BASE_URL}/auth/session`, {
+    const response = await fetch(`${getApiBaseUrl()}/auth/session`, {
       method: 'GET',
       headers: this.getAuthHeader(),
       credentials: 'include', // Include cookies
@@ -176,7 +177,7 @@ class AuthService {
 
   // Get all user sessions
   async getSessions(): Promise<UserSession[]> {
-    const response = await fetch(`${API_BASE_URL}/auth/sessions`, {
+    const response = await fetch(`${getApiBaseUrl()}/auth/sessions`, {
       method: 'GET',
       headers: this.getAuthHeader(),
       credentials: 'include', // Include cookies
@@ -187,7 +188,7 @@ class AuthService {
 
   // Revoke specific session
   async revokeSession(sessionId: string): Promise<void> {
-    const response = await fetch(`${API_BASE_URL}/auth/session/${sessionId}`, {
+    const response = await fetch(`${getApiBaseUrl()}/auth/session/${sessionId}`, {
       method: 'DELETE',
       headers: this.getAuthHeader(),
       credentials: 'include', // Include cookies
@@ -199,7 +200,7 @@ class AuthService {
 
   // Revoke all sessions except current
   async revokeAllSessions(): Promise<void> {
-    const response = await fetch(`${API_BASE_URL}/auth/sessions`, {
+    const response = await fetch(`${getApiBaseUrl()}/auth/sessions`, {
       method: 'DELETE',
       headers: this.getAuthHeader(),
       credentials: 'include', // Include cookies
@@ -210,7 +211,7 @@ class AuthService {
 
   // Logout
   async logout(): Promise<void> {
-    const response = await fetch(`${API_BASE_URL}/auth/logout`, {
+    const response = await fetch(`${getApiBaseUrl()}/auth/logout`, {
       method: 'POST',
       headers: this.getAuthHeader(),
       credentials: 'include', // Include cookies
@@ -230,7 +231,7 @@ class AuthService {
     this.isRefreshing = true
     this.refreshPromise = (async () => {
       try {
-        const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
+        const response = await fetch(`${getApiBaseUrl()}/auth/refresh`, {
           method: 'POST',
           headers: this.getAuthHeader(),
           credentials: 'include', // Include cookies - refresh token comes from cookie

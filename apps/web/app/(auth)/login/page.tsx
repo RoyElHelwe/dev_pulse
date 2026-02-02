@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { getApiUrl } from '@/lib/api-config'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
@@ -33,7 +34,7 @@ export default function LoginPage() {
   // If there's an invitation token, fetch the workspace info
   useEffect(() => {
     if (invitationToken) {
-      fetch(`${process.env.NEXT_PUBLIC_API_URL}/invitations/validate/${invitationToken}`)
+      fetch(`${getApiUrl()}/invitations/validate/${invitationToken}`)
         .then(res => res.json())
         .then(data => {
           if (data.valid && data.invitation?.workspace) {

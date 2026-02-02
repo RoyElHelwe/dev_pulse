@@ -16,12 +16,15 @@ const nextConfig = {
     ]
   },
   // Allow development access from network IPs - include all possible origins
+  // Get the HOST_IP from environment variable
   allowedDevOrigins: [
     'http://localhost:3000',
     'https://localhost:3000',
-    'http://10.12.4.9:3000',
-    'https://10.12.4.9:3000',
-    '10.12.4.9',
+    'http://127.0.0.1:3000',
+    'https://127.0.0.1:3000',
+    `http://${process.env.HOST_IP || '10.12.1.7'}:3000`,
+    `https://${process.env.HOST_IP || '10.12.1.7'}:3000`,
+    process.env.HOST_IP || '10.12.1.7',
   ],
   webpack: (config: any, { dev, isServer }: { dev: boolean; isServer: boolean }) => {
     // Phaser.js webpack configuration
