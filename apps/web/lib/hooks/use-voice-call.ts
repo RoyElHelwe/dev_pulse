@@ -4,31 +4,16 @@ import { useEffect, useRef, useCallback, useState } from 'react'
 import { Socket } from 'socket.io-client'
 import SimplePeer, { Instance as SimplePeerInstance } from 'simple-peer'
 import { Position } from '@/lib/game/types'
+import type { CallQualityStats, CallStatus, PeerConnection } from './types/voice-call.types'
+import {
+  calculateCallQualityScore,
+  calculateJitterTrend,
+  calculatePacketLossRate,
+} from './types/voice-call.types'
 
 // ============================================
 // TYPES
 // ============================================
-
-export type CallStatus = 
-  | 'idle' 
-  | 'calling' 
-  | 'ringing' 
-  | 'connecting' 
-  | 'connected' 
-  | 'ended' 
-  | 'failed'
-  | 'declined'
-
-interface PeerConnection {
-  peerId: string
-  peerName: string
-  peer: SimplePeerInstance
-  stream?: MediaStream
-  position?: Position
-  audioElement?: HTMLAudioElement
-  gainNode?: GainNode
-  pannerNode?: StereoPannerNode
-}
 
 interface CallInvitation {
   callerId: string
@@ -36,6 +21,7 @@ interface CallInvitation {
   callType: 'voice' | 'proximity'
   timestamp: string
 }
+
 
 interface UseVoiceCallOptions {
   socket: Socket | null
@@ -46,6 +32,7 @@ interface UseVoiceCallOptions {
   maxAudioDistance?: number
   minAudioDistance?: number
   spatialAudioEnabled?: boolean
+  onCallQualityUpdate?: (stats: CallQualityStats) => void
 }
 
 interface UseVoiceCallReturn {
@@ -56,6 +43,7 @@ interface UseVoiceCallReturn {
   incomingCall: CallInvitation | null
   connectedPeers: Map<string, PeerConnection>
   proximityVoiceEnabled: boolean
+  callQuality: CallQualityStats | null
   startCall: (targetUserId: string, targetUserName: string) => Promise<void>
   acceptCall: () => Promise<void>
   declineCall: () => void
@@ -72,24 +60,44 @@ interface UseVoiceCallReturn {
 // ============================================
 
 const ICE_SERVERS: RTCIceServer[] = [
-  // Free STUN servers (for simple NAT traversal)
+  // Primary STUN servers (Google - most reliable)
   { urls: 'stun:stun.l.google.com:19302' },
   { urls: 'stun:stun1.l.google.com:19302' },
   { urls: 'stun:stun2.l.google.com:19302' },
   { urls: 'stun:stun3.l.google.com:19302' },
   { urls: 'stun:stun4.l.google.com:19302' },
+  // Backup STUN servers (in case Google is blocked/unavailable)
   { urls: 'stun:stun.stunprotocol.org:3478' },
   { urls: 'stun:stun.voip.blackberry.com:3478' },
+  { urls: 'stun:stun.cloudflare.com:3478' },
+  { urls: 'stun:stun.nextcloud.com:443' },
+  // Free TURN servers (for symmetric NAT traversal - limited bandwidth)
+  {
+    urls: 'turn:openrelay.metered.ca:80',
+    username: 'openrelayproject',
+    credential: 'openrelayproject',
+  },
+  {
+    urls: 'turn:openrelay.metered.ca:443',
+    username: 'openrelayproject',
+    credential: 'openrelayproject',
+  },
+  {
+    urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+    username: 'openrelayproject',
+    credential: 'openrelayproject',
+  },
 ]
 
-// Add TURN server if configured (for symmetric NAT/firewall traversal)
+// Add custom TURN server if configured (recommended for production)
 if (process.env.NEXT_PUBLIC_TURN_SERVER_URL) {
-  ICE_SERVERS.push({
+  // Insert custom TURN at the beginning for priority
+  ICE_SERVERS.unshift({
     urls: process.env.NEXT_PUBLIC_TURN_SERVER_URL,
     username: process.env.NEXT_PUBLIC_TURN_USERNAME || 'devpulse',
     credential: process.env.NEXT_PUBLIC_TURN_PASSWORD || 'devpulse123',
   })
-  console.log('[VoiceCall] 🔄 TURN server configured:', process.env.NEXT_PUBLIC_TURN_SERVER_URL)
+  console.log('[VoiceCall] 🔄 Custom TURN server configured:', process.env.NEXT_PUBLIC_TURN_SERVER_URL)
 }
 
 // ============================================
@@ -105,6 +113,7 @@ export function useVoiceCall({
   maxAudioDistance = 300,
   minAudioDistance = 50,
   spatialAudioEnabled = true,
+  onCallQualityUpdate,
 }: UseVoiceCallOptions): UseVoiceCallReturn {
   // Debug: Log on mount
   useEffect(() => {
@@ -119,6 +128,7 @@ export function useVoiceCall({
   const [incomingCall, setIncomingCall] = useState<CallInvitation | null>(null)
   const [connectedPeers, setConnectedPeers] = useState<Map<string, PeerConnection>>(new Map())
   const [proximityVoiceEnabled, setProximityVoiceEnabled] = useState(false)
+  const [callQuality, setCallQuality] = useState<CallQualityStats | null>(null)
 
   // Refs
   const localStreamRef = useRef<MediaStream | null>(null)
@@ -126,20 +136,39 @@ export function useVoiceCall({
   const audioContextRef = useRef<AudioContext | null>(null)
   const localPositionRef = useRef<Position>({ x: 0, y: 0 })
   const callStatusRef = useRef<CallStatus>('idle')
+  const activeCallRef = useRef<{ id: string; peerId: string; peerName: string } | null>(null)
+  const pendingSignalsRef = useRef<Map<string, SimplePeer.SignalData[]>>(new Map()) // Buffer for early signals
+  const signalTimeoutsRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map()) // Track signal buffer timeouts
+  const qualitySamplesRef = useRef<Map<string, number[]>>(new Map()) // Track jitter samples per peer
   
-  // Keep ref in sync with state
+  // Keep refs in sync with state
   useEffect(() => {
     callStatusRef.current = callStatus
   }, [callStatus])
+
+  useEffect(() => {
+    activeCallRef.current = activeCall ? { id: `${userId}-${activeCall.peerId}`, ...activeCall } : null
+  }, [activeCall, userId])
 
   // ============================================
   // AUDIO CONTEXT FOR SPATIAL AUDIO
   // ============================================
 
-  const getAudioContext = useCallback(() => {
+  const getAudioContext = useCallback(async () => {
     if (!audioContextRef.current) {
       audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)()
     }
+    
+    // Resume if suspended (Chrome requires user gesture)
+    if (audioContextRef.current.state === 'suspended') {
+      try {
+        await audioContextRef.current.resume()
+        console.log('[VoiceCall] 🔊 AudioContext resumed')
+      } catch (e) {
+        console.warn('[VoiceCall] Failed to resume AudioContext:', e)
+      }
+    }
+    
     return audioContextRef.current
   }, [])
 
@@ -169,24 +198,106 @@ export function useVoiceCall({
   // APPLY SPATIAL AUDIO
   // ============================================
 
-  const applySpatialAudio = useCallback((peerConnection: PeerConnection) => {
+  const applySpatialAudio = useCallback(async (peerConnection: PeerConnection) => {
     if (!spatialAudioEnabled || !peerConnection.position || !peerConnection.audioElement) {
       return
     }
 
     const { volume, pan } = calculateSpatialAudio(localPositionRef.current, peerConnection.position)
+    const audioContext = await getAudioContext()
 
     if (peerConnection.gainNode) {
       peerConnection.gainNode.gain.setValueAtTime(
         isDeafened ? 0 : volume,
-        getAudioContext().currentTime
+        audioContext.currentTime
       )
     }
 
     if (peerConnection.pannerNode) {
-      peerConnection.pannerNode.pan.setValueAtTime(pan, getAudioContext().currentTime)
+      peerConnection.pannerNode.pan.setValueAtTime(pan, audioContext.currentTime)
     }
   }, [spatialAudioEnabled, calculateSpatialAudio, isDeafened, getAudioContext])
+
+  // ============================================
+  // WEBRTC STATS MONITORING
+  // ============================================
+
+  const startStatsMonitoring = useCallback((peerId: string, peer: SimplePeerInstance) => {
+    // Monitor WebRTC stats every 5 seconds for call quality
+    const statsInterval = setInterval(async () => {
+      try {
+        // Access the underlying RTCPeerConnection
+        const pc = (peer as any)._pc as RTCPeerConnection | undefined
+        if (!pc || pc.connectionState !== 'connected') return
+
+        const stats = await pc.getStats()
+        let packetsLost = 0
+        let packetsReceived = 0
+        let jitter = 0
+        let roundTripTime = 0
+        let bytesReceived = 0
+
+        stats.forEach((report) => {
+          if (report.type === 'inbound-rtp' && report.kind === 'audio') {
+            packetsLost = report.packetsLost || 0
+            packetsReceived = report.packetsReceived || 0
+            jitter = report.jitter || 0
+            bytesReceived = report.bytesReceived || 0
+          }
+          if (report.type === 'candidate-pair' && report.state === 'succeeded') {
+            roundTripTime = report.currentRoundTripTime || 0
+          }
+        })
+
+        const jitterMs = Math.round(jitter * 1000)
+        const rttMs = Math.round(roundTripTime * 1000)
+
+        const packetLossRate = calculatePacketLossRate(packetsLost, packetsReceived)
+        const { trend: jitterTrend, samples } = calculateJitterTrend(
+          qualitySamplesRef.current.get(peerId) || [],
+          jitterMs,
+        )
+        qualitySamplesRef.current.set(peerId, samples)
+
+        const qualityScore = calculateCallQualityScore({
+          packetLossRate,
+          jitter: jitterMs,
+          roundTripTime: rttMs,
+        })
+
+        const qualityStats: CallQualityStats = {
+          peerId,
+          packetsLost,
+          packetsReceived,
+          jitter: jitterMs,
+          roundTripTime: rttMs,
+          bytesReceived,
+          timestamp: Date.now(),
+          packetLossRate,
+          qualityScore,
+          jitterTrend,
+          previousSamples: samples,
+        }
+
+        setCallQuality(qualityStats)
+        onCallQualityUpdate?.(qualityStats)
+
+        // Log warning if call quality is poor (thresholds are in ms)
+        if (packetLossRate > 5 || jitterMs > 50 || rttMs > 300) {
+          console.warn('[VoiceCall] ⚠️ Poor call quality detected:', {
+            packetLossRate: `${packetLossRate.toFixed(1)}%`,
+            jitter: `${jitterMs}ms`,
+            rtt: `${rttMs}ms`,
+            qualityScore,
+          })
+        }
+      } catch (e) {
+        // Stats collection failed, peer might be disconnected
+      }
+    }, 5000)
+
+    return statsInterval
+  }, [onCallQualityUpdate])
 
   // ============================================
   // GET LOCAL AUDIO STREAM
@@ -224,21 +335,57 @@ export function useVoiceCall({
   const cleanupPeer = useCallback((peerId: string) => {
     const peerConnection = peersRef.current.get(peerId)
     if (peerConnection) {
-      peerConnection.peer.destroy()
-      
-      // Properly cleanup audio element
-      if (peerConnection.audioElement) {
-        peerConnection.audioElement.pause()
-        peerConnection.audioElement.srcObject = null
-        peerConnection.audioElement.remove()
+      // 1) Clear timers first
+      if (peerConnection.statsInterval) clearInterval(peerConnection.statsInterval)
+
+      // Clear any buffered signals + timeouts for this peer
+      pendingSignalsRef.current.delete(peerId)
+      const signalTimeout = signalTimeoutsRef.current.get(peerId)
+      if (signalTimeout) {
+        clearTimeout(signalTimeout)
+        signalTimeoutsRef.current.delete(peerId)
       }
-      
-      // Disconnect audio nodes
-      peerConnection.gainNode?.disconnect()
-      peerConnection.pannerNode?.disconnect()
-      
+
+      // 2) Stop media tracks
+      try {
+        peerConnection.stream?.getTracks().forEach((track: MediaStreamTrack) => track.stop())
+      } catch {
+        // ignore
+      }
+
+      // 3) Disconnect Web Audio nodes (source → processing → destination)
+      try {
+        peerConnection.sourceNode?.disconnect()
+      } catch {
+        // ignore
+      }
+      try {
+        peerConnection.gainNode?.disconnect()
+        peerConnection.pannerNode?.disconnect()
+      } catch {
+        // ignore
+      }
+
+      // 4) Remove DOM elements
+      if (peerConnection.audioElement) {
+        try {
+          peerConnection.audioElement.pause()
+          peerConnection.audioElement.srcObject = null
+          peerConnection.audioElement.remove()
+        } catch (e) {
+          console.warn('[VoiceCall] Audio element cleanup error:', e)
+        }
+      }
+
+      // 5) Destroy peer connection last
+      try {
+        peerConnection.peer.removeAllListeners()
+        peerConnection.peer.destroy()
+      } catch (e) {
+        console.warn('[VoiceCall] Peer cleanup error:', e)
+      }
+
       peersRef.current.delete(peerId)
-      setConnectedPeers(new Map(peersRef.current))
     }
     
     // Safety: Also remove any orphaned audio elements
@@ -247,17 +394,26 @@ export function useVoiceCall({
       console.log('[VoiceCall] 🧹 Removing orphaned audio element for', peerId)
       orphanedElement.remove()
     }
+    
+    // Clear call quality state only if it belongs to this peer
+    setCallQuality((prev: CallQualityStats | null) => (prev?.peerId === peerId ? null : prev))
+    
+    // Batch state update
+    setConnectedPeers(new Map(peersRef.current))
   }, [])
 
   const cleanupAllPeers = useCallback(() => {
-    peersRef.current.forEach((_, peerId) => cleanupPeer(peerId))
+    peersRef.current.forEach((peerConnection: PeerConnection, peerId: string) => {
+      void peerConnection
+      cleanupPeer(peerId)
+    })
     peersRef.current.clear()
     setConnectedPeers(new Map())
   }, [cleanupPeer])
 
   const cleanupLocalStream = useCallback(() => {
     if (localStreamRef.current) {
-      localStreamRef.current.getTracks().forEach(track => track.stop())
+      localStreamRef.current.getTracks().forEach((track: MediaStreamTrack) => track.stop())
       localStreamRef.current = null
     }
   }, [])
@@ -287,6 +443,7 @@ export function useVoiceCall({
       peerId: targetUserId,
       peerName: targetUserName,
       peer,
+      reconnectionAttempts: 0,
     }
     peersRef.current.set(targetUserId, peerConnection)
     setConnectedPeers(new Map(peersRef.current))
@@ -302,7 +459,7 @@ export function useVoiceCall({
       })
     })
 
-    peer.on('stream', (remoteStream: MediaStream) => {
+    peer.on('stream', async (remoteStream: MediaStream) => {
       console.log('[VoiceCall] 🔊 Received remote stream')
       
       const audioElement = document.createElement('audio')
@@ -312,7 +469,7 @@ export function useVoiceCall({
       ;(audioElement as any).playsInline = true
       document.body.appendChild(audioElement)
 
-      const audioContext = getAudioContext()
+      const audioContext = await getAudioContext()
       const source = audioContext.createMediaStreamSource(remoteStream)
       const gainNode = audioContext.createGain()
       const pannerNode = audioContext.createStereoPanner()
@@ -325,6 +482,7 @@ export function useVoiceCall({
       if (storedPeerConnection) {
         storedPeerConnection.stream = remoteStream
         storedPeerConnection.audioElement = audioElement
+        storedPeerConnection.sourceNode = source
         storedPeerConnection.gainNode = gainNode
         storedPeerConnection.pannerNode = pannerNode
         applySpatialAudio(storedPeerConnection)
@@ -335,12 +493,17 @@ export function useVoiceCall({
     peer.on('connect', () => {
       console.log('[VoiceCall] ✅ Peer connected')
       setCallStatus('connected')
+      
+      // Start monitoring call quality stats
+      const storedPeerConnection = peersRef.current.get(targetUserId)
+      if (storedPeerConnection) {
+        storedPeerConnection.statsInterval = startStatsMonitoring(targetUserId, peer)
+      }
     })
 
     peer.on('close', () => {
       console.log('[VoiceCall] 🔌 Peer disconnected')
-      peersRef.current.delete(targetUserId)
-      setConnectedPeers(new Map(peersRef.current))
+      cleanupPeer(targetUserId)
     })
 
     peer.on('error', (err: Error) => {
@@ -348,8 +511,29 @@ export function useVoiceCall({
       setCallStatus('failed')
     })
 
+    // Process any buffered signals that arrived before peer was created
+    const bufferedSignals = pendingSignalsRef.current.get(targetUserId)
+    if (bufferedSignals && bufferedSignals.length > 0) {
+      console.log(`[VoiceCall] 📡 Processing ${bufferedSignals.length} buffered signals`)
+      bufferedSignals.forEach((signal: SimplePeer.SignalData) => {
+        try {
+          peer.signal(signal)
+        } catch (e) {
+          console.warn('[VoiceCall] Failed to process buffered signal:', e)
+        }
+      })
+      pendingSignalsRef.current.delete(targetUserId)
+      
+      // Clear the timeout since we processed the signals
+      const timeout = signalTimeoutsRef.current.get(targetUserId)
+      if (timeout) {
+        clearTimeout(timeout)
+        signalTimeoutsRef.current.delete(targetUserId)
+      }
+    }
+
     return peer
-  }, [socket, workspaceId, userId, userName, getAudioContext, applySpatialAudio])
+  }, [socket, workspaceId, userId, userName, getAudioContext, applySpatialAudio, startStatsMonitoring])
 
   // ============================================
   // CALL ACTIONS
@@ -439,7 +623,7 @@ export function useVoiceCall({
   const endCall = useCallback(() => {
     if (!socket) return
 
-    peersRef.current.forEach((peerConnection) => {
+    peersRef.current.forEach((peerConnection: PeerConnection) => {
       socket.emit('voice:call-end', {
         workspaceId,
         targetUserId: peerConnection.peerId,
@@ -469,14 +653,15 @@ export function useVoiceCall({
     }
   }, [])
 
-  const toggleDeafen = useCallback(() => {
-    setIsDeafened(prev => {
+  const toggleDeafen = useCallback(async () => {
+    const audioContext = await getAudioContext()
+    setIsDeafened((prev: boolean) => {
       const newDeafened = !prev
-      peersRef.current.forEach((peerConnection) => {
+      peersRef.current.forEach((peerConnection: PeerConnection) => {
         if (peerConnection.gainNode) {
           peerConnection.gainNode.gain.setValueAtTime(
             newDeafened ? 0 : 1,
-            getAudioContext().currentTime
+            audioContext.currentTime
           )
         }
       })
@@ -485,7 +670,7 @@ export function useVoiceCall({
   }, [getAudioContext])
 
   const toggleProximityVoice = useCallback(() => {
-    setProximityVoiceEnabled(prev => !prev)
+    setProximityVoiceEnabled((prev: boolean) => !prev)
   }, [])
 
   // ============================================
@@ -502,7 +687,7 @@ export function useVoiceCall({
 
   const updateLocalPosition = useCallback((position: Position) => {
     localPositionRef.current = position
-    peersRef.current.forEach((peerConnection) => {
+    peersRef.current.forEach((peerConnection: PeerConnection) => {
       applySpatialAudio(peerConnection)
     })
   }, [applySpatialAudio])
@@ -586,9 +771,33 @@ export function useVoiceCall({
       console.log('[VoiceCall] 📡 Received signal from', data.fromUserId)
       const peerConnection = peersRef.current.get(data.fromUserId)
       if (peerConnection) {
-        peerConnection.peer.signal(data.signalData)
+        try {
+          peerConnection.peer.signal(data.signalData)
+        } catch (e) {
+          console.warn('[VoiceCall] Failed to signal peer:', e)
+        }
       } else {
-        console.warn('[VoiceCall] ⚠️ No peer connection found for', data.fromUserId)
+        // Buffer signals that arrive before peer is created (race condition fix)
+        console.log('[VoiceCall] 📦 Buffering signal for', data.fromUserId)
+        const existing = pendingSignalsRef.current.get(data.fromUserId) || []
+        if (existing.length >= 50) {
+          existing.shift() // keep last 50 signals
+        }
+        existing.push(data.signalData)
+        pendingSignalsRef.current.set(data.fromUserId, existing)
+        
+        // Clear any existing timeout for this user
+        const existingTimeout = signalTimeoutsRef.current.get(data.fromUserId)
+        if (existingTimeout) {
+          clearTimeout(existingTimeout)
+        }
+        
+        // Auto-clear buffer after 30 seconds to prevent memory leak
+        const timeout = setTimeout(() => {
+          pendingSignalsRef.current.delete(data.fromUserId)
+          signalTimeoutsRef.current.delete(data.fromUserId)
+        }, 30000)
+        signalTimeoutsRef.current.set(data.fromUserId, timeout)
       }
     })
 
@@ -601,6 +810,77 @@ export function useVoiceCall({
       setTimeout(() => setCallStatus('idle'), 2000)
     })
 
+    // Handle socket reconnection - attempt to restore active call
+    const handleReconnect = () => {
+      console.log('[VoiceCall] 🔄 Socket reconnected')
+      const status = callStatusRef.current
+      const shouldAttemptRejoin =
+        status !== 'idle' &&
+        status !== 'ended' &&
+        status !== 'failed' &&
+        status !== 'declined'
+
+      if (activeCallRef.current && shouldAttemptRejoin) {
+        console.log('[VoiceCall] 🔄 Notifying server of active call after reconnect')
+        // Re-join the call room
+        socket.emit('voice:rejoin-call', {
+          workspaceId,
+          callId: activeCallRef.current.id,
+          userId,
+        })
+      }
+    }
+
+    const handleDisconnect = (reason: string) => {
+      console.warn('[VoiceCall] ⚠️ Socket disconnected:', reason)
+      // Don't immediately cleanup - wait for potential reconnect
+      if (reason === 'io server disconnect') {
+        // Server intentionally disconnected, cleanup
+        cleanupAllPeers()
+        cleanupLocalStream()
+        setCallStatus('failed')
+        setActiveCall(null)
+      }
+    }
+
+    // Handle rejoin success - need to re-establish peer connections
+    const handleRejoinSuccess = async (data: { callId: string; participants: string[] }) => {
+      console.log('[VoiceCall] ✅ Rejoin successful, participants:', data.participants)
+      // Re-establish peer connections with existing participants
+      const stream = localStreamRef.current
+      if (stream && data.participants.length > 0) {
+        for (const participantId of data.participants) {
+          // Check if we already have a connection
+          if (!peersRef.current.has(participantId)) {
+            console.log('[VoiceCall] 🔌 Re-establishing connection with', participantId)
+            createPeerConnection(participantId, 'Participant', true, stream)
+          }
+        }
+      }
+    }
+
+    // Handle rejoin failure - call is no longer active
+    const handleRejoinFailed = (data: { callId: string; reason: string }) => {
+      console.log('[VoiceCall] ❌ Rejoin failed:', data.reason)
+      cleanupAllPeers()
+      cleanupLocalStream()
+      setCallStatus('ended')
+      setActiveCall(null)
+      setTimeout(() => setCallStatus('idle'), 1000)
+    }
+
+    // Handle peer reconnection notification
+    const handlePeerReconnected = (data: { userId: string; callId: string }) => {
+      console.log('[VoiceCall] 👋 Peer reconnected:', data.userId)
+      // The reconnecting peer will initiate the new connection
+    }
+
+    socket.on('connect', handleReconnect)
+    socket.on('disconnect', handleDisconnect)
+    socket.on('voice:rejoin-success', handleRejoinSuccess)
+    socket.on('voice:rejoin-failed', handleRejoinFailed)
+    socket.on('voice:peer-reconnected', handlePeerReconnected)
+
     return () => {
       console.log('[VoiceCall] 🧹 Cleaning up socket listeners')
       socket.off('voice:call-invitation', handleCallInvitation)
@@ -609,6 +889,11 @@ export function useVoiceCall({
       socket.off('voice:call-ended')
       socket.off('voice:signal')
       socket.off('voice:call-error')
+      socket.off('connect', handleReconnect)
+      socket.off('disconnect', handleDisconnect)
+      socket.off('voice:rejoin-success', handleRejoinSuccess)
+      socket.off('voice:rejoin-failed', handleRejoinFailed)
+      socket.off('voice:peer-reconnected', handlePeerReconnected)
     }
   }, [
     socket,
@@ -619,15 +904,27 @@ export function useVoiceCall({
     createPeerConnection,
     getLocalStream,
     workspaceId,
+    userId,
   ])
 
   useEffect(() => {
     return () => {
+      // Cleanup all resources on unmount
       cleanupAllPeers()
       cleanupLocalStream()
-      if (audioContextRef.current) {
-        audioContextRef.current.close()
+      
+      // Clear signal buffer and timeouts
+      pendingSignalsRef.current.clear()
+      signalTimeoutsRef.current.forEach((timeout: ReturnType<typeof setTimeout>) => clearTimeout(timeout))
+      signalTimeoutsRef.current.clear()
+      
+      // Close audio context
+      if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+        audioContextRef.current.close().catch(() => {})
       }
+      
+      // Remove any orphaned audio elements
+      document.querySelectorAll('[id^="voice-peer-"]').forEach(el => el.remove())
     }
   }, [cleanupAllPeers, cleanupLocalStream])
 
@@ -639,6 +936,7 @@ export function useVoiceCall({
     incomingCall,
     connectedPeers,
     proximityVoiceEnabled,
+    callQuality,
     startCall,
     acceptCall,
     declineCall,

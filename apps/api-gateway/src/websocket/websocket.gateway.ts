@@ -73,6 +73,11 @@ export class WebsocketGateway
     setInterval(() => {
       this.cleanupInactiveUsers();
     }, 30000);
+
+    // Cleanup stale voice calls every 60 seconds
+    setInterval(() => {
+      this.cleanupStaleVoiceCalls();
+    }, 60000);
   }
 
   handleConnection(client: Socket) {
@@ -245,6 +250,38 @@ export class WebsocketGateway
         // Broadcast offline
         this.broadcastToWorkspace(workspaceId, 'user:offline', { userId });
         this.logger.log(`User ${userId} timed out and marked offline`);
+      }
+    });
+  }
+
+  // Cleanup stale voice calls (users who disconnected during calls)
+  private cleanupStaleVoiceCalls(): void {
+    this.activeCalls.forEach((participants, callKey) => {
+      const validParticipants = new Set<string>();
+      
+      participants.forEach(userId => {
+        // Check if user is still online
+        if (this.onlineUsers.has(userId)) {
+          validParticipants.add(userId);
+        } else {
+          this.logger.log(`[Voice] Removing stale participant ${userId} from call ${callKey}`);
+        }
+      });
+
+      if (validParticipants.size < 2) {
+        // Call no longer valid (less than 2 participants)
+        this.activeCalls.delete(callKey);
+        this.logger.log(`[Voice] Cleaned up stale call: ${callKey}`);
+        
+        // Notify remaining participant if any
+        validParticipants.forEach(userId => {
+          const socket = this.findUserSocket(userId);
+          if (socket) {
+            socket.emit('voice:call-ended', { fromUserId: 'system', reason: 'peer_disconnected' });
+          }
+        });
+      } else {
+        this.activeCalls.set(callKey, validParticipants);
       }
     });
   }
@@ -1074,6 +1111,53 @@ export class WebsocketGateway
       if (activeCall.size === 0) {
         this.activeCalls.delete(callKey);
       }
+    }
+  }
+
+  @SubscribeMessage('voice:rejoin-call')
+  handleVoiceRejoinCall(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: {
+      workspaceId: string;
+      callId: string;
+      userId: string;
+    },
+  ): void {
+    const { workspaceId, callId, userId } = data;
+    
+    this.logger.log(`[Voice] User ${userId} attempting to rejoin call ${callId} after reconnect`);
+    
+    // Check if the call is still active
+    const callKey = `call:${workspaceId}`;
+    const activeCall = this.activeCalls.get(callKey);
+    
+    if (activeCall && activeCall.has(userId)) {
+      this.logger.log(`[Voice] User ${userId} rejoined active call`);
+      
+      // Notify other participants that user has reconnected
+      activeCall.forEach(participantId => {
+        if (participantId !== userId) {
+          const participantSocket = this.findUserSocket(participantId);
+          if (participantSocket) {
+            participantSocket.emit('voice:peer-reconnected', {
+              userId,
+              callId,
+            });
+          }
+        }
+      });
+      
+      // Confirm rejoin to the reconnected user
+      client.emit('voice:rejoin-success', {
+        callId,
+        participants: Array.from(activeCall).filter(id => id !== userId),
+      });
+    } else {
+      this.logger.log(`[Voice] Call ${callId} no longer active for user ${userId}`);
+      client.emit('voice:rejoin-failed', {
+        callId,
+        reason: 'call_ended',
+      });
     }
   }
 

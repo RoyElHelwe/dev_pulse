@@ -143,6 +143,8 @@ services:
       - GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET:-}
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
+      # File watching polling for Docker
+      - CHOKIDAR_USEPOLLING=true
     depends_on:
       postgres:
         condition: service_healthy
@@ -163,6 +165,13 @@ services:
         max-file: "3"
     networks:
       - ft_trans_network
+    # Add memory limits for dev
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 256M
 
   # Auth Service (Microservice)
   auth-service:
@@ -313,12 +322,22 @@ services:
       - ./apps/web/server.js:/app/apps/web/server.js
       - ./packages/shared-types/src:/app/packages/shared-types/src
       - ./certs:/app/certs:ro
+      # Anonymous volumes to prevent file watching in node_modules
+      - /app/apps/web/node_modules
+      - /app/node_modules
     environment:
       - NODE_ENV=${NODE_ENV:-development}
       - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:4000}
       - NEXT_PUBLIC_WS_URL=${NEXT_PUBLIC_WS_URL:-ws://localhost:4000}
       - HOSTNAME=0.0.0.0
       - PORT=3000
+      # === Docker File Watching Performance Fixes ===
+      # Use polling for file watching (fixes slow HMR in Docker)
+      - WATCHPACK_POLLING=true
+      - WATCHPACK_POLL_INTERVAL=300
+      - CHOKIDAR_USEPOLLING=true
+      # Reduce polling interval (ms) - balance between responsiveness and CPU
+      - CHOKIDAR_INTERVAL=300
     depends_on:
       - api-gateway
     logging:
@@ -328,6 +347,13 @@ services:
         max-file: "3"
     networks:
       - ft_trans_network
+    # Add memory limits for dev to prevent resource exhaustion
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 512M
 
 volumes:
   postgres_data:

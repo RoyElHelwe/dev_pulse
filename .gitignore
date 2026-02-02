@@ -62,3 +62,7 @@ prisma/migrations/
 .parcel-cache/
 
 certs/
+
+.specify/
+.github/
+specs/
