@@ -1257,14 +1257,62 @@ export class WebsocketGateway
     const nearbyPlayers = this.getPlayersInVoiceRange(workspaceId, userId);
     
     nearbyPlayers.forEach(nearbyPlayerId => {
-      const nearbySocket = this.findUserSocket(nearbyPlayerId);
-      if (nearbySocket) {
-        nearbySocket.emit('voice:proximity-exit', { userId });
+      const nearbyPlayer = officeRoom.get(nearbyPlayerId);
+      if (nearbyPlayer) {
+        const nearbySocket = this.findUserSocket(nearbyPlayerId);
+        if (nearbySocket) {
+          nearbySocket.emit('voice:proximity-exit', {
+            userId,
+          });
+        }
       }
     });
   }
 
-  // Helper: Get players within voice chat range
+  // ============================================
+  // VOICE CALL QUALITY MONITORING (T015)
+  // ============================================
+  
+  @SubscribeMessage('voice:quality-report')
+  handleVoiceQualityReport(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: {
+      peerId: string;
+      qualityStats: {
+        packetLossRate: number;
+        jitter: number;
+        roundTripTime: number;
+        qualityScore: 'excellent' | 'good' | 'fair' | 'poor';
+        bytesReceived: number;
+      };
+      timestamp: number;
+    },
+  ): void {
+    const userId = this.socketToUser.get(client.id);
+    if (!userId) return;
+
+    const { peerId, qualityStats, timestamp } = data;
+    
+    // Log quality metrics for monitoring/analytics
+    this.logger.log(
+      `[Voice Quality] User ${userId} → Peer ${peerId}: ${qualityStats.qualityScore} ` +
+      `(loss: ${qualityStats.packetLossRate.toFixed(1)}%, jitter: ${qualityStats.jitter}ms, ` +
+      `rtt: ${qualityStats.roundTripTime}ms, bytes: ${qualityStats.bytesReceived})`
+    );
+    
+    // In production, you would store this in a time-series database
+    // for analytics, alerting, and quality monitoring dashboards
+    // Example: InfluxDB, Prometheus, CloudWatch, etc.
+    
+    // Optional: Warn if quality is poor
+    if (qualityStats.qualityScore === 'poor') {
+      this.logger.warn(
+        `[Voice Quality] ⚠️ Poor call quality detected for ${userId} → ${peerId}`
+      );
+    }
+  }
+
+  // Helper: Get players within voice proximity range
   private getPlayersInVoiceRange(workspaceId: string, userId: string): string[] {
     const roomKey = `office:${workspaceId}`;
     const officeRoom = this.officePlayers.get(roomKey);
@@ -1288,7 +1336,7 @@ export class WebsocketGateway
   }
 
   // Helper: Check voice proximity changes on player move
-  checkVoiceProximity(workspaceId: string, userId: string, client: Socket): void {
+  private checkVoiceProximity(workspaceId: string, userId: string, client: Socket): void {
     const roomKey = `office:${workspaceId}`;
     const officeRoom = this.officePlayers.get(roomKey);
     if (!officeRoom) return;

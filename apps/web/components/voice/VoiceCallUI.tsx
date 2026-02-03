@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import type { CallStatus } from '@/lib/hooks/types/voice-call.types'
+import type { CallStatus, CallQualityStats } from '@/lib/hooks/types/voice-call.types'
 import { cn } from '@/lib/utils'
 
 // ============================================
@@ -17,6 +17,7 @@ interface VoiceCallUIProps {
   incomingCall: { callerId: string; callerName: string; callType: string; timestamp: string } | null
   proximityVoiceEnabled: boolean
   connectedPeersCount: number
+  callQuality?: CallQualityStats | null
   
   // Actions from useVoiceCall
   acceptCall: () => void
@@ -73,6 +74,51 @@ const WifiIcon = ({ enabled }: { enabled?: boolean }) => (
     } />
   </svg>
 )
+
+// ============================================
+// CONNECTION QUALITY INDICATOR (T013)
+// ============================================
+
+const QualityIndicator = ({ quality }: { quality: CallQualityStats | null }) => {
+  if (!quality) return null
+
+  const { qualityScore, packetLossRate, jitter, roundTripTime } = quality
+  
+  // Determine color and icon based on quality score
+  const getQualityStyle = () => {
+    if (qualityScore === 'excellent') {
+      return { color: 'text-green-500', bars: 4, label: 'Excellent' }
+    } else if (qualityScore === 'good') {
+      return { color: 'text-green-400', bars: 3, label: 'Good' }
+    } else if (qualityScore === 'fair') {
+      return { color: 'text-yellow-500', bars: 2, label: 'Fair' }
+    } else {
+      return { color: 'text-red-500', bars: 1, label: 'Poor' }
+    }
+  }
+
+  const style = getQualityStyle()
+
+  return (
+    <div className="flex items-center gap-2 text-xs text-gray-400">
+      <div className={cn("flex items-center gap-0.5", style.color)}>
+        {[1, 2, 3, 4].map((bar) => (
+          <div
+            key={bar}
+            className={cn(
+              "w-0.5 rounded-full transition-all",
+              bar <= style.bars ? "bg-current" : "bg-gray-600"
+            )}
+            style={{ height: `${bar * 3 + 4}px` }}
+          />
+        ))}
+      </div>
+      <span className={style.color} title={`Packet Loss: ${packetLossRate.toFixed(1)}% | Jitter: ${jitter}ms | RTT: ${roundTripTime}ms`}>
+        {style.label}
+      </span>
+    </div>
+  )
+}
 
 // ============================================
 // INCOMING CALL MODAL
@@ -150,6 +196,7 @@ function ActiveCallBar({
   duration,
   isMuted,
   isDeafened,
+  callQuality,
   onToggleMute,
   onToggleDeafen,
   onEndCall,
@@ -159,6 +206,7 @@ function ActiveCallBar({
   duration: number
   isMuted: boolean
   isDeafened: boolean
+  callQuality?: CallQualityStats | null
   onToggleMute: () => void
   onToggleDeafen: () => void
   onEndCall: () => void
@@ -185,7 +233,11 @@ function ActiveCallBar({
       <div className="flex items-center gap-2">
         <span className="text-white font-medium text-sm">{peerName}</span>
         {callStatus === 'connected' && (
-          <span className="text-gray-400 text-xs">{formatDuration(duration)}</span>
+          <>
+            <span className="text-gray-400 text-xs">{formatDuration(duration)}</span>
+            {/* Quality indicator */}
+            <QualityIndicator quality={callQuality || null} />
+          </>
         )}
         {callStatus === 'connecting' && (
           <span className="text-yellow-400 text-xs">Connecting...</span>
@@ -280,6 +332,7 @@ export function VoiceCallUI({
   incomingCall,
   proximityVoiceEnabled,
   connectedPeersCount,
+  callQuality,
   acceptCall,
   declineCall,
   endCall,
@@ -325,6 +378,7 @@ export function VoiceCallUI({
           duration={callDuration}
           isMuted={isMuted}
           isDeafened={isDeafened}
+          callQuality={callQuality}
           onToggleMute={toggleMute}
           onToggleDeafen={toggleDeafen}
           onEndCall={endCall}

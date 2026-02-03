@@ -140,6 +140,7 @@ export function useVoiceCall({
   const pendingSignalsRef = useRef<Map<string, SimplePeer.SignalData[]>>(new Map()) // Buffer for early signals
   const signalTimeoutsRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map()) // Track signal buffer timeouts
   const qualitySamplesRef = useRef<Map<string, number[]>>(new Map()) // Track jitter samples per peer
+  const isPageVisibleRef = useRef<boolean>(true) // Track page visibility for graceful degradation
   
   // Keep refs in sync with state
   useEffect(() => {
@@ -223,14 +224,20 @@ export function useVoiceCall({
   // ============================================
 
   const startStatsMonitoring = useCallback((peerId: string, peer: SimplePeerInstance) => {
-    // Monitor WebRTC stats every 5 seconds for call quality
-    const statsInterval = setInterval(async () => {
-      try {
-        // Access the underlying RTCPeerConnection
-        const pc = (peer as any)._pc as RTCPeerConnection | undefined
-        if (!pc || pc.connectionState !== 'connected') return
+    // Monitor WebRTC stats with graceful degradation based on page visibility
+    // Use 5s interval when visible, 15s when backgrounded (T011)
+    const getStatsInterval = () => isPageVisibleRef.current ? 5000 : 15000
+    
+    let statsInterval: ReturnType<typeof setInterval>
+    
+    const scheduleNextStats = () => {
+      statsInterval = setInterval(async () => {
+        try {
+          // Access the underlying RTCPeerConnection
+          const pc = (peer as any)._pc as RTCPeerConnection | undefined
+          if (!pc || pc.connectionState !== 'connected') return
 
-        const stats = await pc.getStats()
+          const stats = await pc.getStats()
         let packetsLost = 0
         let packetsReceived = 0
         let jitter = 0
@@ -282,6 +289,21 @@ export function useVoiceCall({
         setCallQuality(qualityStats)
         onCallQualityUpdate?.(qualityStats)
 
+        // Emit quality report to server for monitoring/analytics (T014)
+        if (socket) {
+          socket.emit('voice:quality-report', {
+            peerId,
+            qualityStats: {
+              packetLossRate,
+              jitter: jitterMs,
+              roundTripTime: rttMs,
+              qualityScore,
+              bytesReceived,
+            },
+            timestamp: Date.now(),
+          })
+        }
+
         // Log warning if call quality is poor (thresholds are in ms)
         if (packetLossRate > 5 || jitterMs > 50 || rttMs > 300) {
           console.warn('[VoiceCall] ⚠️ Poor call quality detected:', {
@@ -294,10 +316,12 @@ export function useVoiceCall({
       } catch (e) {
         // Stats collection failed, peer might be disconnected
       }
-    }, 5000)
+    }, getStatsInterval())
+
+    scheduleNextStats()
 
     return statsInterval
-  }, [onCallQualityUpdate])
+  }, [onCallQualityUpdate, socket])
 
   // ============================================
   // GET LOCAL AUDIO STREAM
@@ -927,6 +951,38 @@ export function useVoiceCall({
       document.querySelectorAll('[id^="voice-peer-"]').forEach(el => el.remove())
     }
   }, [cleanupAllPeers, cleanupLocalStream])
+
+  // ============================================
+  // PAGE VISIBILITY API - GRACEFUL DEGRADATION (T012)
+  // ============================================
+  
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      const isVisible = document.visibilityState === 'visible'
+      isPageVisibleRef.current = isVisible
+      
+      if (!isVisible) {
+        console.log('[VoiceCall] 📴 Tab backgrounded - reducing stats polling frequency')
+      } else {
+        console.log('[VoiceCall] 📱 Tab visible - resuming normal stats polling')
+      }
+      
+      // Restart stats monitoring with new interval for all active peers
+      peersRef.current.forEach((peerConnection, peerId) => {
+        if (peerConnection.statsInterval) {
+          clearInterval(peerConnection.statsInterval)
+          const newInterval = startStatsMonitoring(peerId, peerConnection.peer)
+          peerConnection.statsInterval = newInterval
+        }
+      })
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
+  }, [startStatsMonitoring])
 
   return {
     callStatus,
