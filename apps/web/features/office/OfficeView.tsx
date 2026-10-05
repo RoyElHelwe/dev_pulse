@@ -193,7 +193,10 @@ export function OfficeView() {
     if (!editing) return;
     if (!window.confirm('Put back the original furniture and room names? You can still undo, or close without saving.')) return;
     const latest = await api<MyWorkspace>('/workspace').catch(() => null);
-    const templates = await api<{ id: string; layout: OfficeLayout }[]>('/office/templates').catch(() => []);
+    // A generated office is built again from the same team size and seed.
+    const source = latest?.layout.generated;
+    const query = source ? `?team=${source.teamSize}&seed=${encodeURIComponent(source.seed)}` : '';
+    const templates = await api<{ id: string; layout: OfficeLayout }[]>(`/office/templates${query}`).catch(() => []);
     const template = templates.find((t) => t.id === latest?.templateId);
     if (template) editing.editor.reset(template.layout);
   }, [editing]);
@@ -271,7 +274,7 @@ export function OfficeView() {
           onSave={save}
           onDiscard={discard}
           onReload={reloadLatest}
-          onReset={workspace?.templateId === 'generated' ? undefined : resetToTemplate}
+          onReset={resetToTemplate}
           onProblem={setToast}
         />
       )}

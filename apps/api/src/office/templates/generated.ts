@@ -108,7 +108,7 @@ export function generatedOffice(teamSize: number, seed: string): OfficeLayout {
   b.doormat(door, height);
 
   const layout = b.build({ width, height, rooms, walls, spawn: { x: door, y: height - 2.5 } });
-  return flip ? mirror(layout) : layout;
+  return { ...(flip ? mirror(layout) : layout), generated: { teamSize: team, seed } };
 }
 
 /** The first room is bigger (or medium for a small team), the others small; the seed shuffles them. */

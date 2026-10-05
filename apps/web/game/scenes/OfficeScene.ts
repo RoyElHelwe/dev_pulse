@@ -453,7 +453,8 @@ export class OfficeScene extends Phaser.Scene {
     const spawn = { x: layout.spawn.x * TILE, y: layout.spawn.y * TILE };
     for (let attempt = 0; attempt < 20; attempt++) {
       const angle = Math.random() * Math.PI * 2;
-      const distance = TILE * (0.6 + Math.random() * 1.6);
+      // Close to the door: two people arriving together are within earshot (< 3 tiles apart).
+      const distance = TILE * (0.5 + Math.random() * 0.9);
       const x = spawn.x + Math.cos(angle) * distance;
       const y = spawn.y + Math.sin(angle) * distance * 0.6;
       if (this.isFree(x, y) && y < layout.height * TILE - 4) return { x, y };

@@ -67,8 +67,7 @@ interface EditorPanelProps {
   onDiscard(): void;
   onReload(): void;
   /** Puts back the template's original furniture (asks first). */
-  /** Missing for generated offices: the Team page builds them again instead. */
-  onReset?(): void;
+  onReset(): void;
   /** Shows why an action was refused. */
   onProblem(text: string): void;
 }
@@ -197,13 +196,11 @@ export function EditorPanel({ editor, saving, error, onSave, onDiscard, onReload
               Click a piece of furniture to change it. Drag the floor to look around. <Kbd>Shift</Kbd>-drag to select
               several, <Kbd>Ctrl</Kbd> <Kbd>A</Kbd> for all.
             </p>
-            {onReset && (
-              <div className="border-t border-zinc-200/70 p-3">
-                <Button variant="ghost" size="sm" className="w-full text-zinc-600" onClick={onReset}>
-                  <RotateCcw className="size-3.5" /> Reset to the original furniture
-                </Button>
-              </div>
-            )}
+            <div className="border-t border-zinc-200/70 p-3">
+              <Button variant="ghost" size="sm" className="w-full text-zinc-600" onClick={onReset}>
+                <RotateCcw className="size-3.5" /> Reset to the original furniture
+              </Button>
+            </div>
           </div>
         )}
       </Panel>
