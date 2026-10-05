@@ -233,6 +233,9 @@ model ChatMessage {
   channel     String
   userId      String
   text        String
+  /// The booking running in the room when it was sent: a meeting's chat stays
+  /// with that meeting (null = outside any booking).
+  bookingId   String?
   createdAt   DateTime @default(now())
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
