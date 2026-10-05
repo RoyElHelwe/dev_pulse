@@ -26,8 +26,21 @@ export function buttonStyles(variant: Variant = 'primary', size: Size = 'md', cl
   return cn(base, variants[variant], sizes[size], className);
 }
 
-type ButtonProps = ComponentProps<'button'> & { variant?: Variant; size?: Size };
+type ButtonProps = ComponentProps<'button'> & { variant?: Variant; size?: Size; loading?: boolean };
 
-export function Button({ variant, size, className, type = 'button', ...props }: ButtonProps) {
-  return <button type={type} className={buttonStyles(variant, size, className)} {...props} />;
+export function Button({ variant, size, className, type = 'button', loading, disabled, children, ...props }: ButtonProps) {
+  return (
+    <button
+      type={type}
+      className={buttonStyles(variant, size, className)}
+      disabled={disabled || loading}
+      aria-busy={loading || undefined}
+      {...props}
+    >
+      {loading && (
+        <span className="size-4 animate-spin rounded-full border-2 border-current border-r-transparent" aria-hidden="true" />
+      )}
+      {children}
+    </button>
+  );
 }
