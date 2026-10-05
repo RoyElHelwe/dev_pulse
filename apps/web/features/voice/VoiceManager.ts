@@ -232,8 +232,10 @@ export class VoiceManager {
         this.hangUp(other.id);
         continue;
       }
-      // Offline: no new calls (the socket would queue the offers and send them all at once later).
-      if (!peer && want && this.opts.socket.connected && (this.retryAt.get(other.id) ?? 0) <= now) peer = this.call(other.id);
+      // Only the smaller id calls, the other answers: two offers crossing ("glare") can lose
+      // ICE candidates. Offline: no new calls (the socket would queue the offers and send them all at once later).
+      const caller = this.opts.myId < other.id;
+      if (!peer && want && caller && this.opts.socket.connected && (this.retryAt.get(other.id) ?? 0) <= now) peer = this.call(other.id);
       peer?.place(other.x - snap.me.x, other.y - snap.me.y, meeting);
     }
     for (const id of [...this.peers.keys()]) if (!seen.has(id)) this.hangUp(id);
