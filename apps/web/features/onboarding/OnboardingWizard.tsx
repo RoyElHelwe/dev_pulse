@@ -33,6 +33,7 @@ const TEAM_SIZES = [
   { label: '2–8', size: 6 },
   { label: '9–24', size: 16 },
   { label: '25–48', size: 36 },
+  { label: '49–100', size: 72 },
 ];
 const NOTICES: Record<string, string> = {
   removed: 'You were removed from your office. Create a new one or wait for an invitation.',
@@ -208,7 +209,7 @@ export function OnboardingWizard() {
             <h1 className="text-2xl font-semibold tracking-tight">How big is your team?</h1>
             <p className="mt-1 text-zinc-600">We&apos;ll suggest an office with enough desks.</p>
             <div
-              className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4"
+              className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-5"
               role="radiogroup"
               aria-label="Team size"
             >
@@ -248,7 +249,7 @@ export function OnboardingWizard() {
           <>
             <h1 className="text-2xl font-semibold tracking-tight">Pick your office</h1>
             <p className="mt-1 text-zinc-600">You can move, add and remove furniture any time.</p>
-            <div className="mt-6 grid gap-4 md:grid-cols-3" role="radiogroup" aria-label="Office">
+            <div className="mt-6 grid gap-4 sm:grid-cols-2" role="radiogroup" aria-label="Office">
               {templates.map((t) => (
                 <button
                   key={t.id}
