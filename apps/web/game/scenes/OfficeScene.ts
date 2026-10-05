@@ -9,7 +9,7 @@ import { Avatar, DIRECTIONS, type Direction } from '../objects/Avatar';
 import { DeskPlates, type DeskOwner } from '../objects/DeskPlates';
 import { recipeOf } from '../art/recipe';
 import { RemotePlayer } from '../objects/RemotePlayer';
-import { RoomBadges } from '../objects/RoomBadges';
+import { type RoomBooking, RoomBadges } from '../objects/RoomBadges';
 import { Interactions } from '../systems/Interactions';
 import { Proximity } from '../systems/Proximity';
 import { roomFinder } from '../systems/rooms';
@@ -49,6 +49,10 @@ export interface OfficeSceneData {
   players: () => PlayerState[];
   /** Who owns which desk (replayed after a layout reload). */
   desks: () => DeskOwner[];
+  /** Meeting rooms the local player may not enter (replayed after a layout reload). */
+  locked: () => string[];
+  /** Meeting rooms booked right now, for their badges (replayed after a layout reload). */
+  bookings: () => RoomBooking[];
   /** Called when the local player moves (to send it to the others). */
   onMove: (x: number, y: number, dir: number, moving: boolean) => void;
   /** Called when the local player enters or leaves a zone (shared with the others). */
@@ -76,6 +80,9 @@ export class OfficeScene extends Phaser.Scene {
   private keys!: Record<'up' | 'down' | 'left' | 'right' | 'w' | 'a' | 's' | 'd', Phaser.Input.Keyboard.Key>;
   private zones: Zone[] = [];
   private obstacles: Rect[] = [];
+  /** Booked meeting rooms the local player can't walk into (pixels), and their colliders. */
+  private locked: { roomId: string; rect: Rect }[] = [];
+  private lockedSolids!: Phaser.Physics.Arcade.StaticGroup;
   private currentZone: Zone | null = null;
   private userZoom = 1;
   private remotes = new Map<string, RemotePlayer>();
@@ -106,6 +113,7 @@ export class OfficeScene extends Phaser.Scene {
     this.badgesDirty = true;
     this.joystick = { x: 0, y: 0 };
     this.currentZone = null;
+    this.locked = [];
     this.lastSent = { at: 0, moving: false, dir: 'down' };
   }
 
@@ -119,7 +127,8 @@ export class OfficeScene extends Phaser.Scene {
 
     this.bakeStaticScenery(layout, worldW, worldH, solids);
 
-    // Furniture: one image per piece (see render/sprites.ts).
+    // Furniture: one image per piece (see render/sprites.ts), desks drawn for their owners.
+    setDeskOwners(this, ownersOf(this.opts.desks()));
     const scale = textureScale(this.opts.dpr);
     for (const item of layout.furniture) {
       this.addFurniture(item, scale);
@@ -138,6 +147,8 @@ export class OfficeScene extends Phaser.Scene {
     body.setSize(18, 10).setOffset(-9, -10).setCollideWorldBounds(true);
     this.physics.world.setBounds(0, 0, worldW, worldH);
     this.physics.add.collider(this.player, solids);
+    this.lockedSolids = this.physics.add.staticGroup();
+    this.physics.add.collider(this.player, this.lockedSolids);
 
     const text = { fontFamily: this.opts.fontFamily, resolution: this.opts.dpr * 2 };
     this.proximity = new Proximity(roomFinder(layout));
@@ -145,6 +156,8 @@ export class OfficeScene extends Phaser.Scene {
     this.badges = new RoomBadges(this, layout, { ...text, depth: DEPTH.badges });
     this.interactions = new Interactions(this, layout, { ...text, myId: this.opts.myId, touch: this.opts.touch, depth: DEPTH.hints });
     this.setDesks(this.opts.desks());
+    this.setRoomBookings(this.opts.bookings());
+    this.setLockedRooms(this.opts.locked());
     this.player.setStatus(this.opts.status);
 
     for (const p of this.opts.players()) this.upsertPlayer(p);
@@ -264,7 +277,7 @@ export class OfficeScene extends Phaser.Scene {
 
   /** Desks show their owner's things (mug in their colour, their kind of clutter...). */
   private redecorateDesks() {
-    setDeskOwners(this, new Map(this.desks.filter((d) => d.character).map((d) => [d.deskId, d.character!])));
+    setDeskOwners(this, ownersOf(this.desks));
     const scale = textureScale(this.opts.dpr);
     const items = this.editMode ? [] : this.opts.layout.furniture.filter((f) => f.kind === 'desk');
     for (const item of items) {
@@ -285,6 +298,36 @@ export class OfficeScene extends Phaser.Scene {
     if (!this.desks.some((d) => d.userId === userId)) return;
     this.desks = this.desks.map((d) => (d.userId === userId ? { ...d, character } : d));
     this.redecorateDesks();
+  }
+
+  // ---- booked meeting rooms ---------------------------------------------------------
+
+  /**
+   * Rooms booked without us become solid: a collider covers the whole room, so
+   * its doorways are closed. Someone already inside is sent back to the entrance.
+   * Returns the id of the room they were moved out of, or null.
+   */
+  setLockedRooms(roomIds: string[]): string | null {
+    const ids = new Set(roomIds);
+    this.locked = this.opts.layout.rooms
+      .filter((r) => r.kind === 'meeting' && ids.has(r.id))
+      .map((r) => ({ roomId: r.id, rect: pixels(r) }));
+    this.lockedSolids.clear(true, true);
+    for (const { rect } of this.locked) {
+      this.lockedSolids.add(this.add.zone(rect.x + rect.w / 2, rect.y + rect.h / 2, rect.w, rect.h));
+    }
+    const inside = this.locked.find(({ rect }) => overlapsRect(playerBody(this.player.x, this.player.y), rect));
+    if (!inside) return null;
+    const to = this.arrivalPoint(this.opts.layout);
+    (this.player.body as Phaser.Physics.Arcade.Body).reset(to.x, to.y);
+    this.cameras.main.centerOn(to.x, to.y);
+    this.sendPosition();
+    this.updateZone();
+    return inside.roomId;
+  }
+
+  setRoomBookings(bookings: RoomBooking[]) {
+    this.badges.setBookings(bookings);
   }
 
   setJoystick(x: number, y: number) {
@@ -422,8 +465,8 @@ export class OfficeScene extends Phaser.Scene {
   private isFree(x: number, y: number) {
     const { width, height } = this.opts.layout;
     if (x < TILE / 2 || y < TILE || x > (width - 0.5) * TILE || y > (height - 0.5) * TILE) return false;
-    const body = { x: x - 9, y: y - 10, w: 18, h: 10 };
-    return !this.obstacles.some((o) => body.x < o.x + o.w && o.x < body.x + body.w && body.y < o.y + o.h && o.y < body.y + body.h);
+    const body = playerBody(x, y);
+    return !this.obstacles.some((o) => overlapsRect(body, o)) && !this.locked.some(({ rect }) => overlapsRect(body, rect));
   }
 
   /**
@@ -535,6 +578,15 @@ function pixels(r: Rect): Rect {
   return { x: r.x * TILE, y: r.y * TILE, w: r.w * TILE, h: r.h * TILE };
 }
 
+/** The local player's physics body (18 × 10 px) for feet at x, y. */
+function playerBody(x: number, y: number): Rect {
+  return { x: x - 9, y: y - 10, w: 18, h: 10 };
+}
+
+function overlapsRect(a: Rect, b: Rect) {
+  return a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+}
+
 function toEvent(zone: Zone) {
   return { type: zone.type, id: zone.id, name: zone.name };
 }
@@ -546,4 +598,9 @@ function isTyping() {
     el instanceof HTMLTextAreaElement ||
     (el instanceof HTMLElement && el.isContentEditable)
   );
+}
+
+/** Desk id → its owner's character. */
+function ownersOf(desks: DeskOwner[]) {
+  return new Map(desks.filter((d) => d.character).map((d) => [d.deskId, d.character!]));
 }

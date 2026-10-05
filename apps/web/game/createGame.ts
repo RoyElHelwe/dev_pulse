@@ -2,9 +2,10 @@ import * as Phaser from 'phaser';
 import type { LayoutEditor } from './editor/LayoutEditor';
 import type { OfficeLayout } from './layout/types';
 import type { DeskOwner } from './objects/DeskPlates';
+import type { RoomBooking } from './objects/RoomBadges';
 import { OfficeScene, type OfficeSceneData, type OfficeSnapshot, type PlayerState } from './scenes/OfficeScene';
 
-export type { DeskOwner, OfficeSnapshot, PlayerState };
+export type { DeskOwner, OfficeSnapshot, PlayerState, RoomBooking };
 
 export interface OfficeController {
   zoomIn(): void;
@@ -32,6 +33,13 @@ export interface OfficeController {
   setLayout(layout: OfficeLayout): void;
   /** Organisers: edit the office in place. Stop by calling setLayout (saved or original). */
   startEditing(editor: LayoutEditor, onProblem: (text: string) => void): void;
+  /**
+   * Meetings: rooms the local player may not enter right now (booked without them).
+   * Returns the id of the room they were moved out of, if they stood in one.
+   */
+  setLockedRooms(roomIds: string[]): string | null;
+  /** Meetings: rooms booked right now, with the end time shown on their badge ("15:00"). */
+  setRoomBookings(bookings: RoomBooking[]): void;
   /** Where the local player is, to (re)announce it. */
   localPosition(): { x: number; y: number } | null;
   destroy(): void;
@@ -64,8 +72,18 @@ export function createGame(parent: HTMLElement, options: GameOptions): OfficeCon
   // Other people live here, outside the scene, so a layout reload keeps them.
   const players = new Map<string, PlayerState>();
   let desks = options.desks;
+  let locked: string[] = [];
+  let bookings: RoomBooking[] = [];
   const touch = window.matchMedia('(pointer: coarse)').matches;
-  let data: OfficeSceneData = { ...options, dpr, touch, players: () => [...players.values()], desks: () => desks };
+  let data: OfficeSceneData = {
+    ...options,
+    dpr,
+    touch,
+    players: () => [...players.values()],
+    desks: () => desks,
+    locked: () => locked,
+    bookings: () => bookings,
+  };
 
   const game = new Phaser.Game({
     type: Phaser.AUTO,
@@ -115,10 +133,12 @@ export function createGame(parent: HTMLElement, options: GameOptions): OfficeCon
     setPlayerCharacter(id, character) {
       const p = players.get(id);
       if (p) p.character = character;
+      desks = withCharacter(desks, id, character);
       scene()?.setPlayerCharacter(id, character);
     },
     setOwnCharacter(character) {
       data = { ...data, character };
+      desks = withCharacter(desks, options.myId, character);
       scene()?.setOwnLook(character);
     },
     setPlayerZone(id, zone) {
@@ -141,6 +161,14 @@ export function createGame(parent: HTMLElement, options: GameOptions): OfficeCon
       scene()?.setDesks(list);
     },
     setJoystick: (x, y) => scene()?.setJoystick(x, y),
+    setLockedRooms(ids) {
+      locked = ids;
+      return scene()?.setLockedRooms(ids) ?? null;
+    },
+    setRoomBookings(list) {
+      bookings = list;
+      scene()?.setRoomBookings(list);
+    },
     snapshot: () => scene()?.snapshot() ?? null,
     setLayout(layout) {
       const s = scene();
@@ -154,4 +182,9 @@ export function createGame(parent: HTMLElement, options: GameOptions): OfficeCon
       game.destroy(true);
     },
   };
+}
+
+/** Desk owners with one person's new character (their desk follows their look after a layout reload). */
+function withCharacter(desks: DeskOwner[], userId: string, character: string) {
+  return desks.map((d) => (d.userId === userId ? { ...d, character } : d));
 }

@@ -3,9 +3,17 @@ import { TILE } from '../constants';
 import type { OfficeLayout } from '../layout/types';
 import { Bubble } from './Bubble';
 
-/** "In use · 2" at the top of each meeting room with people inside. */
+/** A meeting room booked right now, until `until` ("15:00", already in local time). */
+export interface RoomBooking {
+  roomId: string;
+  until: string;
+}
+
+/** At the top of each meeting room: "Booked · until 15:00", or "In use · 2" with people inside. */
 export class RoomBadges {
   private readonly badges = new Map<string, Bubble>();
+  private counts = new Map<string, number>();
+  private booked = new Map<string, string>();
 
   constructor(scene: Phaser.Scene, layout: OfficeLayout, o: { fontFamily: string; resolution: number; depth: number }) {
     for (const room of layout.rooms.filter((r) => r.kind === 'meeting')) {
@@ -21,10 +29,23 @@ export class RoomBadges {
 
   /** People per room id. */
   update(counts: Map<string, number>) {
+    this.counts = counts;
+    this.render();
+  }
+
+  /** Rooms booked right now. */
+  setBookings(bookings: RoomBooking[]) {
+    this.booked = new Map(bookings.map((b) => [b.roomId, b.until]));
+    this.render();
+  }
+
+  private render() {
     for (const [roomId, badge] of this.badges) {
-      const n = counts.get(roomId) ?? 0;
-      badge.setVisible(n > 0);
-      if (n > 0) badge.setText(`● In use · ${n}`);
+      const n = this.counts.get(roomId) ?? 0;
+      const until = this.booked.get(roomId);
+      badge.setVisible(n > 0 || !!until);
+      if (until) badge.setText(`● Booked · until ${until}${n > 0 ? ` · ${n}` : ''}`);
+      else if (n > 0) badge.setText(`● In use · ${n}`);
     }
   }
 }
