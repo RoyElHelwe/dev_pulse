@@ -118,12 +118,6 @@ export function ramp(l: number, c: number, h: number, options: RampOptions = {})
   return { deep: tone(-2), shadow: tone(-1), base: tone(0), light: tone(1), glint: tone(2) };
 }
 
-/** Same ramp, built around an existing 0xRRGGBB colour. */
-export function rampOf(hex: Hex, options?: RampOptions): Ramp {
-  const { l, c, h } = toOklch(hex);
-  return ramp(l, c, h, options);
-}
-
 /** Mix two colours in OKLCH (t = 0 → a, 1 → b). */
 export function mix(a: Hex, b: Hex, t: number): Hex {
   const A = toOklch(a);
