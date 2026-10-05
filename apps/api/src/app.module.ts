@@ -5,6 +5,7 @@ import { AuthModule } from './auth/auth.module';
 import { OriginMiddleware } from './common/origin.middleware';
 import { ConfigModule } from './config/config.module';
 import { HealthModule } from './health/health.module';
+import { InvitationsModule } from './invitations/invitations.module';
 import { MailModule } from './mail/mail.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { WorkspaceModule } from './workspace/workspace.module';
@@ -18,6 +19,7 @@ import { WorkspaceModule } from './workspace/workspace.module';
     MailModule,
     AuthModule,
     WorkspaceModule,
+    InvitationsModule,
     HealthModule,
     // Feature modules get added here, one per folder:
     // UsersModule, InvitationsModule              (Mira)
