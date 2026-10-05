@@ -1,9 +1,10 @@
 import * as Phaser from 'phaser';
 import type { LayoutEditor } from './editor/LayoutEditor';
 import type { OfficeLayout } from './layout/types';
-import { OfficeScene, type OfficeSceneData, type PlayerState } from './scenes/OfficeScene';
+import type { DeskOwner } from './objects/DeskPlates';
+import { OfficeScene, type OfficeSceneData, type OfficeSnapshot, type PlayerState } from './scenes/OfficeScene';
 
-export type { PlayerState };
+export type { DeskOwner, OfficeSnapshot, PlayerState };
 
 export interface OfficeController {
   zoomIn(): void;
@@ -16,6 +17,15 @@ export interface OfficeController {
   removePlayer(id: string): void;
   setPlayerCharacter(id: string, character: string): void;
   setOwnCharacter(character: string): void;
+  setPlayerZone(id: string, zone: string | null): void;
+  setPlayerStatus(id: string, status: string | null): void;
+  setOwnStatus(status: string | null): void;
+  /** Who sits where (name plates on desks). */
+  setDesks(desks: DeskOwner[]): void;
+  /** Touch joystick, -1..1 on each axis (0, 0 = stop). */
+  setJoystick(x: number, y: number): void;
+  /** Positions for the minimap (tiles). */
+  snapshot(): OfficeSnapshot | null;
   /** Rebuild the office with a new layout (organiser saved), keeping everyone in place. */
   setLayout(layout: OfficeLayout): void;
   /** Organisers: edit the office in place. Stop by calling setLayout (saved or original). */
@@ -27,10 +37,14 @@ export interface OfficeController {
 
 interface GameOptions {
   layout: OfficeLayout;
+  myId: string;
   character: string;
   name: string;
+  status: string | null;
+  desks: DeskOwner[];
   fontFamily: string;
   onMove: OfficeSceneData['onMove'];
+  onZone: OfficeSceneData['onZone'];
 }
 
 /**
@@ -47,7 +61,9 @@ export function createGame(parent: HTMLElement, options: GameOptions): OfficeCon
 
   // Other people live here, outside the scene, so a layout reload keeps them.
   const players = new Map<string, PlayerState>();
-  let data: OfficeSceneData = { ...options, dpr, players: () => [...players.values()] };
+  let desks = options.desks;
+  const touch = window.matchMedia('(pointer: coarse)').matches;
+  let data: OfficeSceneData = { ...options, dpr, touch, players: () => [...players.values()], desks: () => desks };
 
   const game = new Phaser.Game({
     type: Phaser.AUTO,
@@ -103,6 +119,26 @@ export function createGame(parent: HTMLElement, options: GameOptions): OfficeCon
       data = { ...data, character };
       scene()?.setOwnLook(character);
     },
+    setPlayerZone(id, zone) {
+      const p = players.get(id);
+      if (p) p.zone = zone;
+      scene()?.setPlayerZone(id, zone);
+    },
+    setPlayerStatus(id, status) {
+      const p = players.get(id);
+      if (p) p.status = status;
+      scene()?.setPlayerStatus(id, status);
+    },
+    setOwnStatus(status) {
+      data = { ...data, status };
+      scene()?.setOwnStatus(status);
+    },
+    setDesks(list) {
+      desks = list;
+      scene()?.setDesks(list);
+    },
+    setJoystick: (x, y) => scene()?.setJoystick(x, y),
+    snapshot: () => scene()?.snapshot() ?? null,
     setLayout(layout) {
       const s = scene();
       data = { ...data, layout, startAt: s?.localPosition() };
