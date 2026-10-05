@@ -9,9 +9,13 @@ URL = https://$(or $(SERVER_NAME),localhost):$(or $(HTTPS_PORT),8443)
 
 all: up
 
+# First run: copy the example and fill the secrets with random values.
 .env:
 	cp .env.example .env
-	@echo "Created .env from .env.example – change the secrets before deploying."
+	@sed -i.bak "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$$(head -c 24 /dev/urandom | base64 | tr -d '\n/+=')|" .env
+	@sed -i.bak "s|^JWT_SECRET=.*|JWT_SECRET=$$(head -c 48 /dev/urandom | base64 | tr -d '\n/+=')|" .env
+	@rm -f .env.bak
+	@echo "Created .env with random secrets."
 
 ## up: build and start the production-like stack (single command for evaluation)
 up: .env
