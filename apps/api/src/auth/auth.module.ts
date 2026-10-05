@@ -11,6 +11,7 @@ import { OAuthController } from './oauth/oauth.controller';
 import { OAuthService } from './oauth/oauth.service';
 import { PasswordService } from './password.service';
 import { SessionEvents } from './session-events';
+import { SessionGateway } from './session.gateway';
 import { SessionTakeoverService } from './session-takeover.service';
 import { TokensService } from './tokens.service';
 import { TwoFactorService } from './two-factor.service';
@@ -39,6 +40,7 @@ import { VerificationService } from './verification.service';
     OAuthService,
     SessionEvents,
     SessionTakeoverService,
+    SessionGateway,
     { provide: APP_GUARD, useClass: AuthGuard },
   ],
   exports: [TokensService],
