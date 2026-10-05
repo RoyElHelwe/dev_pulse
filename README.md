@@ -10,8 +10,8 @@ tasks from your desk.
 > **[docs/PLAN.md](docs/PLAN.md)**. Done so far: infrastructure, authentication
 > ([docs/AUTH.md](docs/AUTH.md)): email + password, Google / GitHub / 42, 2FA, JWT access +
 > refresh tokens, one device at a time; and the office ([docs/OFFICE.md](docs/OFFICE.md)):
-> onboarding with office templates, email invitations, roles, live multiplayer and the
-> organiser's office editor. What's next for each person: **[docs/HANDOFF.md](docs/HANDOFF.md)**.
+> onboarding with office templates, email invitations, roles, live multiplayer, desks,
+> proximity, statuses, a minimap, phone controls and the organiser's office editor. What's next for each person: **[docs/HANDOFF.md](docs/HANDOFF.md)**.
 
 ## Architecture
 
