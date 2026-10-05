@@ -1,6 +1,6 @@
 'use client';
 
-import { LogOut, ShieldCheck } from 'lucide-react';
+import { LogOut, ShieldCheck, Users } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
@@ -51,6 +51,16 @@ export function UserMenu({ className }: { className?: string }) {
             <p className="truncate text-xs text-zinc-500">{user.email}</p>
           </div>
           <div className="my-1 h-px bg-zinc-100" />
+          {user.workspace && (
+            <Link
+              role="menuitem"
+              href="/team"
+              onClick={() => setOpen(false)}
+              className="flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-100"
+            >
+              <Users className="size-4" /> Team
+            </Link>
+          )}
           <Link
             role="menuitem"
             href="/settings/security"

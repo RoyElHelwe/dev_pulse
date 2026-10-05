@@ -1,6 +1,6 @@
 'use client';
 
-import { LocateFixed, MapPin, Minus, Plus } from 'lucide-react';
+import { LocateFixed, MapPin, Minus, Plus, UserPlus } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { IconButton } from '@/components/ui/IconButton';
@@ -8,9 +8,12 @@ import { Kbd } from '@/components/ui/Kbd';
 import { Logo } from '@/components/ui/Logo';
 import { Panel } from '@/components/ui/Panel';
 import { UserMenu } from '@/features/auth/UserMenu';
-import type { MyWorkspace } from '@/features/workspace/types';
+import { buttonStyles } from '@/components/ui/Button';
+import { useAuth } from '@/features/auth/AuthProvider';
+import { canManage, type MyWorkspace } from '@/features/workspace/types';
 import type { OfficeController } from '@/game/createGame';
 import { cn } from '@/lib/cn';
+import { CharacterSwitcher } from './CharacterSwitcher';
 import type { Presence } from './connection';
 import { officeEvents, type ZoneEvent } from './events';
 import { PresenceList } from './PresenceList';
@@ -30,6 +33,8 @@ interface OfficeHudProps {
 
 export function OfficeHud({ controller, workspace, people, toast }: OfficeHudProps) {
   const zone = useCurrentZone();
+  const { user } = useAuth();
+  const manager = canManage(workspace?.role);
   const [showHelp, setShowHelp] = useState(true);
 
   // The controls hint fades out after a few seconds.
@@ -60,6 +65,13 @@ export function OfficeHud({ controller, workspace, people, toast }: OfficeHudPro
 
       {/* Top right: view controls and the user menu. */}
       <div className="absolute top-4 right-4 flex items-center gap-2">
+        {manager && (
+          <Panel className="hidden p-1 lg:block">
+            <Link href="/team" className={buttonStyles('ghost', 'sm', 'h-9')}>
+              <UserPlus className="size-4" /> Invite
+            </Link>
+          </Panel>
+        )}
         <PresenceList people={people} />
         <Panel className="flex items-center gap-0.5 p-1">
           <IconButton
@@ -114,6 +126,8 @@ export function OfficeHud({ controller, workspace, people, toast }: OfficeHudPro
           <Kbd>Scroll</Kbd> to zoom
         </span>
       </Panel>
+
+      {workspace && user && <CharacterSwitcher name={user.displayName} character={workspace.character} />}
 
       {toast && (
         <Panel role="status" className="absolute top-20 left-1/2 -translate-x-1/2 px-4 py-2.5 text-sm font-medium text-zinc-700">
