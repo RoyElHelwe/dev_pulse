@@ -1,4 +1,4 @@
-import type { OAuthAccount, TwoFactor, User } from '@prisma/client';
+import type { OAuthAccount, Role, TwoFactor, User, Workspace, WorkspaceMember } from '@prisma/client';
 
 /** The user as the frontend sees it: never the password hash or secrets. */
 export interface PublicUser {
@@ -10,12 +10,24 @@ export interface PublicUser {
   hasPassword: boolean;
   twoFactorEnabled: boolean;
   providers: string[];
+  /** The office this user belongs to, or null (then: onboarding or an invitation). */
+  workspace: { id: string; name: string; role: Role } | null;
   createdAt: Date;
 }
 
-export const PUBLIC_USER_INCLUDE = { twoFactor: true, oauthAccounts: true } as const;
+export const PUBLIC_USER_INCLUDE = {
+  twoFactor: true,
+  oauthAccounts: true,
+  membership: { include: { workspace: true } },
+} as const;
 
-export function toPublicUser(user: User & { twoFactor: TwoFactor | null; oauthAccounts: OAuthAccount[] }): PublicUser {
+type UserWithRelations = User & {
+  twoFactor: TwoFactor | null;
+  oauthAccounts: OAuthAccount[];
+  membership: (WorkspaceMember & { workspace: Workspace }) | null;
+};
+
+export function toPublicUser(user: UserWithRelations): PublicUser {
   return {
     id: user.id,
     email: user.email,
@@ -25,6 +37,9 @@ export function toPublicUser(user: User & { twoFactor: TwoFactor | null; oauthAc
     hasPassword: user.passwordHash !== null,
     twoFactorEnabled: Boolean(user.twoFactor?.enabledAt),
     providers: user.oauthAccounts.map((a) => a.provider),
+    workspace: user.membership
+      ? { id: user.membership.workspace.id, name: user.membership.workspace.name, role: user.membership.role }
+      : null,
     createdAt: user.createdAt,
   };
 }

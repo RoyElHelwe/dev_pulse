@@ -10,7 +10,7 @@ import { HttpException, HttpStatus } from '@nestjs/common';
  * ApiError. Missing or expired tokens still get a real 401.
  */
 export class FormError extends HttpException {
-  constructor(code: string, message: string, field?: string) {
-    super({ error: { code, message, ...(field && { field }) } }, HttpStatus.OK);
+  constructor(code: string, message: string, field?: string, details?: unknown) {
+    super({ error: { code, message, ...(field && { field }), ...(details !== undefined && { details }) } }, HttpStatus.OK);
   }
 }
