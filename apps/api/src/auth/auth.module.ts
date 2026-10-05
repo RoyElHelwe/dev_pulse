@@ -6,7 +6,9 @@ import { AppConfig } from '../config/app-config';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { deriveKey } from './crypto/secrets';
+import { EmailTokensService } from './email-tokens.service';
 import { TokensService } from './tokens.service';
+import { VerificationService } from './verification.service';
 
 @Module({
   imports: [
@@ -21,7 +23,13 @@ import { TokensService } from './tokens.service';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, TokensService, { provide: APP_GUARD, useClass: AuthGuard }],
+  providers: [
+    AuthService,
+    TokensService,
+    EmailTokensService,
+    VerificationService,
+    { provide: APP_GUARD, useClass: AuthGuard },
+  ],
   exports: [TokensService],
 })
 export class AuthModule {}
