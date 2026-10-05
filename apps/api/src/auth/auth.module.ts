@@ -7,6 +7,7 @@ import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { deriveKey } from './crypto/secrets';
 import { EmailTokensService } from './email-tokens.service';
+import { PasswordService } from './password.service';
 import { TokensService } from './tokens.service';
 import { VerificationService } from './verification.service';
 
@@ -28,6 +29,7 @@ import { VerificationService } from './verification.service';
     TokensService,
     EmailTokensService,
     VerificationService,
+    PasswordService,
     { provide: APP_GUARD, useClass: AuthGuard },
   ],
   exports: [TokensService],

@@ -9,7 +9,9 @@ import { clientInfo } from './client-info';
 import { clearSessionCookies, COOKIES, setSessionCookies } from './cookies';
 import { EmailDto, TokenDto } from './dto/email.dto';
 import { LoginDto } from './dto/login.dto';
+import { ChangePasswordDto, ResetPasswordDto } from './dto/password.dto';
 import { RegisterDto } from './dto/register.dto';
+import { PasswordService } from './password.service';
 import { TokensService } from './tokens.service';
 import { VerificationService } from './verification.service';
 
@@ -19,6 +21,7 @@ export class AuthController {
     private readonly auth: AuthService,
     private readonly tokens: TokensService,
     private readonly verification: VerificationService,
+    private readonly passwords: PasswordService,
     private readonly config: AppConfig,
   ) {}
 
@@ -49,6 +52,26 @@ export class AuthController {
   @HttpCode(204)
   resendVerification(@Body() dto: EmailDto) {
     return this.verification.resend(dto.email);
+  }
+
+  @Public()
+  @Post('password/forgot')
+  @HttpCode(204)
+  forgotPassword(@Body() dto: EmailDto) {
+    return this.passwords.forgot(dto.email);
+  }
+
+  @Public()
+  @Post('password/reset')
+  @HttpCode(204)
+  resetPassword(@Body() dto: ResetPasswordDto) {
+    return this.passwords.reset(dto);
+  }
+
+  @Post('password/change')
+  @HttpCode(204)
+  changePassword(@CurrentUser() user: AuthUser, @Body() dto: ChangePasswordDto) {
+    return this.passwords.change(user.id, user.sessionId, dto);
   }
 
   /** The signed-in user. */
