@@ -33,6 +33,17 @@ export class CreateWorkspaceDto {
   character: string;
 }
 
+export class SwitchTemplateDto {
+  @IsString()
+  @IsIn(TEMPLATES.map((t) => t.id))
+  templateId: string;
+
+  /** The layout version the organiser saw: refused if someone saved since. */
+  @IsInt()
+  @Min(1)
+  version: number;
+}
+
 export class RenameWorkspaceDto {
   @trim()
   @IsString()

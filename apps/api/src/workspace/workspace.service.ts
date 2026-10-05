@@ -3,10 +3,11 @@ import type { Prisma } from '@prisma/client';
 import { FormError } from '../common/form-error';
 import { validateLayout } from '../office/layout/validate';
 import type { OfficeLayout } from '../office/layout/types';
+import { numberedDesks } from '../office/layout/geometry';
 import { findTemplate } from '../office/templates';
 import { PrismaService } from '../prisma/prisma.service';
 import { DesksService } from './desks.service';
-import type { CreateWorkspaceDto, UpdateLayoutDto, UpdateMeDto } from './dto';
+import type { CreateWorkspaceDto, SwitchTemplateDto, UpdateLayoutDto, UpdateMeDto } from './dto';
 import { CAN_MANAGE, MembershipService } from './membership.service';
 import { WorkspaceEvents } from './workspace-events';
 
@@ -76,6 +77,35 @@ export class WorkspaceService {
     }
     await this.prisma.workspace.delete({ where: { id: member.workspaceId } });
     this.events.emit({ type: 'deleted', workspaceId: member.workspaceId });
+  }
+
+  /**
+   * Owner: move the whole office to another template (or back to the original
+   * furniture of the same one). Everyone gets the new office live; desks are
+   * handed out again in joining order.
+   */
+  async switchTemplate(userId: string, dto: SwitchTemplateDto) {
+    const member = await this.membership.require(userId, ['OWNER']);
+    const current = member.workspace;
+    if (dto.version !== current.layoutVersion) {
+      throw new FormError('LAYOUT_CHANGED', 'The office was changed meanwhile. Reload the page and try again.');
+    }
+    const template = findTemplate(dto.templateId)!;
+    const layout = template.build();
+    const people = await this.prisma.workspaceMember.count({ where: { workspaceId: current.id } });
+    const desks = numberedDesks(layout).length;
+    if (people > desks) {
+      throw new FormError('TOO_SMALL', `${template.name} has ${desks} desks and your team has ${people} people.`, 'templateId');
+    }
+    const { count } = await this.prisma.workspace.updateMany({
+      where: { id: current.id, layoutVersion: current.layoutVersion },
+      data: { templateId: template.id, layout: layout as unknown as Prisma.InputJsonValue, layoutVersion: { increment: 1 } },
+    });
+    if (count !== 1) throw new FormError('LAYOUT_CHANGED', 'The office was changed meanwhile. Reload the page and try again.');
+    const version = current.layoutVersion + 1;
+    this.events.emit({ type: 'layout', workspaceId: current.id, layout, version, by: userId });
+    await this.desks.sync(current.id);
+    return this.mine(userId);
   }
 
   /** Your character and status in the office (both shown to everyone, live). */
