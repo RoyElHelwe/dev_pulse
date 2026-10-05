@@ -33,8 +33,8 @@ export function OfficeIllustration({ className }: { className?: string }) {
       {/* Proximity voice ring between two people */}
       <circle cx="300" cy="148" r="58" fill="#34d399" opacity="0.12" />
       <circle cx="300" cy="148" r="58" fill="none" stroke="#34d399" strokeWidth="2" strokeDasharray="6 6" opacity="0.7" />
-      <Person x={276} y={150} shirt="#2f6f62" hair="#2b1d16" name="Mira" />
-      <Person x={324} y={146} shirt="#e07a5f" hair="#1c1c1c" name="Zakaria" />
+      <Person x={270} y={156} shirt="#2f6f62" hair="#2b1d16" name="Mira" />
+      <Person x={334} y={142} shirt="#e07a5f" hair="#1c1c1c" name="Zakaria" />
       <Person x={110} y={64} shirt="#3d5a80" hair="#b5763c" name="Roy" />
       {/* Plants */}
       {[
