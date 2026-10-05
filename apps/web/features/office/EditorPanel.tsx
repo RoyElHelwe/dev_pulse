@@ -31,6 +31,7 @@ import { Kbd } from '@/components/ui/Kbd';
 import { Panel } from '@/components/ui/Panel';
 import { CATALOG, type CatalogItem, catalogEntry, KIND_LABEL } from '@/game/editor/catalog';
 import type { LayoutEditor } from '@/game/editor/LayoutEditor';
+import { PROBLEM_TEXT, type PlacementProblem } from '@/game/editor/rules';
 import type { FurnitureKind } from '@/game/layout/types';
 import { cn } from '@/lib/cn';
 
@@ -65,12 +66,18 @@ interface EditorPanelProps {
   onSave(): void;
   onDiscard(): void;
   onReload(): void;
+  /** Puts back the template's original furniture (asks first). */
+  onReset(): void;
+  /** Shows why an action was refused. */
+  onProblem(text: string): void;
 }
 
 /** The organiser's tools around the office while editing it. */
-export function EditorPanel({ editor, saving, error, onSave, onDiscard, onReload }: EditorPanelProps) {
+export function EditorPanel({ editor, saving, error, onSave, onDiscard, onReload, onReset, onProblem }: EditorPanelProps) {
   const state = useSyncExternalStore(editor.subscribe, editor.getState, editor.getState);
   const selected = state.selectedId ? editor.item(state.selectedId) : undefined;
+  const count = state.selectedIds.length;
+  const report = (problem: PlacementProblem | null) => problem && onProblem(PROBLEM_TEXT[problem]);
 
   return (
     <>
@@ -134,19 +141,21 @@ export function EditorPanel({ editor, saving, error, onSave, onDiscard, onReload
         {selected ? (
           <div>
             <div className="flex items-center justify-between border-b border-zinc-200/70 px-4 py-3">
-              <p className="text-sm font-semibold">{KIND_LABEL[selected.kind] ?? selected.kind}</p>
-              {state.flagged.includes(selected.id) && (
+              <p className="text-sm font-semibold">
+                {count > 1 ? `${count} pieces selected` : (KIND_LABEL[selected.kind] ?? selected.kind)}
+              </p>
+              {state.selectedIds.some((id) => state.flagged.includes(id)) && (
                 <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[11px] font-medium text-rose-700">Blocked</span>
               )}
             </div>
             <div className="space-y-3 p-3">
               <div className="grid grid-cols-2 gap-1.5">
-                <Tool icon={RotateCcw} label="Rotate left" onClick={() => editor.rotate(selected.id, false)} />
-                <Tool icon={RotateCw} label="Rotate right" onClick={() => editor.rotate(selected.id, true)} />
-                <Tool icon={Copy} label="Duplicate" onClick={() => editor.duplicate(selected.id)} />
-                <Tool icon={Trash2} label="Remove" danger onClick={() => editor.remove(selected.id)} />
+                <Tool icon={RotateCcw} label="Rotate left" onClick={() => report(editor.rotate(false))} />
+                <Tool icon={RotateCw} label="Rotate right" onClick={() => report(editor.rotate(true))} />
+                <Tool icon={Copy} label="Duplicate" onClick={() => report(editor.duplicate())} />
+                <Tool icon={Trash2} label="Remove" danger onClick={() => editor.remove()} />
               </div>
-              {catalogEntry(selected.kind)?.colors && (
+              {count === 1 && catalogEntry(selected.kind)?.colors && (
                 <div>
                   <p className="mb-1.5 text-xs font-medium text-zinc-500">Colour</p>
                   <div className="flex flex-wrap gap-1.5">
@@ -168,7 +177,8 @@ export function EditorPanel({ editor, saving, error, onSave, onDiscard, onReload
                 </div>
               )}
               <p className="text-xs leading-relaxed text-zinc-500">
-                Drag to move. <Kbd>R</Kbd> rotate, <Kbd>Del</Kbd> remove, arrows nudge.
+                Drag to move. <Kbd>R</Kbd> rotate, <Kbd>Del</Kbd> remove, arrows nudge. <Kbd>Shift</Kbd>-click to
+                add or remove a piece.
               </p>
             </div>
           </div>
@@ -183,8 +193,14 @@ export function EditorPanel({ editor, saving, error, onSave, onDiscard, onReload
                 ))}
             </div>
             <p className="border-t border-zinc-200/70 px-4 py-2.5 text-xs text-zinc-500">
-              Click a piece of furniture to change it. Drag the floor to look around.
+              Click a piece of furniture to change it. Drag the floor to look around. <Kbd>Shift</Kbd>-drag to select
+              several, <Kbd>Ctrl</Kbd> <Kbd>A</Kbd> for all.
             </p>
+            <div className="border-t border-zinc-200/70 p-3">
+              <Button variant="ghost" size="sm" className="w-full text-zinc-600" onClick={onReset}>
+                <RotateCcw className="size-3.5" /> Reset to the original furniture
+              </Button>
+            </div>
           </div>
         )}
       </Panel>

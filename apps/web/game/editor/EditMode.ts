@@ -31,7 +31,10 @@ export class EditMode {
   private readonly scene: Phaser.Scene;
   private readonly outline: Phaser.GameObjects.Graphics;
   private ghost: Phaser.GameObjects.Image | null = null;
-  private drag: { id: string; dx: number; dy: number } | null = null;
+  private drag: { x: number; y: number } | null = null;
+  /** Shift + drag on the floor: selection box (world pixels). */
+  private box: { x: number; y: number; add: boolean } | null = null;
+  private readonly boxGraphics: Phaser.GameObjects.Graphics;
   private panning = false;
   private unsubscribe: () => void;
 
@@ -42,6 +45,7 @@ export class EditMode {
   ) {
     this.scene = host.scene;
     this.outline = this.scene.add.graphics().setDepth(1000);
+    this.boxGraphics = this.scene.add.graphics().setDepth(1001);
     for (const sprite of host.sprites.values()) this.makeInteractive(sprite.image);
 
     const input = this.scene.input;
@@ -65,6 +69,7 @@ export class EditMode {
     input.setDefaultCursor('default');
     this.unsubscribe();
     this.outline.destroy();
+    this.boxGraphics.destroy();
     this.ghost?.destroy();
   }
 
@@ -77,13 +82,18 @@ export class EditMode {
       if (problem) this.problem(problem);
       return;
     }
+    const shift = (pointer.event as MouseEvent | undefined)?.shiftKey ?? false;
     const id = over.map((o) => o.getData('furnitureId') as string | undefined).find(Boolean);
-    if (id) {
-      const item = this.editor.item(id)!;
-      this.editor.select(id);
+    if (id && shift) {
+      this.editor.select(id, true);
+    } else if (id) {
+      // Dragging a selected piece moves the whole selection.
+      if (!this.editor.isSelected(id)) this.editor.select(id);
       this.editor.beginDrag();
-      this.drag = { id, dx: item.x * TILE - pointer.worldX, dy: item.y * TILE - pointer.worldY };
+      this.drag = { x: pointer.worldX, y: pointer.worldY };
       this.scene.input.setDefaultCursor('grabbing');
+    } else if (shift) {
+      this.box = { x: pointer.worldX, y: pointer.worldY, add: true };
     } else {
       this.editor.select(null);
       this.panning = true;
@@ -93,7 +103,16 @@ export class EditMode {
 
   private onMove(pointer: Phaser.Input.Pointer) {
     if (this.drag) {
-      this.editor.dragTo(this.drag.id, (pointer.worldX + this.drag.dx) / TILE, (pointer.worldY + this.drag.dy) / TILE);
+      this.editor.dragBy((pointer.worldX - this.drag.x) / TILE, (pointer.worldY - this.drag.y) / TILE);
+    } else if (this.box) {
+      const g = this.boxGraphics;
+      const x = Math.min(this.box.x, pointer.worldX);
+      const y = Math.min(this.box.y, pointer.worldY);
+      const w = Math.abs(pointer.worldX - this.box.x);
+      const h = Math.abs(pointer.worldY - this.box.y);
+      g.clear();
+      g.fillStyle(0x10b981, 0.08).fillRect(x, y, w, h);
+      g.lineStyle(1.5, 0x10b981, 1).strokeRect(x, y, w, h);
     } else if (this.panning && pointer.isDown) {
       const cam = this.scene.cameras.main;
       cam.scrollX -= (pointer.x - pointer.prevPosition.x) / cam.zoom;
@@ -103,11 +122,17 @@ export class EditMode {
     }
   }
 
-  private onUp() {
+  private onUp(pointer: Phaser.Input.Pointer) {
     if (this.drag) {
-      const problem = this.editor.endDrag(this.drag.id);
+      const problem = this.editor.endDrag();
       if (problem) this.problem(problem);
     }
+    if (this.box) {
+      const b = this.box;
+      this.editor.selectBox(b.x / TILE, b.y / TILE, pointer.worldX / TILE, pointer.worldY / TILE, b.add);
+      this.boxGraphics.clear();
+    }
+    this.box = null;
     this.drag = null;
     this.panning = false;
     this.scene.input.setDefaultCursor('default');
@@ -118,7 +143,8 @@ export class EditMode {
   private onKey = (event: KeyboardEvent) => {
     const target = event.target as HTMLElement | null;
     if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return;
-    const { selectedId, placing } = this.editor.getState();
+    const { selectedIds, placing } = this.editor.getState();
+    const selected = selectedIds.length > 0;
     const mod = event.ctrlKey || event.metaKey;
     const key = event.key.toLowerCase();
     let problem: PlacementProblem | null = null;
@@ -133,21 +159,25 @@ export class EditMode {
     } else if (key === 'escape') {
       if (placing) this.editor.cancelPlacing();
       else this.editor.select(null);
-    } else if (selectedId && mod && key === 'd') {
+    } else if (mod && key === 'a') {
       event.preventDefault();
-      problem = this.editor.duplicate(selectedId);
-    } else if (selectedId && (key === 'delete' || key === 'backspace')) {
+      const { width, height } = this.editor.layout;
+      this.editor.selectBox(0, 0, width, height);
+    } else if (selected && mod && key === 'd') {
       event.preventDefault();
-      this.editor.remove(selectedId);
-    } else if (selectedId && key === 'r') {
-      problem = this.editor.rotate(selectedId, !event.shiftKey);
+      problem = this.editor.duplicate();
+    } else if (selected && (key === 'delete' || key === 'backspace')) {
+      event.preventDefault();
+      this.editor.remove();
+    } else if (selected && key === 'r' && !mod) {
+      problem = this.editor.rotate(!event.shiftKey);
     } else if (key.startsWith('arrow')) {
       event.preventDefault();
       const step = event.shiftKey ? 1 : 0.25;
       const dx = key === 'arrowleft' ? -step : key === 'arrowright' ? step : 0;
       const dy = key === 'arrowup' ? -step : key === 'arrowdown' ? step : 0;
-      if (selectedId) {
-        problem = this.editor.nudge(selectedId, dx, dy);
+      if (selected) {
+        problem = this.editor.nudge(dx, dy);
       } else {
         const cam = this.scene.cameras.main;
         cam.scrollX += dx * TILE * 4;
@@ -205,7 +235,7 @@ export class EditMode {
     // Selection and flagged outlines.
     this.outline.clear();
     for (const id of state.flagged) this.drawOutline(id, 0xe11d48);
-    if (state.selectedId) this.drawOutline(state.selectedId, 0x10b981);
+    for (const id of state.selectedIds) this.drawOutline(id, 0x10b981);
 
     if (!state.placing) {
       this.ghost?.destroy();

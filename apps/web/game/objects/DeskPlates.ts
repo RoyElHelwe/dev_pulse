@@ -47,6 +47,11 @@ export class DeskPlates {
     });
   }
 
+  /** Hidden while editing: desks move, plates would float. */
+  setVisible(visible: boolean) {
+    this.plates.forEach((p) => p.setVisible(visible));
+  }
+
   destroy() {
     this.plates.forEach((p) => p.destroy());
     this.plates = [];
