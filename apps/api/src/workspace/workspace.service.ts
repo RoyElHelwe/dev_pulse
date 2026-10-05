@@ -94,7 +94,9 @@ export class WorkspaceService {
     const template = findTemplate(dto.templateId)!;
     const people = await this.prisma.workspaceMember.count({ where: { workspaceId: current.id } });
     const teamSize = dto.teamSize ?? people;
-    const layout = template.build(teamSize, current.name);
+    // Rebuilding a generated office keeps its look (the seed it was made with), even after a rename.
+    const seed = (current.layout as unknown as OfficeLayout).generated?.seed ?? current.name;
+    const layout = template.build(teamSize, seed);
     const desks = numberedDesks(layout).length;
     if (people > desks) {
       const office = template.id === 'generated' ? `An office for ${teamSize}` : template.name;

@@ -413,7 +413,8 @@ function TemplateSwitcher({ workspace, onSwitched }: { workspace: MyWorkspace; o
 
   useEffect(() => {
     // The generated office is previewed as it would be made: for the people here now.
-    const query = `team=${workspace.memberCount}&seed=${encodeURIComponent(workspace.name)}`;
+    const seed = workspace.layout.generated?.seed ?? workspace.name;
+    const query = `team=${workspace.memberCount}&seed=${encodeURIComponent(seed)}`;
     api<Template[]>(`/office/templates?${query}`).then(setTemplates, () => undefined);
   }, [workspace.memberCount, workspace.name]);
 
