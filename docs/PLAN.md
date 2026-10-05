@@ -95,19 +95,21 @@ model WorkspaceMember {
 }
 ```
 
-### C2 — Auth contract (Mira provides it, everyone uses it)
+### C2 — Auth contract (Mira provides it, everyone uses it) ✅ done
 
-- Session = **httpOnly cookie** `access_token` (JWT signed with `JWT_SECRET`, `Secure`, `SameSite=Lax`).
-- Backend: `@UseGuards(AuthGuard)` and `@CurrentUser() user` from `src/common/auth`.
-- Sockets: the same cookie is sent on the Socket.IO handshake (same origin). The helper
-  `authenticateSocket(socket)` sets `socket.data.user`.
-- Workspace access: `@UseGuards(WorkspaceMemberGuard)` checks the user belongs to `:workspaceId`.
-- Frontend: `GET /api/auth/me` → `{ id, email, displayName, avatarUrl }` (401 if logged out),
-  wrapped in a `useMe()` hook.
+Details and examples: **[docs/AUTH.md](AUTH.md)**.
 
-**Interface first:** Mira's first PR (M1) ships these guards and decorators with their *final*
-signatures, backed by a fake seeded user. Roy and Zakaria code against them from day 2, and
-Mira swaps in the real implementation without anyone else changing code.
+- Tokens = **httpOnly cookies**: `access_token` (JWT, 15 min) + `refresh_token` (rotating).
+- Backend: **every route is protected by default**; mark open routes with `@Public()`.
+  Get the caller with `@CurrentUser() user` (`{ id, sessionId }`) from `src/common/auth`.
+- Sockets: the same cookie is sent on the Socket.IO handshake. `authenticateSocket(socket, tokens)`
+  sets `socket.data.user` (disconnect when it returns null).
+- Workspace access: `WorkspaceMemberGuard` checks the user belongs to `:workspaceId`
+  (added with the workspace tables, M4/M5).
+- Frontend: `useAuth()` → `{ status, user, signOut }`; `api()` calls the API with cookies and
+  refreshes tokens on its own. `/office` and `/settings` redirect to `/login` when signed out.
+- A user typing something wrong → `throw new FormError(code, message, field)` (HTTP 200 +
+  `{ error }`, keeps the browser console clean).
 
 ### C3 — Game → features event bus (Roy emits, Zakaria and the helper listen)
 
@@ -153,16 +155,16 @@ REST: `/api/auth/*`, `/api/users/*`, `/api/workspaces/*`, `/api/workspaces/:id/i
 
 | #  | Week  | Task | Depends | Unblocks |
 | -- | ----- | ---- | ------- | -------- |
-| M1 | W0–W1 | **Auth contract (C2)**: `AuthGuard`, `@CurrentUser()`, `authenticateSocket`, `WorkspaceMemberGuard`, backed by a seeded fake user | C1 | **everyone** |
-| M2 | W1    | Sign up / log in / log out with email + password (bcrypt/argon2 hash), JWT cookie, `/auth/me`, validation on front **and** back, login + signup pages, redirect to onboarding if the user has no workspace | M1 | R3 |
+| M1 | W0–W1 | ✅ **Auth contract (C2)**: global `AuthGuard` + `@Public()`, `@CurrentUser()`, `authenticateSocket` (`WorkspaceMemberGuard` comes with M4/M5) | C1 | **everyone** |
+| M2 | W1    | ✅ Sign up / sign in / sign out (scrypt), JWT access + rotating refresh tokens, `/auth/me`, validation on front **and** back, email confirmation, forgot/reset/change password, signed-in devices, pages. Left: redirect to onboarding when the user has no workspace (with R3) | M1 | R3 |
 | M3 | W2    | Profile: edit display name, avatar upload (default avatar when none), public profile page `/u/[id]` | M2 | R2 (avatars/names in office) |
 | M4 | W2–W3 | **Invitations**: owner/admin invites by email → token link `/invite/[token]`; accept while logged in, or sign up then accept → creates `WorkspaceMember`; list and revoke pending invites; optional email via SMTP env | M2, C1 | R3 (join flow) |
 | M5 | W3    | Members management: list members, change role, remove member; roles enforced (OWNER/ADMIN/MEMBER) | M4 | everyone (role checks) |
-| M6 | W4    | OAuth login (42 or GitHub). Optional: 2FA (TOTP) | M2 | — |
+| M6 | W4    | ✅ OAuth: Google, GitHub and 42. ✅ 2FA (TOTP + backup codes + trusted browser), also after OAuth | M2 | — |
 | M7 | W4    | Friends (add/remove, list) + online status (from socket connection) | M3 | H2 |
 | H1 | W5    | **Helper → Chill room** (see Zakaria's list) | R4 | — |
 | H2 | W5    | **Helper → Chat**: workspace chat + direct messages, history saved in DB, typing indicator | M7 | — |
-| F1 | W6    | Privacy Policy + Terms of Service pages, linked in the footer (**mandatory**, real content) | — | — |
+| F1 | W6    | ✅ Privacy Policy + Terms of Service pages, linked in the footer (**mandatory**, real content) | — | — |
 
 ### Roy — game engine + onboarding
 
