@@ -6,8 +6,10 @@ A collaborative workspace inside a **2D virtual office**: walk around with your 
 talk by proximity voice, meet in meeting rooms, take a break in the chill room and manage
 tasks from your desk.
 
-> 🚧 Infrastructure only for now. The team plan (who builds what, and in which order) is in
-> **[docs/PLAN.md](docs/PLAN.md)**.
+> 🚧 In progress. The team plan (who builds what, and in which order) is in
+> **[docs/PLAN.md](docs/PLAN.md)**. Done so far: infrastructure, the 2D office (R1) and
+> authentication ([docs/AUTH.md](docs/AUTH.md)): email + password, Google / GitHub / 42,
+> 2FA, JWT access + refresh tokens.
 
 ## Architecture
 
@@ -34,7 +36,7 @@ make            # creates .env from .env.example, builds and starts everything
 ```
 
 Open **https://localhost:8443**. The certificate is self-signed, so accept the browser warning
-once. The home page checks the API, database and WebSocket.
+once. `/status` checks the API, database and WebSocket.
 
 ### Commands
 
@@ -50,6 +52,13 @@ once. The home page checks the API, database and WebSocket.
 
 Added a dependency? `cd apps/web && pnpm add <pkg>` (commits the lockfile), then rerun
 `make dev`; it rebuilds the image.
+
+### Optional settings
+
+`make` creates `.env` with random secrets; the app works without changing anything. Emails
+(confirmation, password reset) are printed in `make logs s=api` until you set `SMTP_*`.
+Google / GitHub / 42 sign-in buttons appear when their keys are set. See
+[docs/AUTH.md §5](docs/AUTH.md#5-configuration-env).
 
 ### Access from other machines (LAN)
 
