@@ -43,6 +43,6 @@ import { VerificationService } from './verification.service';
     SessionGateway,
     { provide: APP_GUARD, useClass: AuthGuard },
   ],
-  exports: [TokensService],
+  exports: [TokensService, SessionEvents],
 })
 export class AuthModule {}
