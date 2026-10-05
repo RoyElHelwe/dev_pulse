@@ -19,9 +19,99 @@ datasource db {
 //   User, Workspace, WorkspaceMember
 // ============================================================================
 
+model User {
+  id              String    @id @default(cuid())
+  email           String    @unique
+  displayName     String
+  avatarUrl       String?
+  /// scrypt hash; null for accounts created with Google / GitHub / 42 only.
+  passwordHash    String?
+  emailVerifiedAt DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  refreshTokens RefreshToken[]
+  oauthAccounts OAuthAccount[]
+  authTokens    AuthToken[]
+  twoFactor     TwoFactor?
+}
+
 // ============================================================================
 // MIRA – auth, profile, invitations
 // ============================================================================
+
+/// One row per refresh token. Tokens are rotated on every use: the old row is
+/// revoked and points to its replacement. All rows created from one sign-in
+/// share a familyId (= one device), so a stolen token can kill the family.
+model RefreshToken {
+  id           String    @id @default(cuid())
+  userId       String
+  familyId     String
+  /// SHA-256 of the token. The token itself is only ever in the cookie.
+  tokenHash    String    @unique
+  userAgent    String?
+  ip           String?
+  createdAt    DateTime  @default(now())
+  expiresAt    DateTime
+  revokedAt    DateTime?
+  replacedById String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([familyId])
+}
+
+/// A Google / GitHub / 42 identity linked to a user.
+model OAuthAccount {
+  id             String   @id @default(cuid())
+  provider       String
+  providerUserId String
+  userId         String
+  createdAt      DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerUserId])
+  @@index([userId])
+}
+
+enum AuthTokenType {
+  VERIFY_EMAIL
+  RESET_PASSWORD
+}
+
+/// One-time tokens sent by email (verify email, reset password).
+model AuthToken {
+  id        String        @id @default(cuid())
+  userId    String
+  type      AuthTokenType
+  tokenHash String        @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime      @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, type])
+}
+
+/// Authenticator-app (TOTP) settings. enabledAt is null until the user has
+/// confirmed the first code, so a half-finished setup never locks anyone out.
+model TwoFactor {
+  userId         String    @id
+  /// AES-256-GCM encrypted base32 secret.
+  secret         String
+  enabledAt      DateTime?
+  /// SHA-256 hashes of the unused backup codes.
+  backupCodes    String[]
+  /// Last accepted 30-second step, so a code can't be used twice.
+  lastUsedStep   Int?
+  failedAttempts Int       @default(0)
+  lockedUntil    DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
 
 // ============================================================================
 // ROY – onboarding, office map, game
