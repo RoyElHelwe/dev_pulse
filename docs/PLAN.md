@@ -122,13 +122,14 @@ Zakaria.
 | `player:near`     | `{ userId, distance }`                                      | another player comes within `NEAR_RADIUS`      |
 | `player:distance` | `{ userId, distance }`                                      | while near, at most 5×/s (for voice volume)    |
 | `player:far`      | `{ userId }`                                                | they leave the radius (with a little hysteresis)|
-| `zone:enter`      | `{ type: 'meeting' \| 'chill' \| 'desk', id }`              | local player enters a zone                     |
-| `zone:leave`      | `{ type, id }`                                              | local player leaves a zone                     |
+| `zone:enter`      | `{ type: 'meeting' \| 'chill' \| 'desk', id, name }`        | local player enters a zone (**done in R1**)    |
+| `zone:leave`      | `{ type, id, name }`                                        | local player leaves a zone (**done in R1**)    |
 | `object:interact` | `{ type: 'desk' \| 'board', id }`                           | player presses **E** next to an object         |
 
-Map format: Tiled JSON with an object layer named `zones`. Each object has the properties
-`type` (`meeting` / `chill` / `desk`) and `id`. (The tilesets in `apps/web/office_map` on
-`main` can be reused.)
+Map format: an `OfficeLayout` object (`apps/web/game/layout/types.ts`): plain JSON with
+rooms, walls, furniture and `zones` (`type`, `id`, `name`, rectangle in tiles). The office
+is drawn in code from that data (no tileset), so the same JSON can be stored in the
+database and turned into templates in R5. Example: `game/layout/studio.ts`.
 
 ### C4 — Realtime namespaces and REST prefixes
 
@@ -167,7 +168,7 @@ REST: `/api/auth/*`, `/api/users/*`, `/api/workspaces/*`, `/api/workspaces/:id/i
 
 | #  | Week  | Task | Depends | Unblocks |
 | -- | ----- | ---- | ------- | -------- |
-| R1 | W1    | Phaser inside Next.js (client-only dynamic import), office tilemap (Tiled JSON), character sprite, movement + collisions + camera follow | — | R2 |
+| R1 | W1    | ✅ Phaser inside Next.js (client-only dynamic import), office drawn from layout data, character with walk cycle, movement + collisions + camera follow, zone enter/leave | — | R2 |
 | R2 | W2    | **Multiplayer movement**: `/office` namespace, join the workspace room, broadcast moves (throttled ~10–15/s), interpolation for other players, join/leave, name labels | R1, M1 | **Z3, Z4** |
 | R3 | W2    | **Onboarding wizard**: first login with no workspace → create workspace (name) → pick office template → pick character → enter office. Invited users skip "create" but still pick a character | M1, C1 | M4 (join flow), demo |
 | R4 | W3    | **Zones and interactions (C3)**: `zones` layer, desk per member, `officeEvents` (near/far/distance, zone enter/leave, interact with **E**), `presence:zone` on server | R2 | **Z3 proximity, Z4, Z5, H1** |

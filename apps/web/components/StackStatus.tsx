@@ -37,7 +37,7 @@ export function StackStatus() {
   }, []);
 
   return (
-    <ul className="divide-y divide-slate-800 rounded-lg border border-slate-800">
+    <ul className="divide-y divide-zinc-100 rounded-2xl bg-white text-sm ring-1 ring-zinc-200/80">
       <Row label="API (HTTPS via nginx)" status={api} />
       <Row label="Database" status={db} />
       <Row label="WebSocket (Socket.IO)" status={ws} />
@@ -46,16 +46,19 @@ export function StackStatus() {
 }
 
 const COLORS: Record<Status, string> = {
-  checking: 'text-slate-400',
-  ok: 'text-emerald-400',
-  error: 'text-rose-400',
+  checking: 'bg-zinc-300',
+  ok: 'bg-emerald-500',
+  error: 'bg-rose-500',
 };
 
 function Row({ label, status }: { label: string; status: Status }) {
   return (
-    <li className="flex items-center justify-between px-4 py-3">
-      <span>{label}</span>
-      <span className={COLORS[status]}>{status}</span>
+    <li className="flex items-center justify-between px-4 py-2.5">
+      <span className="text-zinc-600">{label}</span>
+      <span className="flex items-center gap-2 font-medium">
+        <span className={`size-2 rounded-full ${COLORS[status]}`} />
+        {status}
+      </span>
     </li>
   );
 }
