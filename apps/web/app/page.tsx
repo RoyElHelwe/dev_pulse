@@ -1,6 +1,6 @@
 import { ArrowRight, Headphones, KanbanSquare, Users } from 'lucide-react';
 import Link from 'next/link';
-import { StackStatus } from '@/components/StackStatus';
+import { SiteFooter } from '@/components/SiteFooter';
 import { buttonStyles } from '@/components/ui/Button';
 import { Logo } from '@/components/ui/Logo';
 import { HeaderActions } from '@/features/auth/HeaderActions';
@@ -52,11 +52,8 @@ export default function HomePage() {
             </article>
           ))}
         </section>
-
-        <section className="mt-12 max-w-sm">
-          <StackStatus />
-        </section>
       </main>
+      <SiteFooter className="mx-auto max-w-6xl border-t border-zinc-200 px-4 py-8 sm:px-6" />
     </div>
   );
 }

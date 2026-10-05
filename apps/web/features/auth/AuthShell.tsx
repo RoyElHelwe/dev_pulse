@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
+import { SiteFooter } from '@/components/SiteFooter';
 import { Logo } from '@/components/ui/Logo';
 import { OfficeIllustration } from './OfficeIllustration';
 
@@ -25,6 +26,7 @@ export function AuthShell({ title, subtitle, children, footer }: AuthShellProps)
           <div className="mt-8">{children}</div>
           {footer && <p className="mt-8 text-center text-sm text-zinc-600">{footer}</p>}
         </main>
+        <SiteFooter className="mx-auto w-full max-w-sm text-xs" />
       </div>
       <aside className="relative hidden overflow-hidden bg-zinc-900 p-3 lg:block">
         <div className="relative flex h-full flex-col justify-between overflow-hidden rounded-[28px] bg-zinc-950 p-10 text-white">
