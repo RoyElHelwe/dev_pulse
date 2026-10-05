@@ -3,7 +3,6 @@ name: CI
 on:
   pull_request:
   push:
-    branches: [main]
 
 jobs:
   build:
@@ -31,3 +30,76 @@ jobs:
       - if: matrix.app == 'api'
         run: pnpm test
       - run: pnpm build
+
+  # The whole app in real browsers: onboarding, invitations, multiplayer,
+  # desks, the office editor, templates, phones (e2e/tests).
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      db:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: devpulse
+          POSTGRES_PASSWORD: devpulse
+          POSTGRES_DB: devpulse
+        ports: ['5432:5432']
+        options: --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://devpulse:devpulse@localhost:5432/devpulse
+      JWT_SECRET: e2e-only-secret-not-used-anywhere-else-0123456789
+      APP_URL: http://localhost:8080
+      PORT: '4100'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: e2e/package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: '**/pnpm-lock.yaml'
+
+      - name: Start the API
+        working-directory: apps/api
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm prisma generate
+          pnpm prisma db push --skip-generate
+          pnpm build
+          nohup node dist/main.js > ../../api.log 2>&1 &
+      - name: Start the web app
+        working-directory: apps/web
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm build
+          nohup pnpm exec next start -p 3000 > ../../web.log 2>&1 &
+      - name: Install Playwright
+        working-directory: e2e
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm exec playwright install --with-deps chromium
+      - name: Wait for the app
+        working-directory: e2e
+        run: |
+          nohup node serve.mjs > ../proxy.log 2>&1 &
+          for i in $(seq 60); do
+            curl -sf http://localhost:8080/api/health > /dev/null && curl -sf http://localhost:8080/login > /dev/null && exit 0
+            sleep 2
+          done
+          echo "The app did not start"; cat ../api.log ../web.log; exit 1
+      - name: Run the tests
+        working-directory: e2e
+        run: pnpm test
+      - name: Logs
+        if: failure()
+        run: tail -n 100 api.log web.log
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: |
+            e2e/playwright-report
+            e2e/test-results
+          retention-days: 7
