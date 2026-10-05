@@ -1,5 +1,6 @@
 import * as Phaser from 'phaser';
 import { circle, rr, shade } from '../render/draw';
+import { Bubble } from './Bubble';
 import type { CharacterLook } from './looks';
 
 export type Direction = 'down' | 'up' | 'left' | 'right';
@@ -20,6 +21,7 @@ export class Avatar extends Phaser.GameObjects.Container {
   private direction: Direction = 'down';
   private phase = 0;
   private moving = false;
+  private status: Bubble | null = null;
 
   constructor(
     scene: Phaser.Scene,
@@ -27,8 +29,8 @@ export class Avatar extends Phaser.GameObjects.Container {
     y: number,
     private look: CharacterLook,
     name: string,
-    fontFamily: string,
-    textResolution: number,
+    private readonly fontFamily: string,
+    private readonly textResolution: number,
   ) {
     super(scene, x, y);
 
@@ -84,6 +86,25 @@ export class Avatar extends Phaser.GameObjects.Container {
     this.phase = moving ? this.phase + deltaMs * 0.018 : 0;
     if (moving || this.moving || changed) this.redraw();
     this.moving = moving;
+  }
+
+  /** A short status in a bubble above the name ("On break", current task...). */
+  setStatus(text: string | null | undefined) {
+    if (!text) {
+      this.status?.destroy();
+      this.status = null;
+      return;
+    }
+    if (this.status) this.status.setText(text);
+    else {
+      this.status = new Bubble(this.scene, 0, -74, text, {
+        fontFamily: this.fontFamily,
+        resolution: this.textResolution,
+        tail: true,
+        fontSize: 10,
+      });
+      this.add(this.status);
+    }
   }
 
   setLook(look: CharacterLook) {

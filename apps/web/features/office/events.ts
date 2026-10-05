@@ -1,7 +1,7 @@
 import type { ZoneType } from '@/game/layout/types';
 
 // Contract C3 (docs/PLAN.md): the game emits these, features listen to them.
-// R1 emits zone:enter / zone:leave. R4 adds proximity and interactions.
+// Proximity: game/systems/Proximity.ts. Interactions: game/systems/Interactions.ts.
 
 export interface ZoneEvent {
   type: ZoneType;
@@ -15,7 +15,8 @@ export interface OfficeEventMap {
   'player:near': { userId: string; distance: number };
   'player:distance': { userId: string; distance: number };
   'player:far': { userId: string };
-  'object:interact': { type: 'desk' | 'board'; id: string };
+  /** E pressed next to something. Desks: `ownerId` = who sits there (null = free desk). */
+  'object:interact': { type: 'desk' | 'board'; id: string; name: string; ownerId?: string | null };
 }
 
 type Listener<T> = (payload: T) => void;
