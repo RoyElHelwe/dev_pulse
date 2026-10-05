@@ -1,9 +1,15 @@
 import { Logger, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import type { NestExpressApplication } from '@nestjs/platform-express';
+import cookieParser from 'cookie-parser';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+
+  // nginx is in front: trust its X-Forwarded-* headers (real client IP, https).
+  app.set('trust proxy', 1);
+  app.use(cookieParser());
 
   // Every HTTP route lives under /api (nginx forwards /api/* here).
   app.setGlobalPrefix('api');
