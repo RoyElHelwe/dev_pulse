@@ -30,7 +30,7 @@ export class WorkspaceService {
       data: {
         name: dto.name,
         templateId: template.id,
-        layout: template.build() as unknown as Prisma.InputJsonValue,
+        layout: template.build(dto.teamSize, dto.name) as unknown as Prisma.InputJsonValue,
         members: { create: { userId, role: 'OWNER', character: dto.character } },
       },
     });
@@ -81,7 +81,8 @@ export class WorkspaceService {
 
   /**
    * Owner: move the whole office to another template (or back to the original
-   * furniture of the same one). Everyone gets the new office live; desks are
+   * furniture of the same one). The generated office is made for `teamSize`, or
+   * for the people already in it. Everyone gets the new office live; desks are
    * handed out again in joining order.
    */
   async switchTemplate(userId: string, dto: SwitchTemplateDto) {
@@ -91,11 +92,13 @@ export class WorkspaceService {
       throw new FormError('LAYOUT_CHANGED', 'The office was changed meanwhile. Reload the page and try again.');
     }
     const template = findTemplate(dto.templateId)!;
-    const layout = template.build();
     const people = await this.prisma.workspaceMember.count({ where: { workspaceId: current.id } });
+    const teamSize = dto.teamSize ?? people;
+    const layout = template.build(teamSize, current.name);
     const desks = numberedDesks(layout).length;
     if (people > desks) {
-      throw new FormError('TOO_SMALL', `${template.name} has ${desks} desks and your team has ${people} people.`, 'templateId');
+      const office = template.id === 'generated' ? `An office for ${teamSize}` : template.name;
+      throw new FormError('TOO_SMALL', `${office} has ${desks} desks and your team has ${people} people.`, 'templateId');
     }
     const { count } = await this.prisma.workspace.updateMany({
       where: { id: current.id, layoutVersion: current.layoutVersion },

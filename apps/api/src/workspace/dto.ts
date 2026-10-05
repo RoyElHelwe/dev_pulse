@@ -11,6 +11,7 @@ import {
   Matches,
   Max,
   Min,
+  ValidateIf,
   ValidateNested,
 } from 'class-validator';
 import { FURNITURE_KINDS } from '../office/layout/types';
@@ -29,6 +30,13 @@ export class CreateWorkspaceDto {
   @IsIn(TEMPLATES.map((t) => t.id))
   templateId: string;
 
+  /** The generated office needs it: how many people it's made for. */
+  @ValidateIf((o: CreateWorkspaceDto) => o.templateId === 'generated' || o.teamSize !== undefined)
+  @IsInt({ message: 'Pick the size of your team.' })
+  @Min(1)
+  @Max(100)
+  teamSize?: number;
+
   @IsCharacter()
   character: string;
 }
@@ -37,6 +45,13 @@ export class SwitchTemplateDto {
   @IsString()
   @IsIn(TEMPLATES.map((t) => t.id))
   templateId: string;
+
+  /** For the generated office; the number of members when left out. */
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  teamSize?: number;
 
   /** The layout version the organiser saw: refused if someone saved since. */
   @IsInt()

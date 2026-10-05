@@ -4,7 +4,7 @@ import { validateLayout } from '../layout/validate';
 import { TEMPLATES } from './index';
 
 describe.each(TEMPLATES)('template $id', (template) => {
-  const layout = template.build();
+  const layout = template.build(template.maxTeam);
 
   it('passes every editor check', () => {
     expect(validateLayout(layout)).toEqual([]);
