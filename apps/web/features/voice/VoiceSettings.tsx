@@ -10,7 +10,7 @@ import { Kbd } from '@/components/ui/Kbd';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { api, ApiError } from '@/lib/api';
 import { cn } from '@/lib/cn';
-import { KEY_CODE, keyName, type VoiceMode, type VoiceSettings as Settings } from './settings';
+import { KEY_CODE, keyName, OFFICE_KEYS, type VoiceMode, type VoiceSettings as Settings } from './settings';
 
 const MODES: { mode: VoiceMode; title: string; text: string; Icon: typeof Mic }[] = [
   { mode: 'OPEN', title: 'Open mic', text: 'People nearby hear you whenever you are not muted (M).', Icon: Mic },
@@ -55,6 +55,10 @@ export function VoiceSettings() {
       setPicking(false);
       if (e.code === 'Escape') return;
       if (!KEY_CODE.test(e.code)) return setMessage({ tone: 'error', text: 'That key can’t be used. Try another one.' });
+      if (OFFICE_KEYS.has(e.code)) {
+        const text = `${keyName(e.code)} is already used in the office (walk, mute, deafen or use). Try another key.`;
+        return setMessage({ tone: 'error', text });
+      }
       void save({ pushToTalkKey: e.code });
     };
     window.addEventListener('keydown', pick);

@@ -1,7 +1,7 @@
 'use client';
 
 import { ChevronDown, MessageSquare, SendHorizontal } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { IconButton } from '@/components/ui/IconButton';
 import { Panel } from '@/components/ui/Panel';
 import type { OfficeFeatureProps } from '@/features/office/types';
@@ -43,8 +43,9 @@ const timeOf = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: '2-
  * you stand in (meeting room or lounge). Collapsed to a button with an unread
  * count. The server decides who may read and write each channel.
  */
-export function ChatPanel({ socket, controller, workspace, people, myId }: OfficeFeatureProps) {
+export function ChatPanel({ socket, controller, workspace, people, myId, editing }: OfficeFeatureProps) {
   const room = useCurrentRoom(controller, workspace.layout);
+  const roomId = room?.id ?? null;
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<'office' | 'room'>('office');
   const [messages, setMessages] = useState<Record<string, ChatMessage[]>>({});
@@ -54,12 +55,17 @@ export function ChatPanel({ socket, controller, workspace, people, myId }: Offic
 
   // The live listener reads these without re-subscribing.
   const visible = useRef<string | null>(null);
-  visible.current = open ? channel : null;
+  const shown = open && !editing;
+  visible.current = shown ? channel : null;
+  const roomRef = useRef(roomId);
+  roomRef.current = roomId;
 
   // Live messages (ours come back too, for our other tabs).
   useEffect(() => {
     if (!socket) return;
     const onMessage = (m: ChatMessage) => {
+      // A room we already left: no tab shows it, so it mustn't count as unread.
+      if (m.channel !== OFFICE && m.channel !== roomRef.current) return;
       setMessages((all) => ({ ...all, [m.channel]: merge(all[m.channel], [m]) }));
       if (m.userId !== myId && visible.current !== m.channel) {
         setUnread((u) => ({ ...u, [m.channel]: (u[m.channel] ?? 0) + 1 }));
@@ -76,7 +82,6 @@ export function ChatPanel({ socket, controller, workspace, people, myId }: Offic
   }, [socket, myId]);
 
   // A new room (or none): forget the old room's chat; its history loads again when shown.
-  const roomId = room?.id ?? null;
   useEffect(() => {
     const keepOffice = <T,>(all: Record<string, T>): Record<string, T> => (OFFICE in all ? { [OFFICE]: all[OFFICE] } : {});
     setMessages(keepOffice);
@@ -106,11 +111,19 @@ export function ChatPanel({ socket, controller, workspace, people, myId }: Offic
 
   // What's on screen is read.
   useEffect(() => {
-    if (open && unread[channel]) setUnread((u) => omit(u, channel));
-  }, [open, channel, unread]);
+    if (shown && unread[channel]) setUnread((u) => omit(u, channel));
+  }, [shown, channel, unread]);
 
   const totalUnread = Object.values(unread).reduce((sum, n) => sum + n, 0);
+  const characters = useMemo(
+    () => new Map([...people.map((p) => [p.id, p.character] as const), [myId, workspace.character] as const]),
+    [people, myId, workspace.character],
+  );
+  const retry = useCallback(() => setLoads((l) => omit(l, channel)), [channel]);
+  const ids = useId();
 
+  // The organiser is editing the office: hidden, but messages keep arriving.
+  if (editing) return null;
   if (!open) {
     return (
       <Panel className="absolute bottom-20 left-4 p-1">
@@ -126,7 +139,6 @@ export function ChatPanel({ socket, controller, workspace, people, myId }: Offic
     );
   }
 
-  const characterOf = (userId: string) => (userId === myId ? workspace.character : people.find((p) => p.id === userId)?.character);
   const tabs = [
     { key: 'office' as const, label: 'Office', channel: OFFICE },
     ...(room ? [{ key: 'room' as const, label: room.name, channel: room.id }] : []),
@@ -138,9 +150,11 @@ export function ChatPanel({ socket, controller, workspace, people, myId }: Offic
         {tabs.map((t) => (
           <button
             key={t.key}
+            id={`${ids}-${t.key}`}
             type="button"
             role="tab"
             aria-selected={tab === t.key}
+            aria-controls={`${ids}-panel`}
             onClick={() => setTab(t.key)}
             className={cn(
               'flex max-w-40 items-center gap-1.5 rounded-full px-3 py-1 text-sm font-medium transition',
@@ -155,25 +169,34 @@ export function ChatPanel({ socket, controller, workspace, people, myId }: Offic
           <ChevronDown className="size-4" />
         </IconButton>
       </div>
-      <MessageList
-        key={channel}
-        messages={messages[channel] ?? []}
-        load={loadState}
-        myId={myId}
-        characterOf={characterOf}
-        onRetry={() => setLoads((l) => omit(l, channel))}
-        empty={channel === OFFICE ? 'Say hello to the office.' : `Only people in ${room?.name ?? 'this room'} see these messages.`}
-      />
-      <Composer
-        key={`composer-${channel}`}
-        socket={socket}
-        channel={channel}
-        placeholder={channel === OFFICE ? 'Message the office' : `Message ${room?.name ?? 'the room'}`}
-        onSent={(m) => setMessages((all) => ({ ...all, [m.channel]: merge(all[m.channel], [m]) }))}
-      />
+      <div
+        id={`${ids}-panel`}
+        role="tabpanel"
+        aria-labelledby={`${ids}-${tab === 'room' && room ? 'room' : 'office'}`}
+        className="flex min-h-0 flex-1 flex-col"
+      >
+        <MessageList
+          key={channel}
+          messages={messages[channel] ?? EMPTY}
+          load={loadState}
+          myId={myId}
+          characters={characters}
+          onRetry={retry}
+          empty={channel === OFFICE ? 'Say hello to the office.' : `Only people in ${room?.name ?? 'this room'} see these messages.`}
+        />
+        {/* One composer for both tabs: the draft stays when switching. */}
+        <Composer
+          socket={socket}
+          channel={channel}
+          placeholder={channel === OFFICE ? 'Message the office' : `Message ${room?.name ?? 'the room'}`}
+          onSent={(m) => setMessages((all) => ({ ...all, [m.channel]: merge(all[m.channel], [m]) }))}
+        />
+      </div>
     </Panel>
   );
 }
+
+const EMPTY: ChatMessage[] = [];
 
 function omit<T>(record: Record<string, T>, key: string) {
   const { [key]: _, ...rest } = record;
@@ -184,12 +207,13 @@ interface MessageListProps {
   messages: ChatMessage[];
   load: LoadState | undefined;
   myId: string;
-  characterOf(userId: string): string | undefined;
+  /** userId → character, for the faces. */
+  characters: ReadonlyMap<string, string>;
   onRetry(): void;
   empty: string;
 }
 
-function MessageList({ messages, load, myId, characterOf, onRetry, empty }: MessageListProps) {
+const MessageList = memo(function MessageList({ messages, load, myId, characters, onRetry, empty }: MessageListProps) {
   const ref = useRef<HTMLDivElement>(null);
   // Follow new messages, unless the reader scrolled up to read older ones.
   const stuck = useRef(true);
@@ -208,7 +232,8 @@ function MessageList({ messages, load, myId, characterOf, onRetry, empty }: Mess
         stuck.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
       }}
       className="flex-1 space-y-1 overflow-y-auto px-3 py-2"
-      aria-live="polite"
+      role="log"
+      aria-label="Messages"
     >
       {load?.state === 'loading' && messages.length === 0 && <p className="py-6 text-center text-sm text-zinc-500">Loading…</p>}
       {load?.state === 'error' && (
@@ -228,7 +253,7 @@ function MessageList({ messages, load, myId, characterOf, onRetry, empty }: Mess
         return (
           <div key={m.id} className={cn('flex gap-2', mine && 'flex-row-reverse', head && 'pt-1.5')}>
             {!mine && (
-              <div className="w-7 shrink-0">{head && <Face character={characterOf(m.userId)} name={m.name} />}</div>
+              <div className="w-7 shrink-0">{head && <Face character={characters.get(m.userId)} name={m.name} />}</div>
             )}
             <div className={cn('flex min-w-0 flex-col', mine ? 'items-end' : 'items-start')}>
               {head && (
@@ -253,7 +278,7 @@ function MessageList({ messages, load, myId, characterOf, onRetry, empty }: Mess
       })}
     </div>
   );
-}
+});
 
 function Face({ character, name }: { character: string | undefined; name: string }) {
   if (character) return <CharacterFace character={character} className="size-7" />;

@@ -411,12 +411,19 @@ function TemplateSwitcher({ workspace, onSwitched }: { workspace: MyWorkspace; o
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<{ tone: 'success' | 'error'; text: string } | null>(null);
 
+  // The generated office is previewed as it would be made: for the people here now.
+  const seed = workspace.layout.generated?.seed ?? workspace.name;
   useEffect(() => {
-    // The generated office is previewed as it would be made: for the people here now.
-    const seed = workspace.layout.generated?.seed ?? workspace.name;
+    let cancelled = false;
     const query = `team=${workspace.memberCount}&seed=${encodeURIComponent(seed)}`;
-    api<Template[]>(`/office/templates?${query}`).then(setTemplates, () => undefined);
-  }, [workspace.memberCount, workspace.name]);
+    api<Template[]>(`/office/templates?${query}`).then(
+      (list) => !cancelled && setTemplates(list),
+      () => undefined,
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [workspace.memberCount, seed]);
 
   const same = picked === workspace.templateId;
   const rebuild = same && picked === 'generated';

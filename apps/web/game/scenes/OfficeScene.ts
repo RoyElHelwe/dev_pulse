@@ -1,5 +1,6 @@
 import * as Phaser from 'phaser';
 import { officeEvents } from '@/features/office/events';
+import { isTyping } from '@/lib/dom';
 import { TILE, WALK_SPEED } from '../constants';
 import { EditMode } from '../editor/EditMode';
 import type { LayoutEditor } from '../editor/LayoutEditor';
@@ -53,16 +54,18 @@ export interface OfficeSceneData {
   locked: () => string[];
   /** Meeting rooms booked right now, for their badges (replayed after a layout reload). */
   bookings: () => RoomBooking[];
+  /** Who is in a call and talking (replayed after a layout reload). */
+  voice: () => ReadonlyMap<string, { inCall: boolean; talking: boolean }>;
   /** Called when the local player moves (to send it to the others). */
   onMove: (x: number, y: number, dir: number, moving: boolean) => void;
   /** Called when the local player enters or leaves a zone (shared with the others). */
   onZone: (zoneId: string | null) => void;
 }
 
-/** For the minimap: positions in tiles. */
+/** For the minimap and voice: positions in tiles, and the room each person stands in (null outside rooms). */
 export interface OfficeSnapshot {
-  me: { x: number; y: number };
-  others: { id: string; x: number; y: number }[];
+  me: { x: number; y: number; room: string | null };
+  others: { id: string; x: number; y: number; room: string | null }[];
   view: { x: number; y: number; w: number; h: number };
 }
 
@@ -90,6 +93,7 @@ export class OfficeScene extends Phaser.Scene {
   private sprites = new Map<string, { image: Phaser.GameObjects.Image; shadow?: Phaser.GameObjects.Image; key: string }>();
   private editMode: EditMode | null = null;
   private proximity!: Proximity;
+  private roomAt!: (x: number, y: number) => string | null;
   private interactions!: Interactions;
   private plates!: DeskPlates;
   private badges!: RoomBadges;
@@ -151,7 +155,8 @@ export class OfficeScene extends Phaser.Scene {
     this.physics.add.collider(this.player, this.lockedSolids);
 
     const text = { fontFamily: this.opts.fontFamily, resolution: this.opts.dpr * 2 };
-    this.proximity = new Proximity(roomFinder(layout));
+    this.roomAt = roomFinder(layout);
+    this.proximity = new Proximity(this.roomAt);
     this.plates = new DeskPlates(this, layout, { ...text, myId: this.opts.myId, depth: DEPTH.plates });
     this.badges = new RoomBadges(this, layout, { ...text, depth: DEPTH.badges });
     this.interactions = new Interactions(this, layout, { ...text, myId: this.opts.myId, touch: this.opts.touch, depth: DEPTH.hints });
@@ -161,6 +166,7 @@ export class OfficeScene extends Phaser.Scene {
     this.player.setStatus(this.opts.status);
 
     for (const p of this.opts.players()) this.upsertPlayer(p);
+    for (const [id, v] of this.opts.voice()) this.setVoice(id, v.inCall, v.talking);
 
     // Keyboard: arrows + WASD. No key capture, so text inputs keep working.
     const kb = this.input.keyboard!;
@@ -336,9 +342,10 @@ export class OfficeScene extends Phaser.Scene {
 
   snapshot(): OfficeSnapshot {
     const cam = this.cameras.main.worldView;
+    const at = (x: number, y: number) => ({ x: x / TILE, y: y / TILE, room: this.roomAt(x / TILE, y / TILE) });
     return {
-      me: { x: this.player.x / TILE, y: this.player.y / TILE },
-      others: [...this.remotes].map(([id, r]) => ({ id, x: r.avatar.x / TILE, y: r.avatar.y / TILE })),
+      me: at(this.player.x, this.player.y),
+      others: [...this.remotes].map(([id, r]) => ({ id, ...at(r.avatar.x, r.avatar.y) })),
       view: { x: cam.x / TILE, y: cam.y / TILE, w: cam.width / TILE, h: cam.height / TILE },
     };
   }
@@ -590,15 +597,6 @@ function overlapsRect(a: Rect, b: Rect) {
 
 function toEvent(zone: Zone) {
   return { type: zone.type, id: zone.id, name: zone.name };
-}
-
-function isTyping() {
-  const el = document.activeElement;
-  return (
-    el instanceof HTMLInputElement ||
-    el instanceof HTMLTextAreaElement ||
-    (el instanceof HTMLElement && el.isContentEditable)
-  );
 }
 
 /** Desk id → its owner's character. */

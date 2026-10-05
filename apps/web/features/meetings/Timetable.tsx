@@ -54,6 +54,8 @@ export function Timetable({ rooms, day, bookings, now, myId, nameOf, onPick, onO
 
       {rooms.map((room) => {
         const roomBookings = bookings.filter((b) => b.roomId === room.id);
+        // Slots under a booking block can't be reached: keep them out of the tab order too.
+        const covered = (row: number) => roomBookings.some((b) => rowOf(new Date(b.startsAt)) < row + 1 && rowOf(new Date(b.endsAt)) > row);
         return (
           <div key={room.id} className="w-36 shrink-0 border-l border-zinc-100 sm:w-40">
             <div className="sticky top-0 z-10 flex h-8 items-center justify-center truncate bg-white/90 px-2 text-sm font-semibold text-zinc-700">
@@ -62,12 +64,14 @@ export function Timetable({ rooms, day, bookings, now, myId, nameOf, onPick, onO
             <div className="relative" style={{ height: ROWS * ROW_H }}>
               {Array.from({ length: ROWS }, (_, row) => {
                 const past = rowTime(day, row + 1).getTime() <= now;
+                const hidden = covered(row);
                 const selected = drag?.roomId === room.id && row >= Math.min(drag.from, drag.to) && row <= Math.max(drag.from, drag.to);
                 return (
                   <button
                     key={row}
                     type="button"
-                    disabled={past}
+                    disabled={past || hidden}
+                    aria-hidden={hidden || undefined}
                     aria-label={`Book ${room.name} at ${hm(rowTime(day, row))}`}
                     style={{ top: row * ROW_H, height: ROW_H }}
                     className={cn(
@@ -78,10 +82,10 @@ export function Timetable({ rooms, day, bookings, now, myId, nameOf, onPick, onO
                     )}
                     onPointerDown={(e) => {
                       pointer.current = e.pointerType;
-                      if (e.pointerType === 'mouse' && e.button === 0 && !past) setDrag({ roomId: room.id, from: row, to: row });
+                      if (e.pointerType === 'mouse' && e.button === 0 && !past && !hidden) setDrag({ roomId: room.id, from: row, to: row });
                     }}
                     onPointerEnter={() => {
-                      if (drag?.roomId === room.id && !past) setDrag({ ...drag, to: row });
+                      if (drag?.roomId === room.id && !past && !hidden) setDrag({ ...drag, to: row });
                     }}
                     // Touch and keyboard: one tap books one slot (drag is mouse only, so touch can scroll).
                     onClick={(e) => {

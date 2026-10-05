@@ -19,4 +19,6 @@ export interface OfficeFeatureProps {
   myId: string;
   /** Short message at the bottom of the screen. */
   onToast(message: string): void;
+  /** An organiser is editing the office: features stay mounted (calls, chat) but hide their UI. */
+  editing: boolean;
 }
