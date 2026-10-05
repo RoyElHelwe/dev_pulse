@@ -1,4 +1,5 @@
-import { ConflictException, ForbiddenException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { FormError } from '../common/form-error';
 import { AppConfig } from '../config/app-config';
 import { PrismaService } from '../prisma/prisma.service';
 import type { SessionTokens } from './cookies';
@@ -36,11 +37,7 @@ export class AuthService {
   async register(dto: RegisterDto, client: ClientInfo): Promise<SignInResult> {
     const existing = await this.prisma.user.findUnique({ where: { email: dto.email } });
     if (existing) {
-      throw new ConflictException({
-        code: 'EMAIL_TAKEN',
-        field: 'email',
-        message: 'An account with this email already exists.',
-      });
+      throw new FormError('EMAIL_TAKEN', 'An account with this email already exists.', 'email');
     }
     const user = await this.prisma.user.create({
       data: { email: dto.email, displayName: dto.displayName, passwordHash: await hashPassword(dto.password) },
@@ -54,14 +51,11 @@ export class AuthService {
     const user = await this.prisma.user.findUnique({ where: { email: dto.email }, include: PUBLIC_USER_INCLUDE });
     const valid = await verifyPassword(dto.password, user?.passwordHash ?? (await DUMMY_HASH));
     if (!user || !user.passwordHash || !valid) {
-      throw new UnauthorizedException({ code: 'INVALID_CREDENTIALS', message: 'Wrong email or password.' });
+      throw new FormError('INVALID_CREDENTIALS', 'Wrong email or password.');
     }
     const publicUser = toPublicUser(user);
     if (this.config.requireEmailVerification && !publicUser.emailVerified) {
-      throw new ForbiddenException({
-        code: 'EMAIL_NOT_VERIFIED',
-        message: 'Please verify your email first. Check your inbox.',
-      });
+      throw new FormError('EMAIL_NOT_VERIFIED', 'Please verify your email first. Check your inbox.');
     }
     return this.startSession(publicUser, client, trustedDevice);
   }
@@ -70,7 +64,7 @@ export class AuthService {
   async completeTwoFactor(mfaToken: string | undefined, code: string, client: ClientInfo): Promise<SignInResult> {
     const payload = this.tokens.verifyPurposeToken<{ sub: string }>('mfa', mfaToken);
     if (!payload) {
-      throw new UnauthorizedException({ code: 'MFA_EXPIRED', message: 'This sign-in expired. Please start again.' });
+      throw new FormError('MFA_EXPIRED', 'This sign-in expired. Please start again.');
     }
     await this.twoFactor.verifyCode(payload.sub, code);
     const user = await this.me(payload.sub);

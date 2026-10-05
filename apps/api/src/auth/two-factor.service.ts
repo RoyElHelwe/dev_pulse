@@ -1,11 +1,5 @@
-import {
-  BadRequestException,
-  ConflictException,
-  HttpException,
-  HttpStatus,
-  Injectable,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
+import { FormError } from '../common/form-error';
 import { AppConfig } from '../config/app-config';
 import { PrismaService } from '../prisma/prisma.service';
 import { verifyPassword } from './crypto/password';
@@ -40,10 +34,10 @@ export class TwoFactorService {
   async setup(userId: string, password?: string) {
     const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId }, include: { twoFactor: true } });
     if (user.twoFactor?.enabledAt) {
-      throw new ConflictException({ code: 'ALREADY_ENABLED', message: 'Two-factor authentication is already on.' });
+      throw new FormError('ALREADY_ENABLED', 'Two-factor authentication is already on.');
     }
     if (user.passwordHash && !(password && (await verifyPassword(password, user.passwordHash)))) {
-      throw new UnauthorizedException({ code: 'WRONG_PASSWORD', field: 'password', message: 'Wrong password.' });
+      throw new FormError('WRONG_PASSWORD', 'Wrong password.', 'password');
     }
     const secret = generateTotpSecret();
     const data = { secret: encrypt(secret, this.key), enabledAt: null, backupCodes: [], lastUsedStep: null, failedAttempts: 0, lockedUntil: null };
@@ -55,11 +49,11 @@ export class TwoFactorService {
   async enable(userId: string, sessionId: string, code: string) {
     const record = await this.prisma.twoFactor.findUnique({ where: { userId } });
     if (!record || record.enabledAt) {
-      throw new BadRequestException({ code: 'NO_PENDING_SETUP', message: 'Start the setup again.' });
+      throw new FormError('NO_PENDING_SETUP', 'Start the setup again.');
     }
     const step = verifyTotp(decrypt(record.secret, this.key), code.trim());
     if (step === null) {
-      throw new BadRequestException({ code: 'INVALID_CODE', field: 'code', message: 'That code is not right. Try the newest one.' });
+      throw new FormError('INVALID_CODE', 'That code is not right. Try the newest one.', 'code');
     }
     const backupCodes = generateBackupCodes();
     await this.prisma.twoFactor.update({
@@ -97,13 +91,10 @@ export class TwoFactorService {
   async verifyCode(userId: string, input: string): Promise<void> {
     const record = await this.prisma.twoFactor.findUnique({ where: { userId } });
     if (!record?.enabledAt) {
-      throw new BadRequestException({ code: 'NOT_ENABLED', message: 'Two-factor authentication is not on.' });
+      throw new FormError('NOT_ENABLED', 'Two-factor authentication is not on.');
     }
     if (record.lockedUntil && record.lockedUntil > new Date()) {
-      throw new HttpException(
-        { code: 'TOO_MANY_ATTEMPTS', message: 'Too many wrong codes. Try again in a few minutes.' },
-        HttpStatus.TOO_MANY_REQUESTS,
-      );
+      throw new FormError('TOO_MANY_ATTEMPTS', 'Too many wrong codes. Try again in a few minutes.');
     }
 
     const code = input.trim();
@@ -130,7 +121,7 @@ export class TwoFactorService {
       where: { userId },
       data: locked ? { failedAttempts: 0, lockedUntil: new Date(Date.now() + LOCK_MS) } : { failedAttempts },
     });
-    throw new BadRequestException({ code: 'INVALID_CODE', field: 'code', message: 'That code is not right.' });
+    throw new FormError('INVALID_CODE', 'That code is not right.', 'code');
   }
 
   // ---- "trust this device" -------------------------------------------------
