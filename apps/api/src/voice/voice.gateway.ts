@@ -6,15 +6,16 @@ import {
   WebSocketGateway,
 } from '@nestjs/websockets';
 import type { Socket } from 'socket.io';
-import { type ActiveBooking, MeetingsService } from '../meetings/meetings.service';
+import { MeetingsService } from '../meetings/meetings.service';
 import { OfficeGateway } from '../office/office.gateway';
+import { Budget } from '../office/rules';
 import { bookingAllows, withinEarshot } from './talk-rule';
 
 interface VoiceSocketData {
   userId: string;
   workspaceId: string;
-  /** Signals received in the current second (flood protection). */
-  rtcBudget?: { second: number; count: number };
+  /** Flood protection for the voice messages (separate from the office's). */
+  rtcBudget?: Budget;
 }
 
 interface VoiceState {
@@ -27,8 +28,6 @@ interface VoiceState {
 /** An offer with its ICE candidates is a few KB; anything bigger is not a signal. */
 const MAX_SIGNAL_BYTES = 16_000;
 const MAX_SIGNALS_PER_SECOND = 50;
-/** Bookings are looked up at most every few seconds per room (ICE candidates come in bursts). */
-const BOOKING_CACHE_MS = 5_000;
 
 /**
  * Voice: relays WebRTC signaling between two people of the same office, only when
@@ -39,8 +38,8 @@ const BOOKING_CACHE_MS = 5_000;
  * authenticated the socket and set `socket.data`.
  *
  * Events:
- * - `rtc:signal { to, data }` → `rtc:signal { from, data }` to all of `to`'s tabs,
- *   or `rtc:refused { to }` back when they may not talk.
+ * - `rtc:signal { to, data }` → `rtc:signal { from, data }` to the tab `to` joined voice
+ *   with, or `rtc:refused { to }` back when they may not talk or aren't in voice.
  * - `voice:state { muted, deafened }` (joined voice / changed) → `office:voice [userId, muted, deafened]`.
  * - `voice:leave` or the tab closing → `office:voice [userId, null, null]`.
  * - `voice:states` (with ack) → `[userId, muted, deafened][]` of everyone in voice.
@@ -49,7 +48,6 @@ const BOOKING_CACHE_MS = 5_000;
 export class VoiceGateway implements OnGatewayDisconnect {
   /** workspaceId → userId → state, for people in voice. */
   private readonly states = new Map<string, Map<string, VoiceState>>();
-  private readonly bookings = new Map<string, { at: number; booking: ActiveBooking | null }>();
 
   constructor(
     private readonly office: OfficeGateway,
@@ -63,8 +61,10 @@ export class VoiceGateway implements OnGatewayDisconnect {
     const { to, data } = body as { to?: unknown; data?: unknown };
     if (typeof to !== 'string' || to === me.userId || !data || typeof data !== 'object') return;
     if (JSON.stringify(data).length > MAX_SIGNAL_BYTES) return;
-    if (!(await this.mayTalk(me.workspaceId, me.userId, to))) return void socket.emit('rtc:refused', { to });
-    this.office.sendTo(to, 'rtc:signal', { from: me.userId, data });
+    // Only the tab that joined voice answers (two tabs answering would break the call).
+    const target = this.states.get(me.workspaceId)?.get(to);
+    if (!target || !(await this.mayTalk(me.workspaceId, me.userId, to))) return void socket.emit('rtc:refused', { to });
+    this.office.sendToSocket(target.socketId, 'rtc:signal', { from: me.userId, data });
   }
 
   @SubscribeMessage('voice:state')
@@ -110,34 +110,23 @@ export class VoiceGateway implements OnGatewayDisconnect {
     this.office.broadcast(me.workspaceId, 'office:voice', [me.userId, null, null]);
   }
 
-  /** Server geometry only (never what clients claim): same office, same room, in earshot, booking. */
+  /**
+   * Same office, same room, in earshot, booking: from the server's copy of where
+   * people stand (see OfficeGateway.locate). Once two people are connected, audio
+   * is peer to peer: each client hangs up when the other leaves range.
+   */
   private async mayTalk(workspaceId: string, a: string, b: string) {
     const spotA = this.office.locate(workspaceId, a);
     const spotB = this.office.locate(workspaceId, b);
     if (!withinEarshot(spotA, spotB)) return false;
     const room = spotA!.room;
     if (room?.kind !== 'meeting') return true;
-    return bookingAllows(await this.booking(workspaceId, room.id), a, b);
-  }
-
-  private async booking(workspaceId: string, roomId: string) {
-    const key = `${workspaceId}:${roomId}`;
-    const cached = this.bookings.get(key);
-    if (cached && Date.now() - cached.at < BOOKING_CACHE_MS) return cached.booking;
-    let booking: ActiveBooking | null;
-    try {
-      booking = await this.meetings.activeBooking(workspaceId, roomId);
-    } catch {
-      return { attendeeIds: [] }; // can't tell who is invited: nobody talks there for now
-    }
-    this.bookings.set(key, { at: Date.now(), booking });
-    if (this.bookings.size > 1000) this.bookings.clear();
-    return booking;
+    // Can't tell who is invited (database down): nobody talks there for now.
+    const booking = await this.meetings.activeBooking(workspaceId, room.id).catch(() => ({ attendeeIds: [] }));
+    return bookingAllows(booking, a, b);
   }
 
   private withinBudget(data: VoiceSocketData) {
-    const second = Math.floor(Date.now() / 1000);
-    if (data.rtcBudget?.second !== second) data.rtcBudget = { second, count: 0 };
-    return ++data.rtcBudget.count <= MAX_SIGNALS_PER_SECOND;
+    return (data.rtcBudget ??= new Budget(MAX_SIGNALS_PER_SECOND)).allow();
   }
 }

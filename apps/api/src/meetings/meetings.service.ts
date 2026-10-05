@@ -7,22 +7,24 @@ import { CAN_MANAGE, MembershipService } from '../workspace/membership.service';
 import { clock, MAX_ATTENDEES, slotProblem } from './booking-rules';
 import type { CreateBookingDto } from './dto';
 
-/** A booking running right now in a meeting room. */
+/** A booking running right now in a meeting room (what voice and chat need of it). */
 export interface ActiveBooking {
   id: string;
-  roomId: string;
-  title: string;
-  endsAt: Date;
   attendeeIds: string[];
 }
 
 const DAY = 24 * 60 * 60_000;
+/** Running bookings are looked up at most every few seconds per room (ICE candidates come in bursts). */
+const ACTIVE_CACHE_MS = 3_000;
 /** Longest range one list request may cover. */
 const MAX_LIST_DAYS = 62;
 
 /** Meeting room bookings: list, book (no overlaps), cancel. */
 @Injectable()
 export class MeetingsService {
+  /** `workspaceId:roomId` → the running booking, cleared when a booking is made or cancelled. */
+  private readonly active = new Map<string, { at: number; booking: ActiveBooking | null }>();
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly membership: MembershipService,
@@ -30,15 +32,22 @@ export class MeetingsService {
   ) {}
 
   /**
-   * The booking running in `roomId` at `at` (default now), or null when the
-   * room is free. Voice and chat use it: while a room is booked, only its
-   * attendees hear its audio and read its chat.
+   * The booking running in `roomId` now, or null when the room is free. Voice and
+   * chat use it: while a room is booked, only its attendees hear its audio and
+   * read its chat.
    */
-  async activeBooking(workspaceId: string, roomId: string, at = new Date()): Promise<ActiveBooking | null> {
-    return this.prisma.roomBooking.findFirst({
-      where: { workspaceId, roomId, startsAt: { lte: at }, endsAt: { gt: at } },
-      select: { id: true, roomId: true, title: true, endsAt: true, attendeeIds: true },
+  async activeBooking(workspaceId: string, roomId: string): Promise<ActiveBooking | null> {
+    const key = `${workspaceId}:${roomId}`;
+    const cached = this.active.get(key);
+    if (cached && Date.now() - cached.at < ACTIVE_CACHE_MS) return cached.booking;
+    const now = new Date();
+    const booking = await this.prisma.roomBooking.findFirst({
+      where: { workspaceId, roomId, startsAt: { lte: now }, endsAt: { gt: now } },
+      select: { id: true, attendeeIds: true },
     });
+    if (this.active.size > 1000) this.active.clear();
+    this.active.set(key, { at: Date.now(), booking });
+    return booking;
   }
 
   /** Bookings of every meeting room in the caller's office, from `from` (default today) to `to` (default +7 days). */
@@ -92,7 +101,7 @@ export class MeetingsService {
         include: { createdBy: { select: { displayName: true } } },
       });
     });
-    this.changed(workspaceId);
+    this.changed(workspaceId, room.id);
     return publicBooking(booking);
   }
 
@@ -106,11 +115,12 @@ export class MeetingsService {
     }
     if (booking.endsAt <= new Date()) throw new FormError('OVER', 'This meeting is already over.');
     await this.prisma.roomBooking.delete({ where: { id: bookingId } });
-    this.changed(me.workspaceId);
+    this.changed(me.workspaceId, booking.roomId);
   }
 
-  /** Everyone in the office reloads the bookings. */
-  private changed(workspaceId: string) {
+  /** Voice and chat see the change at once; everyone in the office reloads the bookings. */
+  private changed(workspaceId: string, roomId: string) {
+    this.active.delete(`${workspaceId}:${roomId}`);
     this.office.broadcast(workspaceId, 'office:bookings', { changed: true });
   }
 }

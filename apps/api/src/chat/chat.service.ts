@@ -37,8 +37,11 @@ const toDto = (m: { id: string; channel: string; userId: string; text: string; c
 });
 
 /**
- * Office chat: one channel for the whole office, one per room. Where someone
- * stands comes from the server's own copy of the office, never from the client.
+ * Office chat: one channel for the whole office, one per room. Who is in a room
+ * comes from the server's copy of the positions clients report, speed-limited so
+ * nobody can jump into a room (OfficeGateway.locate); booked rooms are protected
+ * by the attendee check. A meeting's room chat belongs to that booking: it isn't
+ * shown before or after it.
  */
 @Injectable()
 export class ChatService {
@@ -50,17 +53,27 @@ export class ChatService {
     private readonly meetings: MeetingsService,
   ) {}
 
+  /** Always answers (the client waits for the ack), even when the database fails. */
   async send(workspaceId: string, userId: string, body: unknown): Promise<SendResult> {
+    try {
+      return await this.trySend(workspaceId, userId, body);
+    } catch {
+      return fail('SERVER_ERROR');
+    }
+  }
+
+  private async trySend(workspaceId: string, userId: string, body: unknown): Promise<SendResult> {
     const { channel, text: raw } = (body ?? {}) as { channel?: unknown; text?: unknown };
     if (!isChannel(channel)) return fail('BAD_CHANNEL');
     const text = cleanText(raw);
     if (!text) return fail('BAD_MESSAGE');
+    // Before any database work, so a flood costs nothing.
+    if (!this.limiter.allow(userId)) return fail('TOO_FAST');
     const { error, booking } = await this.access(workspaceId, userId, channel);
     if (error) return fail(error);
-    if (!this.limiter.allow(userId)) return fail('TOO_FAST');
 
     const saved = await this.prisma.chatMessage.create({
-      data: { workspaceId, channel, userId, text },
+      data: { workspaceId, channel, userId, text, bookingId: booking?.id ?? null },
       include: { user: { select: { displayName: true } } },
     });
     const message = toDto(saved);
@@ -74,13 +87,26 @@ export class ChatService {
     return { ok: true, message };
   }
 
-  /** The last 50 messages of a channel (before `before`), oldest first. */
-  async history(workspaceId: string, userId: string, channel: string, before?: Date) {
-    const { error } = await this.access(workspaceId, userId, channel);
+  /**
+   * The last 50 messages of a channel, oldest first, older than the message
+   * `before` (its `createdAt`) + `beforeId` (its id, for messages of the same
+   * millisecond). A room shows only the messages of its running booking (or of
+   * no booking when it's free).
+   */
+  async history(workspaceId: string, userId: string, channel: string, before?: Date, beforeId?: string) {
+    const { error, booking } = await this.access(workspaceId, userId, channel);
     if (error) return { error: { code: error, message: CHAT_ERRORS[error] } };
+    const older = before && {
+      OR: [{ createdAt: { lt: before } }, ...(beforeId ? [{ createdAt: before, id: { lt: beforeId } }] : [])],
+    };
     const rows = await this.prisma.chatMessage.findMany({
-      where: { workspaceId, channel, ...(before && { createdAt: { lt: before } }) },
-      orderBy: { createdAt: 'desc' },
+      where: {
+        workspaceId,
+        channel,
+        ...(channel !== OFFICE_CHANNEL && { bookingId: booking?.id ?? null }),
+        ...older,
+      },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: HISTORY_PAGE,
       include: { user: { select: { displayName: true } } },
     });
