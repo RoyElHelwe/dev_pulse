@@ -24,7 +24,8 @@ export function StackStatus() {
         setDb('error');
       });
 
-    const socket = io({ transports: ['websocket'] });
+    // Default transports: a quick HTTP handshake, then an upgrade to WebSocket.
+    const socket = io();
     socket.on('connect', async () => {
       const reply = await socket.timeout(3000).emitWithAck('ping').catch(() => null);
       setWs(reply === 'pong' ? 'ok' : 'error');

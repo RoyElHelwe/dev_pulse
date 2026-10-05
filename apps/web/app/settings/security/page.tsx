@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { AppHeader } from '@/components/AppHeader';
+import { SiteFooter } from '@/components/SiteFooter';
 import { SecuritySettings } from '@/features/settings/SecuritySettings';
 
 export const metadata: Metadata = { title: 'Security · Dev Pulse' };
@@ -15,6 +16,7 @@ export default function SecurityPage() {
           <SecuritySettings />
         </div>
       </main>
+      <SiteFooter className="mx-auto max-w-4xl border-t border-zinc-200 px-4 py-8 sm:px-6" />
     </>
   );
 }
