@@ -15,4 +15,20 @@ export interface User {
 export type SignInResponse =
   | { status: 'signed-in'; user: User }
   | { status: 'verification-required'; user: User }
-  | { status: 'two-factor-required' };
+  | { status: 'two-factor-required' }
+  /** Signed in correctly, but the account is in use on another device. */
+  | { status: 'session-active'; device: ActiveDevice };
+
+export interface ActiveDevice {
+  name: string;
+  lastActiveAt: string;
+}
+
+/** Why this browser was signed out (sent by the API, shown on the sign-in page). */
+export type SignedOutReason =
+  | 'signed_out'
+  | 'sessions_closed'
+  | 'signed_in_elsewhere'
+  | 'password_changed'
+  | 'security_alert'
+  | 'expired';
