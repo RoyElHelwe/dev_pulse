@@ -17,7 +17,7 @@ import { authenticateSocket } from '../common/auth/socket-auth';
 import { PrismaService } from '../prisma/prisma.service';
 import { type WorkspaceEvent, WorkspaceEvents } from '../workspace/workspace-events';
 import { TILE } from './layout/geometry';
-import type { OfficeLayout } from './layout/types';
+import type { OfficeLayout, Room } from './layout/types';
 
 /** 0 down, 1 up, 2 left, 3 right. */
 type Dir = 0 | 1 | 2 | 3;
@@ -48,8 +48,8 @@ interface SocketData {
 const MAX_MOVES_PER_SECOND = 40;
 const ZONE_ID = /^[\w:-]{1,64}$/;
 
-const wsRoom = (id: string) => `ws:${id}`;
-const userRoom = (id: string) => `user:${id}`;
+export const wsRoom = (id: string) => `ws:${id}`;
+export const userRoom = (id: string) => `user:${id}`;
 const sessionRoom = (id: string) => `session:${id}`;
 
 /**
@@ -63,7 +63,7 @@ const sessionRoom = (id: string) => `session:${id}`;
 export class OfficeGateway implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect, OnModuleDestroy {
   @WebSocketServer() private server!: Namespace;
   private readonly logger = new Logger(OfficeGateway.name);
-  private readonly offices = new Map<string, { players: Map<string, Player>; width: number; height: number; spawn: { x: number; y: number } }>();
+  private readonly offices = new Map<string, { players: Map<string, Player>; layout: OfficeLayout }>();
   private readonly subscriptions = new Subscription();
 
   constructor(
@@ -109,8 +109,8 @@ export class OfficeGateway implements OnGatewayInit, OnGatewayConnection, OnGate
         id: data.userId,
         name: member.user.displayName,
         character: member.character,
-        x: office.spawn.x * TILE,
-        y: office.spawn.y * TILE,
+        x: office.layout.spawn.x * TILE,
+        y: office.layout.spawn.y * TILE,
         dir: 0,
         moving: false,
         status: member.status,
@@ -148,8 +148,8 @@ export class OfficeGateway implements OnGatewayInit, OnGatewayConnection, OnGate
     const office = this.offices.get(data.workspaceId);
     const player = office?.players.get(data.userId);
     if (!office || !player || typeof x !== 'number' || typeof y !== 'number' || !Number.isFinite(x) || !Number.isFinite(y)) return;
-    player.x = Math.round(Math.min(Math.max(x, 0), office.width * TILE));
-    player.y = Math.round(Math.min(Math.max(y, 0), office.height * TILE));
+    player.x = Math.round(Math.min(Math.max(x, 0), office.layout.width * TILE));
+    player.y = Math.round(Math.min(Math.max(y, 0), office.layout.height * TILE));
     player.dir = dir === 1 || dir === 2 || dir === 3 ? dir : 0;
     player.moving = moving === 1 || moving === true;
     socket
@@ -170,6 +170,37 @@ export class OfficeGateway implements OnGatewayInit, OnGatewayConnection, OnGate
     socket.to(wsRoom(data.workspaceId)).except(userRoom(data.userId)).emit('office:zone', [player.id, zone]);
   }
 
+  // ---- For the other live features (voice, chat, meetings) --------------------------
+
+  /**
+   * Where someone stands right now (pixels) and the room they are in, worked out
+   * from the server's own copy of the layout, never from what the client claims.
+   * Null when they aren't in the office.
+   */
+  locate(workspaceId: string, userId: string): { x: number; y: number; room: Room | null } | null {
+    const office = this.offices.get(workspaceId);
+    const player = office?.players.get(userId);
+    if (!office || !player) return null;
+    return { x: player.x, y: player.y, room: roomAt(office.layout, player.x / TILE, player.y / TILE) };
+  }
+
+  /** Ids of the people standing in a room right now. */
+  peopleIn(workspaceId: string, roomId: string): string[] {
+    const office = this.offices.get(workspaceId);
+    if (!office) return [];
+    return [...office.players.values()].filter((p) => roomAt(office.layout, p.x / TILE, p.y / TILE)?.id === roomId).map((p) => p.id);
+  }
+
+  /** Sends an event to everyone in the office. */
+  broadcast(workspaceId: string, event: string, payload: unknown) {
+    this.server.to(wsRoom(workspaceId)).emit(event, payload);
+  }
+
+  /** Sends an event to all the tabs of one person. */
+  sendTo(userId: string, event: string, payload: unknown) {
+    this.server.to(userRoom(userId)).emit(event, payload);
+  }
+
   onModuleDestroy() {
     this.subscriptions.unsubscribe();
   }
@@ -184,8 +215,7 @@ export class OfficeGateway implements OnGatewayInit, OnGatewayConnection, OnGate
     let office = this.offices.get(workspaceId);
     if (!office) {
       const workspace = await this.prisma.workspace.findUniqueOrThrow({ where: { id: workspaceId } });
-      const layout = workspace.layout as unknown as OfficeLayout;
-      office = { players: new Map(), width: layout.width, height: layout.height, spawn: layout.spawn };
+      office = { players: new Map(), layout: workspace.layout as unknown as OfficeLayout };
       this.offices.set(workspaceId, office);
     }
     return office;
@@ -200,7 +230,7 @@ export class OfficeGateway implements OnGatewayInit, OnGatewayConnection, OnGate
     const office = this.offices.get(event.workspaceId);
     switch (event.type) {
       case 'layout':
-        if (office) Object.assign(office, { width: event.layout.width, height: event.layout.height, spawn: event.layout.spawn });
+        if (office) office.layout = event.layout;
         room.emit('office:layout', { layout: event.layout, version: event.version, by: event.by });
         break;
       case 'member-updated': {
@@ -225,4 +255,13 @@ export class OfficeGateway implements OnGatewayInit, OnGatewayConnection, OnGate
     }
     this.logger.debug(`workspace ${event.workspaceId}: ${event.type}`);
   }
+}
+
+/** The smallest room containing the point (rooms can sit inside the open space). Tiles. */
+function roomAt(layout: OfficeLayout, x: number, y: number): Room | null {
+  let best: Room | null = null;
+  for (const r of layout.rooms) {
+    if (x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h && (!best || r.w * r.h < best.w * best.h)) best = r;
+  }
+  return best;
 }

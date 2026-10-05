@@ -36,6 +36,9 @@ model User {
   twoFactor       TwoFactor?
   membership      WorkspaceMember?
   invitationsSent Invitation[]
+  settings        UserSettings?
+  chatMessages    ChatMessage[]
+  bookings        RoomBooking[]
 }
 
 /// An organisation and its virtual office. Created by its owner (the organiser).
@@ -51,8 +54,10 @@ model Workspace {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  members     WorkspaceMember[]
-  invitations Invitation[]
+  members      WorkspaceMember[]
+  invitations  Invitation[]
+  chatMessages ChatMessage[]
+  bookings     RoomBooking[]
 }
 
 /// OWNER: the organiser (one per workspace). ADMIN: can invite and edit the office.
@@ -68,7 +73,9 @@ model WorkspaceMember {
   userId      String   @unique
   workspaceId String
   role        Role     @default(MEMBER)
-  /// Character look key (apps/web/game/objects/looks.ts).
+  /// Character: a named preset ("maya", "sam"...) or a recipe code: "1" + one
+  /// base-36 digit per choice (body, hair, outfit, desk vibe...), 19 characters.
+  /// Format and validation: apps/web/game/art/recipe.ts, apps/api/src/workspace/characters.ts.
   character   String   @default("maya")
   /// Their desk: a desk furniture id of the layout (null when every desk is taken).
   deskId      String?
@@ -200,3 +207,58 @@ model Invitation {
 // ============================================================================
 // ZAKARIA (+ helper) – tasks, voice, meeting room, chill room
 // ============================================================================
+
+/// How someone talks in the office: mic open (with a mute button) or push to talk.
+enum VoiceMode {
+  OPEN
+  PUSH_TO_TALK
+}
+
+/// Personal settings, the same on every device.
+model UserSettings {
+  userId        String    @id
+  voiceMode     VoiceMode @default(OPEN)
+  /// KeyboardEvent.code held to talk in PUSH_TO_TALK mode ("KeyV", "Space"...).
+  pushToTalkKey String    @default("KeyV")
+  updatedAt     DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+/// A text message: to the whole office (channel "office") or inside a room
+/// (channel = the layout room id, seen only by people in that room).
+model ChatMessage {
+  id          String   @id @default(cuid())
+  workspaceId String
+  channel     String
+  userId      String
+  text        String
+  createdAt   DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, channel, createdAt])
+}
+
+/// A meeting room reserved for a time slot. No two bookings of one room overlap
+/// (checked by the API under a lock). While it runs, only its attendees can enter
+/// the room, hear its audio and read its chat.
+model RoomBooking {
+  id          String   @id @default(cuid())
+  workspaceId String
+  /// Meeting room id in the layout (rooms with kind "meeting").
+  roomId      String
+  title       String
+  startsAt    DateTime
+  endsAt      DateTime
+  createdById String
+  /// Who may join (always includes the creator).
+  attendeeIds String[]
+  createdAt   DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdBy User      @relation(fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, roomId, startsAt])
+}
