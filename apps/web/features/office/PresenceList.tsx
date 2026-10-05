@@ -1,9 +1,10 @@
 'use client';
 
-import { Users } from 'lucide-react';
+import { HeadphoneOff, MicOff, Users } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Panel } from '@/components/ui/Panel';
 import { useAuth } from '@/features/auth/AuthProvider';
+import { useVoiceStates, type VoiceState } from '@/features/voice/store';
 import { CharacterFace } from '@/features/workspace/CharacterPreview';
 import type { Presence } from './connection';
 
@@ -20,6 +21,7 @@ interface PresenceListProps {
 /** "3 in the office" with their faces; click for the list (where everyone is, their status). */
 export function PresenceList({ people, placeOf, myZone, myStatus, nearby }: PresenceListProps) {
   const { user } = useAuth();
+  const voice = useVoiceStates();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -53,7 +55,13 @@ export function PresenceList({ people, placeOf, myZone, myStatus, nearby }: Pres
       {open && (
         <Panel className="absolute right-0 z-20 mt-2 max-h-[70vh] w-72 overflow-y-auto p-1.5">
           <ul>
-            <Person name={user?.displayName ?? ''} you place={placeOf(myZone)} status={myStatus} />
+            <Person
+              name={user?.displayName ?? ''}
+              you
+              place={placeOf(myZone)}
+              status={myStatus}
+              voice={user ? voice.get(user.id) : undefined}
+            />
             {people.map((p) => (
               <Person
                 key={p.id}
@@ -62,6 +70,7 @@ export function PresenceList({ people, placeOf, myZone, myStatus, nearby }: Pres
                 place={placeOf(p.zone)}
                 status={p.status}
                 near={nearby.has(p.id)}
+                voice={voice.get(p.id)}
               />
             ))}
           </ul>
@@ -78,6 +87,8 @@ function Person(props: {
   place: string | null;
   status: string | null;
   near?: boolean;
+  /** In voice: muted or deafened shows an icon. */
+  voice?: VoiceState;
 }) {
   return (
     <li className="flex items-center gap-2.5 rounded-xl px-2.5 py-2 text-sm">
@@ -95,6 +106,11 @@ function Person(props: {
           {props.status && <> · {props.status}</>}
         </span>
       </span>
+      {props.voice?.deafened ? (
+        <HeadphoneOff className="size-3.5 shrink-0 text-rose-500" aria-label="Deafened" role="img" />
+      ) : (
+        props.voice?.muted && <MicOff className="size-3.5 shrink-0 text-rose-500" aria-label="Muted" role="img" />
+      )}
       {props.near && (
         <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700">Nearby</span>
       )}
