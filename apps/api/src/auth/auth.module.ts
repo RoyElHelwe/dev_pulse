@@ -9,6 +9,7 @@ import { deriveKey } from './crypto/secrets';
 import { EmailTokensService } from './email-tokens.service';
 import { PasswordService } from './password.service';
 import { TokensService } from './tokens.service';
+import { TwoFactorService } from './two-factor.service';
 import { VerificationService } from './verification.service';
 
 @Module({
@@ -30,6 +31,7 @@ import { VerificationService } from './verification.service';
     EmailTokensService,
     VerificationService,
     PasswordService,
+    TwoFactorService,
     { provide: APP_GUARD, useClass: AuthGuard },
   ],
   exports: [TokensService],
