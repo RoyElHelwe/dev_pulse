@@ -3,7 +3,7 @@ import { type NextRequest, NextResponse } from 'next/server';
 // Runs before a page is rendered. It only looks at the signed_in cookie
 // (a hint for nicer redirects); the API still checks the real tokens.
 
-const PROTECTED = ['/office', '/settings'];
+const PROTECTED = ['/office', '/settings', '/onboarding', '/team'];
 const GUEST_ONLY = ['/login', '/register'];
 
 export function proxy(request: NextRequest) {
@@ -23,5 +23,5 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/office/:path*', '/settings/:path*', '/login', '/register'],
+  matcher: ['/office/:path*', '/settings/:path*', '/onboarding', '/team', '/login', '/register'],
 };
