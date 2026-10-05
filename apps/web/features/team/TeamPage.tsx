@@ -12,6 +12,7 @@ import { useAuth } from '@/features/auth/AuthProvider';
 import { emailField } from '@/features/auth/schemas';
 import { CharacterFace } from '@/features/workspace/CharacterPreview';
 import { canManage, type MyWorkspace, ROLE_LABEL, type Role } from '@/features/workspace/types';
+import { numberedDesks } from '@/game/layout/derive';
 import { api, ApiError } from '@/lib/api';
 import { CopyLink } from './CopyLink';
 
@@ -21,6 +22,7 @@ interface Member {
   email: string;
   role: Role;
   character: string;
+  deskId: string | null;
   joinedAt: string;
 }
 
@@ -69,6 +71,8 @@ export function TeamPage() {
         members={members}
         myId={user!.id}
         isOwner={owner}
+        canAssignDesks={manager}
+        desks={numberedDesks(workspace.layout).map(({ desk, name }) => ({ id: desk.id, name }))}
         onChange={load}
         onLeft={async () => {
           await reloadUser();
@@ -200,12 +204,16 @@ function MembersCard({
   members,
   myId,
   isOwner,
+  canAssignDesks,
+  desks,
   onChange,
   onLeft,
 }: {
   members: Member[];
   myId: string;
   isOwner: boolean;
+  canAssignDesks: boolean;
+  desks: { id: string; name: string }[];
   onChange: () => void;
   onLeft: () => void;
 }) {
@@ -241,6 +249,32 @@ function MembersCard({
                 </p>
                 <p className="truncate text-xs text-zinc-500">{m.email}</p>
               </div>
+              {canAssignDesks ? (
+                <select
+                  aria-label={`Desk of ${m.displayName}`}
+                  value={m.deskId ?? ''}
+                  onChange={(e) =>
+                    call(
+                      () => api(`/workspace/members/${m.userId}/desk`, { method: 'PUT', body: { deskId: e.target.value || null } }),
+                      onChange,
+                    )
+                  }
+                  className="h-8 rounded-lg border border-zinc-200 bg-white px-2 text-sm"
+                >
+                  <option value="">No desk</option>
+                  {desks.map((d) => {
+                    const sitter = members.find((o) => o.deskId === d.id && o.userId !== m.userId);
+                    return (
+                      <option key={d.id} value={d.id}>
+                        {d.name}
+                        {sitter ? ` (swap with ${sitter.displayName.split(' ')[0]})` : ''}
+                      </option>
+                    );
+                  })}
+                </select>
+              ) : (
+                <span className="text-xs text-zinc-500">{desks.find((d) => d.id === m.deskId)?.name ?? 'No desk'}</span>
+              )}
               {isOwner && m.role !== 'OWNER' ? (
                 <select
                   aria-label={`Role of ${m.displayName}`}
