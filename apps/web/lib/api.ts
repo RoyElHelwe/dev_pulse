@@ -18,6 +18,15 @@ type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
 /** Errors that mean "get a new access token and try again". */
 const EXPIRED = new Set(['TOKEN_EXPIRED', 'NOT_AUTHENTICATED']);
+/** Errors that mean "this device was signed out". */
+const ENDED = new Set(['SESSION_ENDED', 'REFRESH_TOKEN_REUSED']);
+
+let sessionEndedListener: (() => void) | null = null;
+
+/** Called when the API says this device was signed out (AuthProvider listens). */
+export function onSessionEnded(listener: (() => void) | null) {
+  sessionEndedListener = listener;
+}
 
 export async function api<T = void>(path: string, options: { method?: Method; body?: unknown } = {}): Promise<T> {
   const send = () =>
@@ -31,7 +40,8 @@ export async function api<T = void>(path: string, options: { method?: Method; bo
   let res = await send();
   if (res.status === 401) {
     const body = await res.clone().json().catch(() => ({}));
-    if (EXPIRED.has(body.code) && (await refreshTokens())) res = await send();
+    if (ENDED.has(body.code)) sessionEndedListener?.();
+    else if (EXPIRED.has(body.code) && (await refreshTokens())) res = await send();
   }
   if (!res.ok) throw await toApiError(res);
   if (res.status === 204) return undefined as T;
@@ -72,6 +82,10 @@ export function refreshTokens(): Promise<boolean> {
       // Another tab may have refreshed while we waited for the lock.
       if (accessTokenExpiry() !== before && isAccessTokenFresh()) return true;
       const res = await fetch('/api/auth/refresh', { method: 'POST', credentials: 'same-origin' });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        if (ENDED.has(body.code)) sessionEndedListener?.();
+      }
       return res.ok;
     };
     return navigator.locks ? navigator.locks.request('dev-pulse-refresh', run) : run();
