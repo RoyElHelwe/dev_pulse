@@ -27,21 +27,6 @@ export function slotProblem(startsAt: Date, endsAt: Date, now = new Date()): str
   return null;
 }
 
-interface Range {
-  startsAt: Date;
-  endsAt: Date;
-}
-
-/** Two ranges overlap when each starts before the other ends (back-to-back is fine). */
-export function overlaps(a: Range, b: Range) {
-  return a.startsAt < b.endsAt && b.startsAt < a.endsAt;
-}
-
-/** The first booking clashing with `range`, if any. */
-export function findClash<T extends Range>(range: Range, bookings: T[]): T | undefined {
-  return bookings.find((b) => overlaps(range, b));
-}
-
 /** "14:00" in the given IANA time zone (UTC when unknown). */
 export function clock(at: Date, timeZone?: string) {
   const format = (tz: string) => new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: tz }).format(at);

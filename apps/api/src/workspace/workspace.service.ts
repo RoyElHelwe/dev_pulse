@@ -102,13 +102,22 @@ export class WorkspaceService {
       const office = template.id === 'generated' ? `An office for ${teamSize}` : template.name;
       throw new FormError('TOO_SMALL', `${office} has ${desks} desks and your team has ${people} people.`, 'templateId');
     }
-    const { count } = await this.prisma.workspace.updateMany({
-      where: { id: current.id, layoutVersion: current.layoutVersion },
-      data: { templateId: template.id, layout: layout as unknown as Prisma.InputJsonValue, layoutVersion: { increment: 1 } },
+    const meetingRooms = layout.rooms.filter((r) => r.kind === 'meeting').map((r) => r.id);
+    const cancelled = await this.prisma.$transaction(async (tx) => {
+      const { count } = await tx.workspace.updateMany({
+        where: { id: current.id, layoutVersion: current.layoutVersion },
+        data: { templateId: template.id, layout: layout as unknown as Prisma.InputJsonValue, layoutVersion: { increment: 1 } },
+      });
+      if (count !== 1) throw new FormError('LAYOUT_CHANGED', 'The office was changed meanwhile. Reload the page and try again.');
+      // Running and future bookings of rooms the new office doesn't have would lock rooms that don't exist.
+      const gone = await tx.roomBooking.deleteMany({
+        where: { workspaceId: current.id, endsAt: { gt: new Date() }, roomId: { notIn: meetingRooms } },
+      });
+      return gone.count;
     });
-    if (count !== 1) throw new FormError('LAYOUT_CHANGED', 'The office was changed meanwhile. Reload the page and try again.');
     const version = current.layoutVersion + 1;
     this.events.emit({ type: 'layout', workspaceId: current.id, layout, version, by: userId });
+    if (cancelled > 0) this.events.emit({ type: 'bookings', workspaceId: current.id });
     await this.desks.sync(current.id);
     return this.mine(userId);
   }

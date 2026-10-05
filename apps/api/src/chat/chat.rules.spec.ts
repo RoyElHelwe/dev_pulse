@@ -53,4 +53,15 @@ describe('RateLimiter', () => {
     expect(limiter.allow('u2', 2000)).toBe(true);
     expect(limiter.allow('u1', 6001)).toBe(true);
   });
+
+  it('forgets people who went quiet, at most once per window', () => {
+    const limiter = new RateLimiter(1, 1000);
+    const size = () => (limiter as unknown as { sent: Map<string, number[]> }).sent.size;
+    for (let i = 0; i <= 1000; i++) limiter.allow(`u${i}`, 0);
+    limiter.allow('late', 5000); // prunes the 1001 quiet people
+    expect(size()).toBe(1);
+    for (let i = 0; i <= 1000; i++) limiter.allow(`v${i}`, 5000);
+    limiter.allow('later', 5500); // above 1000 again, but pruned less than a window ago
+    expect(size()).toBe(1003);
+  });
 });

@@ -75,7 +75,8 @@ band of meeting rooms (one per ~10 people, up to 4, one bigger than the others) 
 kitchen + lounge filling the rest (a second chill corner when it's long), an open space
 with desk clusters of 4 in a centred grid, and the entrance with waiting areas on the south
 wall. The office name is the seed: it picks room names, carpet colours, sofas, plants and
-which side the meeting rooms are on, so the wizard's preview is the office you get.
+which side the meeting rooms are on, so the wizard's preview is the office you get. The seed
+is kept in `layout.generated`, so rebuilding it later keeps its look even after a rename.
 `generated.spec.ts` builds every size from 1 to 100 with several seeds and checks
 `validateLayout` finds nothing. The API takes `teamSize` (1–100) with `templateId:
 'generated'` (`POST /api/workspace`; `PUT /api/workspace/template`, where it defaults to the
@@ -94,7 +95,11 @@ furniture when the office is edited.
   membership checked) and sends who is there.
 - While walking, positions go out ~20 times a second as tiny arrays `[x, y, dir, moving]`,
   sent **volatile** (a late position is dropped, never queued) and never back to your own
-  tabs. The server clamps positions to the office and drops floods (> 40/s).
+  tabs. The server clamps positions to the office, drops floods (> 40/s) and ignores jumps
+  faster than walking (1.6 × walking speed + 1 tile of slack; the first position after a
+  connect and the entrance, within 3 tiles of the spawn, are always accepted). Walls aren't
+  checked by the server: its positions are the client's, speed-limited so nobody can jump
+  into a room; booked rooms are protected by the attendee check.
 - Other people are drawn 100 ms in the past and interpolated between positions, so they
   move smoothly even when packets arrive unevenly; a big jump (reconnect) teleports.
 - Locally ~1 ms per move through the server.
@@ -108,7 +113,7 @@ furniture when the office is edited.
 | **Nearby** | Another person within 3 tiles **in the same room** (walls, even glass, separate people) → `player:near`, then `player:distance` up to 5×/s, `player:far` past 3.5 tiles. The people list tags them "Nearby". | `game/systems/Proximity.ts` |
 | **Your desk** | Each member gets a free desk on joining (joining order), with their name on it (yours in green). Desks follow the office: after an edit people keep their desk if it still exists. Owners and admins move people from the Team page (swaps with whoever sat there). | `workspace/desks.service.ts`, `game/objects/DeskPlates.ts` |
 | **E to use** | At a desk or in front of a screen, a hint appears ("Your desk", "Mira’s desk", "Desk 4 · free"); **E** (or tapping the hint) emits `object:interact`. | `game/systems/Interactions.ts` |
-| **Who is where** | The game reports its zone; the server shares it (`office:zone`). The people list shows "Atlas · Meeting room", "At Mira’s desk"; meeting rooms with people inside show "In use · 2". | `office.gateway.ts`, `game/objects/RoomBadges.ts` |
+| **Who is where** | The game reports its zone; the server shares it (`office:zone`), for display only (access uses positions). The people list shows "Atlas · Meeting room", "At Mira’s desk"; meeting rooms with people inside show "In use · 2". | `office.gateway.ts`, `game/objects/RoomBadges.ts` |
 | **Status** | A short status in a bubble over the avatar ("Focusing", "On break ☕" or your own text), set from your chip (bottom left), stored on the membership. | `CharacterSwitcher.tsx` |
 | **Map** | Floor plan in the corner with everyone, and the part of the office on screen. | `Minimap.tsx` |
 | **Phones and tablets** | A joystick (bottom right) instead of the keyboard; the hints say "Tap". | `Joystick.tsx` |
@@ -165,16 +170,21 @@ game (walking keys are ignored while you type).
 | --- | --- |
 | Text | trimmed, 1–500 characters |
 | Rate | 5 messages per 5 seconds per person (`TOO_FAST`) |
-| Room channel | the room the server itself places you in (`OfficeGateway.locate`), never what the client says (`NOT_IN_ROOM`) |
-| Booked room | while a booking runs, only its attendees read and write (`NOT_ATTENDEE`) |
+| Room channel | the room the server places you in (`OfficeGateway.locate`): its copy of the positions clients report, speed-limited so nobody can jump into a room (`NOT_IN_ROOM`) |
+| Booked room | while a booking runs, only its attendees read and write (`NOT_ATTENDEE`); a meeting's messages stay with it (not shown before or after, nor its earlier chatter during it) |
 
 - Socket `/office`: the client sends `chat:send { channel, text }` and gets an ack
-  `{ ok: true, message }` or `{ ok: false, error: { code, message } }` (shown under the input).
+  `{ ok: true, message }` or `{ ok: false, error: { code, message } }` (shown under the input;
+  `SERVER_ERROR` when the database fails, so the ack always comes).
   Everyone allowed receives `chat:message { id, channel, userId, name, text, createdAt }`:
   the office channel goes to the whole office, a room channel only to the people in that room.
-- `GET /api/workspace/chat?channel=office|<room id>&before=<ISO date>` → `{ messages, more }`,
-  the last 50, oldest first; same room and booking rules.
-- Messages are stored in `ChatMessage` (channel `office` or a layout room id).
+- `GET /api/workspace/chat?channel=office|<room id>&before=<createdAt>&beforeId=<id>` →
+  `{ messages, more }`, the last 50, oldest first; same room and booking rules. To load older
+  ones, send the oldest shown message's `createdAt` and `id` (the id keeps messages of the same
+  millisecond from being skipped).
+- Messages are stored in `ChatMessage` (channel `office` or a layout room id), with the
+  booking running in the room when sent (`bookingId`); a room shows only those of the
+  booking running now (or of no booking when it's free).
 
 ## 6. The office editor
 
@@ -282,7 +292,13 @@ details; its creator, or an owner / admin, can cancel it.
   its doors). Someone already inside when it starts is sent back to the entrance with
   "Atlas is booked until 15:00". The badge over the door says "Booked · until 15:00".
 - The server can't move people, so audio and chat check too: they ask
-  `MeetingsService.activeBooking(workspaceId, roomId)` and refuse non-attendees.
+  `MeetingsService.activeBooking(workspaceId, roomId)` (cached a few seconds per room, cleared
+  when a booking is made or cancelled) and refuse non-attendees.
+- Once two people are connected, audio is peer to peer: the server only gates who may start
+  a call (`rtc:signal` reaches only the tab that joined voice), and each client hangs up when
+  the other leaves range or a booking excludes them.
+- Moving the office to another template deletes running and future bookings of rooms the new
+  layout doesn't have.
 - People in a meeting get a toast when it starts.
 
 | Method | Path | Who | What |

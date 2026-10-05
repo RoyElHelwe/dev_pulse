@@ -18,6 +18,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { type WorkspaceEvent, WorkspaceEvents } from '../workspace/workspace-events';
 import { TILE } from './layout/geometry';
 import type { OfficeLayout, Room } from './layout/types';
+import { Budget, limitMove, ZONE_ID } from './rules';
 
 /** 0 down, 1 up, 2 left, 3 right. */
 type Dir = 0 | 1 | 2 | 3;
@@ -34,6 +35,8 @@ interface Player {
   status: string | null;
   /** The zone they stand in (meeting room, lounge, desk), as their game reports it. */
   zone: string | null;
+  /** When the last position was accepted (0: take the next one as is, e.g. after a reconnect). */
+  movedAt: number;
   sockets: Set<string>;
 }
 
@@ -41,12 +44,11 @@ interface SocketData {
   userId: string;
   sessionId: string;
   workspaceId: string;
-  /** Messages received in the current second (flood protection). */
-  budget: { second: number; count: number };
+  /** Flood protection for `move` and `zone`. */
+  budget: Budget;
 }
 
 const MAX_MOVES_PER_SECOND = 40;
-const ZONE_ID = /^[\w:-]{1,64}$/;
 
 export const wsRoom = (id: string) => `ws:${id}`;
 export const userRoom = (id: string) => `user:${id}`;
@@ -82,7 +84,7 @@ export class OfficeGateway implements OnGatewayInit, OnGatewayConnection, OnGate
         .then(([alive, member]) => {
           if (!alive) return next(new Error('SESSION_ENDED'));
           if (!member) return next(new Error('NO_WORKSPACE'));
-          socket.data = { userId: user.id, sessionId: user.sessionId, workspaceId: member.workspaceId, budget: { second: 0, count: 0 } } satisfies SocketData;
+          socket.data = { userId: user.id, sessionId: user.sessionId, workspaceId: member.workspaceId, budget: new Budget(MAX_MOVES_PER_SECOND) } satisfies SocketData;
           next();
         })
         .catch(() => next(new Error('SERVER_ERROR')));
@@ -97,12 +99,22 @@ export class OfficeGateway implements OnGatewayInit, OnGatewayConnection, OnGate
   }
 
   async handleConnection(socket: Socket) {
-    const data = socket.data as SocketData;
-    const office = await this.office(data.workspaceId);
-    const member = await this.prisma.workspaceMember.findUnique({ where: { userId: data.userId }, include: { user: true } });
-    if (!member || !socket.connected) return socket.disconnect(true);
+    // Nest doesn't catch this promise: a failure (office deleted, database down) just closes the socket.
+    try {
+      await this.join(socket);
+    } catch (error) {
+      this.logger.warn(`connection refused: ${(error as Error).message}`);
+      socket.disconnect(true);
+    }
+  }
 
-    await socket.join([wsRoom(data.workspaceId), userRoom(data.userId), sessionRoom(data.sessionId)]);
+  private async join(socket: Socket) {
+    const data = socket.data as SocketData;
+    const member = await this.prisma.workspaceMember.findUnique({ where: { userId: data.userId }, include: { user: true } });
+    if (!member || member.workspaceId !== data.workspaceId) return socket.disconnect(true);
+    const office = await this.office(data.workspaceId);
+    if (!socket.connected) return;
+
     let player = office.players.get(data.userId);
     if (!player) {
       player = {
@@ -115,12 +127,15 @@ export class OfficeGateway implements OnGatewayInit, OnGatewayConnection, OnGate
         moving: false,
         status: member.status,
         zone: null,
+        movedAt: 0,
         sockets: new Set(),
       };
       office.players.set(player.id, player);
       socket.to(wsRoom(data.workspaceId)).except(userRoom(data.userId)).emit('office:joined', this.publicPlayer(player));
     }
     player.sockets.add(socket.id);
+    player.movedAt = 0; // a (re)connected tab announces where it stands
+    await socket.join([wsRoom(data.workspaceId), userRoom(data.userId), sessionRoom(data.sessionId)]);
     const others = [...office.players.values()].filter((p) => p.id !== data.userId).map((p) => this.publicPlayer(p));
     socket.emit('office:state', { players: others });
   }
@@ -139,17 +154,28 @@ export class OfficeGateway implements OnGatewayInit, OnGatewayConnection, OnGate
     }
   }
 
-  /** [x, y, dir, moving] in pixels. Invalid or too frequent messages are ignored. */
+  /**
+   * [x, y, dir, moving] in pixels. Invalid or too frequent messages are ignored,
+   * and nobody moves faster than walking (see limitMove; walls aren't checked).
+   */
   @SubscribeMessage('move')
   move(@ConnectedSocket() socket: Socket, @MessageBody() body: unknown) {
     const data = socket.data as SocketData;
-    if (!Array.isArray(body) || body.length !== 4 || !this.withinBudget(data)) return;
+    if (!Array.isArray(body) || body.length !== 4 || !data.budget.allow()) return;
     const [x, y, dir, moving] = body as [unknown, unknown, unknown, unknown];
     const office = this.offices.get(data.workspaceId);
     const player = office?.players.get(data.userId);
     if (!office || !player || typeof x !== 'number' || typeof y !== 'number' || !Number.isFinite(x) || !Number.isFinite(y)) return;
-    player.x = Math.round(Math.min(Math.max(x, 0), office.layout.width * TILE));
-    player.y = Math.round(Math.min(Math.max(y, 0), office.layout.height * TILE));
+    const to = {
+      x: Math.round(Math.min(Math.max(x, 0), office.layout.width * TILE)),
+      y: Math.round(Math.min(Math.max(y, 0), office.layout.height * TILE)),
+    };
+    const now = Date.now();
+    const spawn = { x: office.layout.spawn.x * TILE, y: office.layout.spawn.y * TILE };
+    const at = player.movedAt ? limitMove(player, to, now - player.movedAt, spawn) : to;
+    player.x = at.x;
+    player.y = at.y;
+    player.movedAt = now;
     player.dir = dir === 1 || dir === 2 || dir === 3 ? dir : 0;
     player.moving = moving === 1 || moving === true;
     socket
@@ -158,11 +184,14 @@ export class OfficeGateway implements OnGatewayInit, OnGatewayConnection, OnGate
       .volatile.emit('office:moved', [player.id, player.x, player.y, player.dir, player.moving ? 1 : 0]);
   }
 
-  /** The zone the player just entered (or null when they left it): who is in which room. */
+  /**
+   * The zone the player just entered (or null when they left it), as their game
+   * reports it: display only (the people list), never used for access.
+   */
   @SubscribeMessage('zone')
   zone(@ConnectedSocket() socket: Socket, @MessageBody() body: unknown) {
     const data = socket.data as SocketData;
-    if (!this.withinBudget(data)) return;
+    if (!data.budget.allow()) return;
     const zone = typeof body === 'string' && ZONE_ID.test(body) ? body : null;
     const player = this.offices.get(data.workspaceId)?.players.get(data.userId);
     if (!player || player.zone === zone) return;
@@ -173,9 +202,10 @@ export class OfficeGateway implements OnGatewayInit, OnGatewayConnection, OnGate
   // ---- For the other live features (voice, chat, meetings) --------------------------
 
   /**
-   * Where someone stands right now (pixels) and the room they are in, worked out
-   * from the server's own copy of the layout, never from what the client claims.
-   * Null when they aren't in the office.
+   * Where someone stands right now (pixels) and the room they are in: the server's
+   * copy of the positions clients report, speed-limited so nobody can jump into a
+   * room, and its own copy of the layout (booked rooms are protected by the
+   * attendee check). Null when they aren't in the office.
    */
   locate(workspaceId: string, userId: string): { x: number; y: number; room: Room | null } | null {
     const office = this.offices.get(workspaceId);
@@ -201,23 +231,22 @@ export class OfficeGateway implements OnGatewayInit, OnGatewayConnection, OnGate
     this.server.to(userRoom(userId)).emit(event, payload);
   }
 
+  /** Sends an event to one tab. */
+  sendToSocket(socketId: string, event: string, payload: unknown) {
+    this.server.to(socketId).emit(event, payload);
+  }
+
   onModuleDestroy() {
     this.subscriptions.unsubscribe();
   }
 
-  private withinBudget(data: SocketData) {
-    const second = Math.floor(Date.now() / 1000);
-    if (data.budget.second !== second) data.budget = { second, count: 0 };
-    return ++data.budget.count <= MAX_MOVES_PER_SECOND;
-  }
-
   private async office(workspaceId: string) {
-    let office = this.offices.get(workspaceId);
-    if (!office) {
-      const workspace = await this.prisma.workspace.findUniqueOrThrow({ where: { id: workspaceId } });
-      office = { players: new Map(), layout: workspace.layout as unknown as OfficeLayout };
-      this.offices.set(workspaceId, office);
-    }
+    const loaded = this.offices.get(workspaceId);
+    if (loaded) return loaded;
+    const workspace = await this.prisma.workspace.findUniqueOrThrow({ where: { id: workspaceId } });
+    // Someone else may have loaded it meanwhile: everyone shares the first one.
+    const office = this.offices.get(workspaceId) ?? { players: new Map(), layout: workspace.layout as unknown as OfficeLayout };
+    this.offices.set(workspaceId, office);
     return office;
   }
 
@@ -242,6 +271,9 @@ export class OfficeGateway implements OnGatewayInit, OnGatewayConnection, OnGate
       }
       case 'desks':
         room.emit('office:desks', { desks: event.desks });
+        break;
+      case 'bookings':
+        room.emit('office:bookings', { changed: true });
         break;
       case 'member-removed':
         this.server.to(userRoom(event.userId)).emit('office:removed', { reason: 'removed' });

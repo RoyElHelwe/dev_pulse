@@ -47,7 +47,7 @@ Each person mostly works in their own folders, which keeps merge conflicts rare.
 | Onboarding       | `workspaces/`                            | `app/onboarding/`                                         | **Roy**        |
 | Office / game    | `office/` (Socket.IO `/office`)          | `app/office/[workspaceId]`, `game/` (Phaser), `features/office/` | **Roy**  |
 | Task manager     | `tasks/` (Socket.IO `/tasks`)            | `features/tasks/`                                         | **Zakaria**    |
-| Voice + meeting  | `rtc/` (Socket.IO `/rtc`), `meetings/`   | `features/voice/`, `features/meeting/`                    | **Zakaria**    |
+| Voice + meeting  | `voice/` (Socket.IO `/office`), `meetings/` | `features/voice/`, `features/meeting/`                    | **Zakaria**    |
 | Chill room, chat | `chat/` (Socket.IO `/chat`)              | `features/chill/`, `features/chat/`                       | **Helper → Mira** |
 | Shared           | `prisma/`, `health/`, `schema.prisma` CORE | `app/layout.tsx`, `components/ui/`                      | everyone, needs review |
 
@@ -141,7 +141,7 @@ meeting room and lounge. Templates: `apps/api/src/office/templates`.
 | `/office`  | Roy     | ✅ joins your office on connect → `office:state {players}`; `move [x,y,dir,moving]` → `office:moved`; `zone` → `office:zone`; `office:joined`, `office:left`, `office:layout`, `office:updated`, `office:desks`, `office:removed` |
 | `/session` | Mira    | ✅ `session:ended` (instant sign-out)                                                          |
 | `/tasks`   | Zakaria | `task:created`, `task:updated`, `task:deleted` (room = workspaceId)                           |
-| `/rtc`     | Zakaria | `rtc:offer`, `rtc:answer`, `rtc:ice` (relayed to `toUserId`), `rtc:hangup`                     |
+| `/office`  | Zakaria | voice on the office socket: `rtc:signal {to, data}` → `rtc:signal {from, data}` (offer, answer, ICE, bye), or `rtc:refused {to}`; `voice:state`, `voice:leave`, `voice:states` → `office:voice` |
 | `/chat`    | Helper  | `chat:join {roomId}`, `chat:message`, `chat:typing`                                           |
 
 REST: `/api/auth/*` ✅, `/api/workspace` ✅ (+ `/members`, `/invitations`, `/layout`),
@@ -192,7 +192,7 @@ plugged into Roy's events.
 | -- | ----- | ---- | ------- | -------- |
 | Z1 | W1    | **Task backend**: `Task` model (title, description, status TODO / IN_PROGRESS / REVIEW / DONE, priority, assignee, due date), CRUD REST with validation, scoped to a workspace | M1, C1 | Z2 |
 | Z2 | W1–W2 | **Kanban UI** (drag & drop) as a panel over the office + live updates via `/tasks` (two browsers see the same board change) | Z1 | Z5 |
-| Z3 | W2–W3 | **Voice core**: WebRTC peer-to-peer audio, `/rtc` signaling (offer/answer/ICE relay), mic permission, mute button. **First test with a "call user X" button between 2 tabs**, then plug into `player:near` / `player:far` and set volume from `player:distance` | M1; R4 for the proximity part | Z4 |
+| Z3 | W2–W3 | **Voice core**: WebRTC peer-to-peer audio, `rtc:signal` on `/office` (offer/answer/ICE relay), mic permission, mute button. **First test with a "call user X" button between 2 tabs**, then plug into `player:near` / `player:far` and set volume from `player:distance` | M1; R4 for the proximity part | Z4 |
 | Z4 | W3–W4 | **Meeting room**: `zone:enter meeting:<id>` → join the group call for that room (mesh, everyone in the zone); leave on exit; participant list; "occupied" badge; optional screen share | Z3, R4 | — |
 | Z5 | W4–W5 | **Desk ↔ tasks**: `object:interact desk` opens *my* tasks; current task shown in the bubble above the avatar (with R6) | Z2, R4 | R6 |
 | H1 | W5    | **Chill room** (Helper, see below): on `zone:enter chill` → room text chat, emotes/reactions, "on break" status on the avatar | R4, H2 | — |

@@ -6,8 +6,9 @@ import { LayoutBuilder } from './builder';
 // 2. an open space below with desk clusters (4 desks each) in a grid;
 // 3. the entrance in the middle of the south wall, a waiting area next to it.
 // The seed only changes the look: room order and names, carpet colours, plants, which side
-// the meeting rooms are on (the seed is the office name, so the wizard's preview is what you
-// get). The size only depends on the team.
+// the meeting rooms are on. It is the office name at creation (so the wizard's preview is
+// what you get), stored in `layout.generated` so a rebuild keeps the look after a rename
+// (older layouts without it fall back to the office name). The size only depends on the team.
 
 const BAND = 12; // depth of the north band (meeting rooms, lounge)
 const COL = 14; // distance between desk clusters, west to east

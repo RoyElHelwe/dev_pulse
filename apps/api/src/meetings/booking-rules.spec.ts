@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { clock, findClash, overlaps, slotProblem, slotStart } from './booking-rules';
+import { clock, slotProblem, slotStart } from './booking-rules';
 
 const at = (iso: string) => new Date(iso);
 const now = at('2026-10-05T10:07:00Z');
@@ -36,20 +36,6 @@ describe('slotProblem', () => {
 
   it('refuses invalid dates', () => {
     expect(slotProblem(new Date('nope'), at('2026-10-05T11:00:00Z'), now)).toMatch(/start and an end/);
-  });
-});
-
-describe('overlap', () => {
-  const booked = [{ id: 'a', startsAt: at('2026-10-05T14:00:00Z'), endsAt: at('2026-10-05T15:00:00Z') }];
-
-  it('finds a clash', () => {
-    expect(findClash({ startsAt: at('2026-10-05T14:30:00Z'), endsAt: at('2026-10-05T15:30:00Z') }, booked)?.id).toBe('a');
-    expect(findClash({ startsAt: at('2026-10-05T13:00:00Z'), endsAt: at('2026-10-05T16:00:00Z') }, booked)?.id).toBe('a');
-  });
-
-  it('lets meetings follow each other', () => {
-    expect(overlaps({ startsAt: at('2026-10-05T15:00:00Z'), endsAt: at('2026-10-05T16:00:00Z') }, booked[0])).toBe(false);
-    expect(overlaps({ startsAt: at('2026-10-05T13:00:00Z'), endsAt: at('2026-10-05T14:00:00Z') }, booked[0])).toBe(false);
   });
 });
 
