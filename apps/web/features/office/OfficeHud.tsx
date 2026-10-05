@@ -151,7 +151,7 @@ export function OfficeHud({ controller, workspace, people, toast, online, editin
       {/* Bottom: how to move. */}
       <Panel
         className={cn(
-          'absolute bottom-5 left-1/2 hidden -translate-x-1/2 items-center gap-4 px-4 py-2.5 text-sm text-zinc-600 transition duration-700',
+          'absolute bottom-20 left-1/2 hidden -translate-x-1/2 items-center gap-4 px-4 py-2.5 text-sm text-zinc-600 transition duration-700',
           !touch && 'sm:flex',
           showHelp ? 'opacity-100' : 'pointer-events-none translate-y-2 opacity-0',
         )}

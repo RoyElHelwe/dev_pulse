@@ -37,7 +37,7 @@ export function CharacterSwitcher({ name, character, status }: { name: string; c
   }
 
   return (
-    <div ref={ref} className="absolute bottom-5 left-4">
+    <div ref={ref} className="absolute bottom-5 left-4 z-10">
       {open && (
         <Panel className="absolute bottom-full mb-2 w-72 p-3">
           <p className="px-1 pb-2 text-sm font-semibold">Your character</p>
