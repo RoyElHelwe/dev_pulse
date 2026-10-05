@@ -1,0 +1,77 @@
+import { type Browser, type BrowserContextOptions, expect, type Page } from '@playwright/test';
+
+export interface Layout {
+  width: number;
+  height: number;
+  rooms: { id: string; name: string; kind: string; x: number; y: number; w: number; h: number }[];
+  walls: { x1: number; y1: number; x2: number; y2: number; kind: 'solid' | 'glass'; face?: boolean }[];
+  furniture: { id: string; kind: string; x: number; y: number; w: number; h: number; rotation?: number }[];
+}
+
+export interface Workspace {
+  templateId: string;
+  layout: Layout;
+  layoutVersion: number;
+  character: string;
+  deskId: string | null;
+  desks: { deskId: string; userId: string; name: string }[];
+}
+
+/** A browser page that remembers its console errors (the app must keep the console clean). */
+export async function openPage(browser: Browser, name: string, options: BrowserContextOptions = {}) {
+  const context = await browser.newContext(options);
+  const page = await context.newPage();
+  const problems: string[] = [];
+  page.on('console', (m) => {
+    if (m.type() === 'error' || m.type() === 'warning') problems.push(`${name} ${m.type()}: ${m.text()}`);
+  });
+  page.on('pageerror', (e) => problems.push(`${name} page error: ${e.message}`));
+  page.on('response', (r) => {
+    if (r.status() >= 400) problems.push(`${name} HTTP ${r.status()} ${r.request().method()} ${new URL(r.url()).pathname}`);
+  });
+  page.on('dialog', (d) => void d.accept());
+  return { page, problems };
+}
+
+export async function register(page: Page, name: string, email: string) {
+  await page.goto('/register');
+  await page.getByLabel('Your name').fill(name);
+  await page.getByLabel('Email').fill(email);
+  await page.getByLabel('Password', { exact: true }).fill('supersecret1');
+  await page.getByRole('button', { name: 'Create account' }).click();
+  await page.waitForURL('**/onboarding**');
+}
+
+export const workspace = (page: Page) => page.evaluate(() => fetch('/api/workspace').then((r) => r.json())) as Promise<Workspace>;
+
+/** Waits until the office is loaded (the canvas and the live connection are up). */
+export async function inOffice(page: Page) {
+  await page.waitForURL('**/office');
+  await expect(page.getByRole('button', { name: 'Zoom in' })).toBeEnabled({ timeout: 120_000 });
+}
+
+/** The "people in the office" list as text (opens and closes it). */
+export async function peopleList(page: Page) {
+  await page.getByRole('button', { name: /in the office/ }).click();
+  const list = page.locator('ul').last();
+  await expect(list).toBeVisible();
+  const text = (await list.innerText()).replace(/\s*\n\s*/g, ' | ');
+  await page.getByRole('button', { name: /in the office/ }).click();
+  return text;
+}
+
+/** Same-origin version of a link the API built with APP_URL. */
+export const local = (page: Page, link: string) => new URL(new URL(link).pathname, page.url()).toString();
+
+export async function invite(page: Page, email: string): Promise<string> {
+  const result = await page.evaluate(
+    (email) =>
+      fetch('/api/workspace/invitations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, role: 'MEMBER' }),
+      }).then((r) => r.json()),
+    email,
+  );
+  return local(page, result.link);
+}
