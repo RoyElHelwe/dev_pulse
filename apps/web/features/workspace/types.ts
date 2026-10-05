@@ -1,3 +1,4 @@
+import type { DeskOwner } from '@/game/createGame';
 import type { OfficeLayout } from '@/game/layout/types';
 
 export type Role = 'OWNER' | 'ADMIN' | 'MEMBER';
@@ -11,6 +12,9 @@ export interface MyWorkspace {
   layoutVersion: number;
   role: Role;
   character: string;
+  status: string | null;
+  deskId: string | null;
+  desks: DeskOwner[];
   memberCount: number;
 }
 

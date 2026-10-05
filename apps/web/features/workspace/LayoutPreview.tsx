@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { itemBounds } from '@/game/layout/derive';
 import type { FurnitureKind, OfficeLayout } from '@/game/layout/types';
 import { cn } from '@/lib/cn';
@@ -22,7 +23,7 @@ const FURNITURE_COLOR: Partial<Record<FurnitureKind, string>> = {
 const hex = (c?: number) => (c === undefined ? undefined : `#${c.toString(16).padStart(6, '0')}`);
 
 /** A small floor plan of an office (rooms, walls, furniture), as SVG. */
-export function LayoutPreview({ layout, className }: { layout: OfficeLayout; className?: string }) {
+export const LayoutPreview = memo(function LayoutPreview({ layout, className }: { layout: OfficeLayout; className?: string }) {
   const items = [...layout.furniture].sort((a, b) => Number(a.kind !== 'rug') - Number(b.kind !== 'rug'));
   return (
     <svg
@@ -71,4 +72,4 @@ export function LayoutPreview({ layout, className }: { layout: OfficeLayout; cla
       ))}
     </svg>
   );
-}
+});

@@ -7,8 +7,18 @@ import { useAuth } from '@/features/auth/AuthProvider';
 import { CharacterFace } from '@/features/workspace/CharacterPreview';
 import type { Presence } from './connection';
 
-/** "3 in the office" with their faces; click for the list. */
-export function PresenceList({ people }: { people: Presence[] }) {
+interface PresenceListProps {
+  people: Presence[];
+  /** "Atlas · Meeting room" for a zone id, or null for the open space. */
+  placeOf(zone: string | null | undefined): string | null;
+  myZone: string | null;
+  myStatus: string | null;
+  /** People close enough to talk (player:near). */
+  nearby: Set<string>;
+}
+
+/** "3 in the office" with their faces; click for the list (where everyone is, their status). */
+export function PresenceList({ people, placeOf, myZone, myStatus, nearby }: PresenceListProps) {
   const { user } = useAuth();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -41,21 +51,53 @@ export function PresenceList({ people }: { people: Presence[] }) {
         </button>
       </Panel>
       {open && (
-        <Panel className="absolute right-0 z-20 mt-2 w-60 p-1.5">
+        <Panel className="absolute right-0 z-20 mt-2 max-h-[70vh] w-72 overflow-y-auto p-1.5">
           <ul>
-            <li className="flex items-center gap-2.5 rounded-xl px-2.5 py-2 text-sm">
-              <span className="size-2 rounded-full bg-emerald-500" />
-              {user?.displayName} <span className="text-zinc-500">(you)</span>
-            </li>
+            <Person name={user?.displayName ?? ''} you place={placeOf(myZone)} status={myStatus} />
             {people.map((p) => (
-              <li key={p.id} className="flex items-center gap-2.5 rounded-xl px-2.5 py-2 text-sm">
-                <CharacterFace character={p.character} className="size-6" />
-                {p.name}
-              </li>
+              <Person
+                key={p.id}
+                name={p.name}
+                character={p.character}
+                place={placeOf(p.zone)}
+                status={p.status}
+                near={nearby.has(p.id)}
+              />
             ))}
           </ul>
         </Panel>
       )}
     </div>
+  );
+}
+
+function Person(props: {
+  name: string;
+  character?: string;
+  you?: boolean;
+  place: string | null;
+  status: string | null;
+  near?: boolean;
+}) {
+  return (
+    <li className="flex items-center gap-2.5 rounded-xl px-2.5 py-2 text-sm">
+      {props.character ? (
+        <CharacterFace character={props.character} className="size-7 shrink-0" />
+      ) : (
+        <span className="mx-2.5 size-2 shrink-0 rounded-full bg-emerald-500" />
+      )}
+      <span className="min-w-0 flex-1 leading-tight">
+        <span className="block truncate">
+          {props.name} {props.you && <span className="text-zinc-500">(you)</span>}
+        </span>
+        <span className="block truncate text-xs text-zinc-500">
+          {props.place ?? 'Open space'}
+          {props.status && <> · {props.status}</>}
+        </span>
+      </span>
+      {props.near && (
+        <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700">Nearby</span>
+      )}
+    </li>
   );
 }
