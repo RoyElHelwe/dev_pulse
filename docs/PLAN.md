@@ -122,12 +122,12 @@ Zakaria.
 
 | Event             | Payload                                                     | Emitted when                                   |
 | ----------------- | ----------------------------------------------------------- | ---------------------------------------------- |
-| `player:near`     | `{ userId, distance }`                                      | another player comes within `NEAR_RADIUS`      |
+| `player:near`     | `{ userId, distance }`                                      | another player comes within `NEAR_RADIUS` (**done in R4**) |
 | `player:distance` | `{ userId, distance }`                                      | while near, at most 5×/s (for voice volume)    |
 | `player:far`      | `{ userId }`                                                | they leave the radius (with a little hysteresis)|
 | `zone:enter`      | `{ type: 'meeting' \| 'chill' \| 'desk', id, name }`        | local player enters a zone (**done in R1**)    |
 | `zone:leave`      | `{ type, id, name }`                                        | local player leaves a zone (**done in R1**)    |
-| `object:interact` | `{ type: 'desk' \| 'board', id }`                           | player presses **E** next to an object         |
+| `object:interact` | `{ type: 'desk' \| 'board', id, name, ownerId? }`           | player presses **E** next to an object (**done in R4**) |
 
 Map format: an `OfficeLayout` object (`apps/web/game/layout/types.ts`): plain JSON with
 rooms (`kind`: open / meeting / lounge), walls, furniture and the spawn point, stored on the
@@ -138,7 +138,7 @@ meeting room and lounge. Templates: `apps/api/src/office/templates`.
 
 | Namespace  | Owner   | Main events                                                                                   |
 | ---------- | ------- | --------------------------------------------------------------------------------------------- |
-| `/office`  | Roy     | ✅ joins your office on connect → `office:state {players}`; `move [x,y,dir,moving]` → `office:moved`; `office:joined`, `office:left`, `office:layout`, `office:updated`, `office:removed` |
+| `/office`  | Roy     | ✅ joins your office on connect → `office:state {players}`; `move [x,y,dir,moving]` → `office:moved`; `zone` → `office:zone`; `office:joined`, `office:left`, `office:layout`, `office:updated`, `office:desks`, `office:removed` |
 | `/session` | Mira    | ✅ `session:ended` (instant sign-out)                                                          |
 | `/tasks`   | Zakaria | `task:created`, `task:updated`, `task:deleted` (room = workspaceId)                           |
 | `/rtc`     | Zakaria | `rtc:offer`, `rtc:answer`, `rtc:ice` (relayed to `toUserId`), `rtc:hangup`                     |
@@ -177,9 +177,9 @@ signed-in user, so feature routes don't need a workspace id.
 | R1 | W1    | ✅ Phaser inside Next.js (client-only dynamic import), office drawn from layout data, character with walk cycle, movement + collisions + camera follow, zone enter/leave | — | R2 |
 | R2 | W2    | ✅ **Multiplayer movement**: `/office` namespace, join the workspace room, broadcast moves (throttled ~10–15/s), interpolation for other players, join/leave, name labels | R1, M1 | **Z3, Z4** |
 | R3 | W2    | ✅ **Onboarding wizard**: first login with no workspace → create workspace (name) → pick office template → pick character → enter office. Invited users skip "create" but still pick a character | M1, C1 | M4 (join flow), demo |
-| R4 | W3    | **Zones and interactions (C3)**: `zones` layer, desk per member, `officeEvents` (near/far/distance, zone enter/leave, interact with **E**), `presence:zone` on server | R2 | **Z3 proximity, Z4, Z5, H1** |
+| R4 | W3    | ✅ **Zones and interactions (C3)**: `zones` layer, desk per member, `officeEvents` (near/far/distance, zone enter/leave, interact with **E**), `presence:zone` on server | R2 | **Z3 proximity, Z4, Z5, H1** |
 | R5 | W4    | ✅ Office templates (loft 8, studio 24, campus 48 desks) saved as JSON on the workspace; **office editor** for organisers (move/add/remove furniture, rename rooms, checked so the office can't break); rename or delete the workspace | R3 | — |
-| R6 | W5    | Polish: status bubble above avatars (data from Z5), minimap, reconnect after network loss, responsive layout | R4 | — |
+| R6 | W5    | ✅ Polish: status bubble above avatars (data from Z5), minimap, reconnect after network loss, responsive layout | R4 | — |
 | F2 | W6    | Tech lead review, fresh-machine test (`git clone && make`), console has no errors | all | — |
 
 ### Zakaria — features inside the office

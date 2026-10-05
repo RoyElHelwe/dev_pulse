@@ -1,6 +1,6 @@
 # Office, onboarding and invitations
 
-**Owners:** Roy (office, onboarding, editor) · Mira (invitations, members)
+**Owners:** Roy (office, onboarding, editor, zones) · Mira (invitations, members)
 **Code:** `apps/api/src/{office,workspace,invitations}`, `apps/web/game`, `apps/web/features/{office,onboarding,team,workspace}`
 
 Same idea as the first version on `main`, without AI: the organiser picks a ready-made office
@@ -19,13 +19,14 @@ sign up ──► /onboarding                     (email) "Roy invited you to De
   3. pick the office (preview)              /invite/<token>
   4. pick a character                         ├─ no account → sign up (email prefilled) ─┐
   ──► /office                                 ├─ signed out → sign in ───────────────────┤
-  "Invite" → /team: email + role                └─ signed in ──► "Join Dev Pulse HQ" ◄────┘
-  "Edit office" → editor                                       ──► /office, already walking
+  "Invite" → /team: email + role                └─ signed in ──► pick a character ◄───────┘
+  "Edit office" → editor                                   "Join Dev Pulse HQ"
+                                                           ──► /office, at their own desk
 ```
 
 - **Only the organiser creates an office.** Whoever creates it is its `OWNER`. Invited people
-  never see the "create" step: accepting the invitation puts them straight in the office with
-  a random character (they can change it from the office, bottom left).
+  never see the "create" step: they pick a character on the invitation page and land
+  straight in the office, with a desk of their own (both can be changed later).
 - **One office per person** (`WorkspaceMember.userId` is unique). Someone already in an
   office can't create or join another one until they leave.
 - Signed in with no office → `/onboarding`. With an office → `/office`.
@@ -34,12 +35,12 @@ sign up ──► /onboarding                     (email) "Roy invited you to De
 
 | | Owner (organiser) | Admin | Member |
 | --- | :---: | :---: | :---: |
-| Walk, see everyone, change own character | ✔ | ✔ | ✔ |
+| Walk, see everyone, change own character and status | ✔ | ✔ | ✔ |
 | Invite members, resend / revoke invitations | ✔ | ✔ | |
-| Edit the office (furniture, room names) | ✔ | ✔ | |
+| Edit the office (furniture, room names), assign desks | ✔ | ✔ | |
 | Invite admins, change roles, remove people | ✔ | | |
 | Rename the office | ✔ | ✔ | |
-| Delete the office | ✔ | | |
+| Move the office to another template, delete it | ✔ | | |
 | Leave the office | (delete it instead) | ✔ | ✔ |
 
 Every rule is checked by the API (`MembershipService.require(userId, roles)`); the buttons
@@ -59,13 +60,18 @@ leave the office at once with a message.
 ## 4. The office
 
 The layout is JSON on the workspace (`OfficeLayout`: rooms, walls, furniture, spawn).
-Three templates in `apps/api/src/office/templates`:
+Four templates in `apps/api/src/office/templates`:
 
 | Template | Desks | Size (tiles) | For |
 | --- | --- | --- | --- |
 | Loft | 8 | 32 × 28 | up to 8 people |
 | Studio | 24 | 46 × 34 | 6–24 |
 | Campus | 48 | 60 × 42 | 20–48 |
+| Headquarters | 100 | 76 × 57 | 40–100 |
+
+The owner can move everyone to another template later (Team page → Office layout), or back
+to the original furniture of the current one. It's refused when the team doesn't fit
+(more people than desks) or someone saved the office meanwhile.
 
 Zones (desks, meeting rooms, lounges) are derived from the layout, so they follow the
 furniture when the office is edited.
@@ -80,8 +86,37 @@ furniture when the office is edited.
 - Other people are drawn 100 ms in the past and interpolated between positions, so they
   move smoothly even when packets arrive unevenly; a big jump (reconnect) teleports.
 - Locally ~1 ms per move through the server.
+- Sockets connect straight over WebSocket (no HTTP long-polling first). If the connection
+  drops, a "Reconnecting…" banner shows and everything resyncs when it's back.
 
-## 5. The office editor
+## 5. Life in the office
+
+| What | How it works | Code |
+| --- | --- | --- |
+| **Nearby** | Another person within 3 tiles **in the same room** (walls, even glass, separate people) → `player:near`, then `player:distance` up to 5×/s, `player:far` past 3.5 tiles. The people list tags them "Nearby". | `game/systems/Proximity.ts` |
+| **Your desk** | Each member gets a free desk on joining (joining order), with their name on it (yours in green). Desks follow the office: after an edit people keep their desk if it still exists. Owners and admins move people from the Team page (swaps with whoever sat there). | `workspace/desks.service.ts`, `game/objects/DeskPlates.ts` |
+| **E to use** | At a desk or in front of a screen, a hint appears ("Your desk", "Mira’s desk", "Desk 4 · free"); **E** (or tapping the hint) emits `object:interact`. | `game/systems/Interactions.ts` |
+| **Who is where** | The game reports its zone; the server shares it (`office:zone`). The people list shows "Atlas · Meeting room", "At Mira’s desk"; meeting rooms with people inside show "In use · 2". | `office.gateway.ts`, `game/objects/RoomBadges.ts` |
+| **Status** | A short status in a bubble over the avatar ("Focusing", "On break ☕" or your own text), set from your chip (bottom left), stored on the membership. | `CharacterSwitcher.tsx` |
+| **Map** | Floor plan in the corner with everyone, and the part of the office on screen. | `Minimap.tsx` |
+| **Phones and tablets** | A joystick (bottom right) instead of the keyboard; the hints say "Tap". | `Joystick.tsx` |
+
+### For features inside the office (Zakaria, helper)
+
+Listen to the game, don't touch it: `officeEvents` in `apps/web/features/office/events.ts`.
+
+```ts
+officeEvents.on('player:near', ({ userId, distance }) => voice.call(userId));
+officeEvents.on('player:distance', ({ userId, distance }) => voice.setVolume(userId, 1 - distance / 3));
+officeEvents.on('player:far', ({ userId }) => voice.hangUp(userId));
+officeEvents.on('zone:enter', (zone) => zone.type === 'meeting' && meeting.join(zone.id)); // room id, not its name
+officeEvents.on('object:interact', (e) => e.type === 'desk' && e.ownerId === me.id && tasks.open());
+```
+
+Every `on` returns its own "off", handy in `useEffect`. The status bubble is
+`PATCH /api/workspace/me { status }` (e.g. the current task); it reaches everyone live.
+
+## 6. The office editor
 
 Owners and admins: **Edit office** (top right). Editing happens in the real office, so what
 you see is exactly what everyone gets.
@@ -91,7 +126,12 @@ you see is exactly what everyone gets.
 - **Move**: drag it. Snaps to ¼ tile. **Arrows** nudge (Shift = 1 tile).
 - **Selected piece** (right panel): rotate, colour (sofas, armchairs, beanbags, rugs),
   duplicate, remove. Keys: `R` rotate, `Ctrl+D` duplicate, `Del` remove, `Esc` deselect.
+- **Several pieces**: `Shift`-click to add or remove one, `Shift`-drag a box on the floor,
+  `Ctrl+A` for everything. Dragging, nudging, rotating, duplicating and removing then work on
+  the whole group (all or nothing: if one piece doesn't fit, nothing moves).
 - **Rooms**: rename them (nothing selected → right panel).
+- **Reset to the original furniture** (right panel): puts the template back, as one undoable
+  step, saved like any other change.
 - `Ctrl+Z` / `Ctrl+Y` undo / redo. Drag the floor to look around, scroll to zoom.
 - **Save for everyone** → everyone in the office gets the new layout at once, staying where
   they stand (or back at the entrance if furniture now covers their spot).
@@ -111,7 +151,7 @@ you see is exactly what everyone gets.
    someone saved in between, the second save is refused ("Load the latest") instead of
    silently overwriting their work.
 
-## 6. API
+## 7. API
 
 | Method | Path | Who | What |
 | --- | --- | --- | --- |
@@ -120,26 +160,41 @@ you see is exactly what everyone gets.
 | GET | `/api/workspace` | member | office, layout, version, your role and character |
 | PATCH | `/api/workspace` | owner, admin | `{ name }` |
 | POST | `/api/workspace/delete` | owner | `{ confirmName }` |
-| PATCH | `/api/workspace/me` | member | `{ character }` |
+| PATCH | `/api/workspace/me` | member | `{ character?, status? }` (empty status = none) |
 | PUT | `/api/workspace/layout` | owner, admin | `{ version, furniture, rooms: [{ id, name }] }` |
-| GET | `/api/workspace/members` | member | |
+| PUT | `/api/workspace/template` | owner | `{ templateId, version }` |
+| GET | `/api/workspace/members` | member | with their `deskId` |
 | PATCH / DELETE | `/api/workspace/members/:userId` | owner (or yourself to leave) | `{ role }` |
+| PUT | `/api/workspace/members/:userId/desk` | owner, admin | `{ deskId }` (null = no desk) |
 | POST / GET | `/api/workspace/invitations` | owner, admin | `{ email, role }` |
 | POST | `/api/workspace/invitations/:id/resend` | owner, admin | new link |
 | DELETE | `/api/workspace/invitations/:id` | owner, admin | revoke |
 | GET | `/api/invitations/:token` | public | what the invitation page shows |
-| POST | `/api/invitations/:token/accept` | signed in, invited email | join |
+| POST | `/api/invitations/:token/accept` | signed in, invited email | `{ character? }` → join |
 | POST | `/api/invitations/:token/decline` | public | |
 
-Socket `/office`: `office:state`, `office:joined`, `office:moved`, `office:left`,
-`office:layout`, `office:updated` (character / role), `office:removed`
-(`removed` / `deleted`); client sends `move`.
+`GET /api/workspace` also returns `status`, `deskId` and `desks` (who sits where).
 
-## 7. Tests
+Socket `/office`: `office:state`, `office:joined`, `office:moved`, `office:left`,
+`office:layout`, `office:updated` (character / role / status), `office:zone [id, zone]`,
+`office:desks`, `office:removed` (`removed` / `deleted`); the client sends `move` and
+`zone`.
+
+## 8. Tests
 
 - `cd apps/api && pnpm test`: every template is valid (inside, no overlaps, everything
-  reachable), and the validator refuses each kind of broken layout.
-- Tried end to end in two browsers: onboarding, invite → sign up from the link → join,
-  both see each other walk, character change, removal kicks live; editor: place, overlap
-  snaps back, rename a room, undo/redo, refused save highlights the piece, save reaches the
-  staff at once, concurrent save asks to load the latest, members can't save layouts (403).
+  reachable, enough desks), and the validator refuses each kind of broken layout.
+- **Browser tests** in `e2e/` (Playwright), run by CI on every push: one story with an
+  organiser, a teammate and a phone: create an office, invite, pick a character, "Nearby",
+  status, walk to your desk and press E, meeting room presence, desk swap, editor (overlap
+  refused, multi-select, save reaches the others), concurrent saves, template switch,
+  joystick, removal, and a clean console throughout. The players really walk: a path is
+  planned on the layout and followed with the arrow keys.
+
+```bash
+# with the API on :4100 and the web app on :3000 (any way you like)
+cd e2e && pnpm install && pnpm exec playwright install chromium
+pnpm serve &        # same-origin proxy on :8080, like nginx
+pnpm test
+# or against Docker: E2E_BASE_URL=https://localhost:8443 pnpm test (after `make`)
+```
