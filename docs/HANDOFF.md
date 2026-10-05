@@ -87,6 +87,8 @@ support for the others and the final polish:
   the client) and **Z2 Kanban** panel over the office with live updates on `/tasks`.
 - **Z3 Voice**: build the WebRTC part with a test "call user X" button first, then plug it
   into `player:near` / `player:far` / `player:distance` (ready, see OFFICE.md §5).
+- **Headsets**: when a call starts or ends, call `avatar.setInCall(true | false, talking)`; the
+  character then wears its headset (and the light blinks while they talk). See OFFICE.md §5.
 - **Z4 Meeting room**: `zone:enter` with `type: 'meeting'`; the "In use" badge and the people
   list already show who's inside.
 - **Z5 Desk ↔ tasks**: `object:interact` with `type: 'desk'` and `ownerId === me` opens my

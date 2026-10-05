@@ -15,7 +15,7 @@ import {
 } from 'class-validator';
 import { FURNITURE_KINDS } from '../office/layout/types';
 import { TEMPLATES } from '../office/templates';
-import { CHARACTERS } from './characters';
+import { IsCharacter } from './characters';
 
 const trim = () => Transform(({ value }) => (typeof value === 'string' ? value.trim().replace(/\s+/g, ' ') : value));
 
@@ -29,7 +29,7 @@ export class CreateWorkspaceDto {
   @IsIn(TEMPLATES.map((t) => t.id))
   templateId: string;
 
-  @IsIn(CHARACTERS)
+  @IsCharacter()
   character: string;
 }
 
@@ -54,7 +54,7 @@ export class RenameWorkspaceDto {
 /** What a member changes about themselves in the office. */
 export class UpdateMeDto {
   @IsOptional()
-  @IsIn(CHARACTERS)
+  @IsCharacter()
   character?: string;
 
   /** Empty = no status. */
@@ -67,7 +67,7 @@ export class UpdateMeDto {
 
 export class AcceptInvitationDto {
   @IsOptional()
-  @IsIn(CHARACTERS)
+  @IsCharacter()
   character?: string;
 }
 

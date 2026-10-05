@@ -1,7 +1,7 @@
 import type * as Phaser from 'phaser';
 import { TILE } from '../constants';
 import { Avatar, type Direction } from './Avatar';
-import type { CharacterLook } from './looks';
+import type { Recipe } from '../art/recipe';
 
 interface Snapshot {
   t: number;
@@ -29,12 +29,12 @@ export class RemotePlayer {
     scene: Phaser.Scene,
     x: number,
     y: number,
-    look: CharacterLook,
+    recipe: Recipe,
     name: string,
     fontFamily: string,
     textResolution: number,
   ) {
-    this.avatar = new Avatar(scene, x, y, look, name, fontFamily, textResolution);
+    this.avatar = new Avatar(scene, x, y, recipe, name, fontFamily, textResolution);
     this.snapshots.push({ t: performance.now(), x, y, dir: 'down', moving: false });
   }
 

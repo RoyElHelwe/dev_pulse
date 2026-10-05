@@ -2,8 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { Panel } from '@/components/ui/Panel';
-import { CharacterFace, CharacterPreview } from '@/features/workspace/CharacterPreview';
-import { LOOK_KEYS } from '@/game/objects/looks';
+import { CharacterGrid } from '@/features/workspace/CharacterGrid';
+import { CharacterFace } from '@/features/workspace/CharacterPreview';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/cn';
 
@@ -41,25 +41,7 @@ export function CharacterSwitcher({ name, character, status }: { name: string; c
       {open && (
         <Panel className="absolute bottom-full mb-2 w-72 p-3">
           <p className="px-1 pb-2 text-sm font-semibold">Your character</p>
-          <div className="grid grid-cols-4 gap-2" role="radiogroup" aria-label="Character">
-            {LOOK_KEYS.map((key) => (
-              <button
-                key={key}
-                type="button"
-                role="radio"
-                aria-checked={character === key}
-                aria-label={key}
-                disabled={saving !== null}
-                onClick={() => pick(key)}
-                className={cn(
-                  'rounded-xl bg-zinc-50 p-1.5 ring-2 transition disabled:opacity-60',
-                  character === key ? 'bg-emerald-50 ring-emerald-500' : 'ring-transparent hover:ring-zinc-300',
-                )}
-              >
-                <CharacterPreview character={key} className="mx-auto h-12" />
-              </button>
-            ))}
-          </div>
+          <CharacterGrid value={character} onPick={pick} disabled={saving !== null} />
           <p className="px-1 pt-4 pb-2 text-sm font-semibold">Status</p>
           <div className="flex flex-wrap gap-1.5">
             {STATUS_PRESETS.map((preset) => (
