@@ -51,7 +51,9 @@ export default function PrivacyPage() {
           personal data.
         </li>
         <li>
-          <strong>mfa_token</strong>, <strong>oauth_state</strong>: short-lived (a few minutes), only during sign-in.
+          <strong>mfa_token</strong>, <strong>oauth_state</strong>, <strong>takeover_token</strong>,{' '}
+          <strong>close_sessions</strong>: short-lived (15 minutes at most), only while signing in or closing your
+          other sessions.
         </li>
         <li>
           <strong>trusted_device</strong>: only if you choose &ldquo;don&apos;t ask again on this browser&rdquo; for

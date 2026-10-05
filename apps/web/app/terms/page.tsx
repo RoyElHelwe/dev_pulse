@@ -16,7 +16,7 @@ export default function TermsPage() {
       <ul>
         <li>Give your real name and an email address you can access.</li>
         <li>Keep your password and backup codes to yourself. You are responsible for what happens with your account.</li>
-        <li>One account per person. Tell us if you think someone else used your account.</li>
+        <li>One account per person, used on one device at a time. Tell us if you think someone else used your account.</li>
       </ul>
 
       <h2>Using the office</h2>

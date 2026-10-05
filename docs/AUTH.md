@@ -20,6 +20,8 @@ sign-in, 2FA for every sign-in method, backend validation, rate limits, HTTPS an
 | **2FA**: authenticator app (TOTP), 10 backup codes, "trust this browser for 30 days" | `/two-factor`, settings |
 | 2FA is also asked after Google / GitHub / 42 sign-in | |
 | Signed-in devices: list, sign out one, sign out everywhere | `/settings/security` |
+| **One device at a time**: a second device is refused; an emailed link closes every session | `/close-sessions` |
+| Signed-out devices leave **at once** (live socket), even in the middle of the office | |
 | Rate limits, origin check (CSRF), "wrong email or password" never tells which one | |
 | Privacy Policy, Terms of Service (mandatory) | `/privacy`, `/terms` |
 
@@ -49,9 +51,9 @@ Every request:  cookie access_token ──► AuthGuard checks the JWT signature
 - **Theft detection**: if an already-used refresh token comes back later, someone copied
   it, so that device is signed out. (A reuse within 30 s is two tabs refreshing at the same
   time, not theft: the frontend also prevents that with a Web Lock.)
-- **Sign out** revokes the device's refresh tokens. An access token that was already issued
-  stays valid until it expires (max 15 min): that is the trade-off of not checking the
-  database on every request.
+- **Sign out** revokes the device's refresh tokens. Every request also checks that its
+  device session is still alive (one small indexed query), so a signed-out device stops
+  working immediately, not when its access token expires.
 - All tokens are in **httpOnly cookies**: JavaScript on the page can't read them, so an XSS
   bug can't steal them. Same site through nginx, so no CORS. `SameSite` + an origin check
   block cross-site requests.
@@ -66,6 +68,36 @@ password ✔ ──► { status: "two-factor-required" } + cookie mfa_token (5 m
 Same after Google / GitHub / 42. The secret is stored AES-256-GCM encrypted, each code
 works once, 5 wrong codes lock 2FA for 5 minutes.
 
+### One device at a time
+
+```
+PC:A signed in, used in the last 20 min
+PC:B: password ✔ (+ 2FA ✔) ──► { status: "session-active", device: "Chrome on macOS" }
+                                  + cookie takeover_token (10 min)
+PC:B: "Close the other session" ──► email to the account's own address
+                                      + cookie close_sessions (ties the link to PC:B)
+link opened ──► every session revoked ──► PC:B: /login ("all sessions are closed")
+                                       └─► PC:A: told over the /session socket,
+                                            leaves the office for /login at once
+PC:B: signs in normally
+```
+
+- **Active** = used in the last 20 minutes (an open app renews every ~14 minutes). A
+  session left open on a sleeping or closed computer doesn't block: it is closed when you
+  sign in elsewhere. Signing in again in the same browser is not "another device".
+- **Who can close sessions**:
+  1. Asking for the email needs the takeover token, which only a **complete** sign-in
+     gets (password or Google/GitHub/42, plus 2FA when it's on). Knowing someone's email
+     is not enough, and the email always goes to the account's own address.
+  2. The link proves access to the inbox. It works **once**, for **15 minutes**, is stored
+     only as a hash, and only works in **the browser that asked for it**. Anywhere else the
+     account **password** is also required (accounts without a password: same browser only).
+  3. Limits: 3 requests per minute per IP, 1 email per minute per account, only the newest
+     link works. An email is sent when the link is requested and when sessions are closed,
+     with the browser and IP, so the owner notices if it wasn't them.
+- Kicked devices see why on the sign-in page (`?reason=sessions_closed`,
+  `signed_in_elsewhere`, `password_changed`...).
+
 ### Cookies
 
 | Cookie | Content | Lifetime | Path | JS can read |
@@ -76,6 +108,8 @@ works once, 5 wrong codes lock 2FA for 5 minutes.
 | `mfa_token` | signed "password OK" step | 5 min | `/api/auth` | no |
 | `trusted_device` | signed "2FA passed here" | 30 days | `/api/auth` | no |
 | `oauth_state` | state + PKCE verifier | 10 min | `/api/auth/oauth` | no |
+| `takeover_token` | signed "signed in OK, but open elsewhere" | 10 min | `/api/auth/sessions` | no |
+| `close_sessions` | secret tying the email link to this browser | 15 min | `/api/auth/sessions` | no |
 
 ---
 
@@ -92,6 +126,8 @@ All under `/api/auth`. Bodies are JSON.
 | POST | `/logout`, `/logout-all` | signed in | this device / every device |
 | GET | `/me` | signed in | the user (never secrets) |
 | GET / DELETE | `/sessions`, `/sessions/:id` | signed in | devices |
+| POST | `/sessions/close-request` | public (takeover cookie) | emails the "close all sessions" link |
+| POST | `/sessions/close` | public | `{ token, password? }`: closes every session |
 | POST | `/email/verify`, `/email/resend` | public | `{ token }` / `{ email }` |
 | POST | `/password/forgot`, `/password/reset` | public | `{ email }` / `{ token, password }` |
 | POST | `/password/change` | signed in | `{ currentPassword?, newPassword }` |
@@ -132,7 +168,9 @@ export class TasksController {
 }
 ```
 
-Sockets (Socket.IO): the browser sends the same cookie on the handshake.
+Sockets (Socket.IO): the browser sends the same cookie on the handshake. The frontend
+already keeps one connection on the `/session` namespace for instant sign-out; feature
+gateways use their own namespace.
 
 ```ts
 @WebSocketGateway({ namespace: '/office' })
@@ -189,6 +227,9 @@ Callback URL to register at Google / GitHub / 42 (adapt host and port to `SERVER
 - Every flow above was tried end to end through nginx (HTTPS): sign up, sign in, wrong
   password, refresh, sign out, 2FA with app and backup codes, lockout, trusted browser,
   password reset, email confirmation, OAuth redirects and account linking.
+- One device at a time, in two browsers: PC:B refused, link emailed, PC:A kicked out of the
+  office ~1 s after the link was opened, PC:B signs in; link in a third browser needs the
+  password; reused, forged or too-frequent links refused; no takeover without a full sign-in.
 
 ## 7. Known limits
 
