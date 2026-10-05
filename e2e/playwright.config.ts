@@ -18,8 +18,14 @@ export default defineConfig({
     screenshot: 'only-on-failure',
     launchOptions: {
       executablePath: process.env.CHROMIUM_PATH || undefined,
-      // WebGL without a GPU (CI machines, containers).
-      args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--no-proxy-server'],
+      // WebGL without a GPU (CI machines, containers); a fake microphone for voice.
+      args: [
+        '--use-angle=swiftshader',
+        '--enable-unsafe-swiftshader',
+        '--no-proxy-server',
+        '--use-fake-ui-for-media-stream',
+        '--use-fake-device-for-media-stream',
+      ],
     },
   },
 });
