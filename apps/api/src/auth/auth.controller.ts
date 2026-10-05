@@ -7,15 +7,18 @@ import { AppConfig } from '../config/app-config';
 import { AuthService, type SignInResult } from './auth.service';
 import { clientInfo } from './client-info';
 import { clearSessionCookies, COOKIES, setSessionCookies } from './cookies';
+import { EmailDto, TokenDto } from './dto/email.dto';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { TokensService } from './tokens.service';
+import { VerificationService } from './verification.service';
 
 @Controller('auth')
 export class AuthController {
   constructor(
     private readonly auth: AuthService,
     private readonly tokens: TokensService,
+    private readonly verification: VerificationService,
     private readonly config: AppConfig,
   ) {}
 
@@ -30,6 +33,22 @@ export class AuthController {
   @HttpCode(200)
   async login(@Body() dto: LoginDto, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
     return this.respond(await this.auth.login(dto, clientInfo(req)), res);
+  }
+
+  /** The link from the "confirm your email" message. */
+  @Public()
+  @Post('email/verify')
+  @HttpCode(204)
+  verifyEmail(@Body() dto: TokenDto) {
+    return this.verification.verify(dto.token);
+  }
+
+  /** Sends a new confirmation link (same answer whether the account exists or not). */
+  @Public()
+  @Post('email/resend')
+  @HttpCode(204)
+  resendVerification(@Body() dto: EmailDto) {
+    return this.verification.resend(dto.email);
   }
 
   /** The signed-in user. */

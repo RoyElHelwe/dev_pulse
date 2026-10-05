@@ -7,6 +7,7 @@ import type { LoginDto } from './dto/login.dto';
 import type { RegisterDto } from './dto/register.dto';
 import { PUBLIC_USER_INCLUDE, type PublicUser, toPublicUser } from './public-user';
 import { type ClientInfo, TokensService } from './tokens.service';
+import { VerificationService } from './verification.service';
 
 /** Result of a sign-in attempt. */
 export type SignInResult =
@@ -22,6 +23,7 @@ export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly tokens: TokensService,
+    private readonly verification: VerificationService,
     private readonly config: AppConfig,
   ) {}
 
@@ -38,6 +40,7 @@ export class AuthService {
       data: { email: dto.email, displayName: dto.displayName, passwordHash: await hashPassword(dto.password) },
       include: PUBLIC_USER_INCLUDE,
     });
+    await this.verification.sendVerificationEmail(user);
     return this.startSession(toPublicUser(user), client);
   }
 
