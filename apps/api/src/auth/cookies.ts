@@ -12,6 +12,10 @@ export const COOKIES = {
   trustedDevice: 'trusted_device',
   /** OAuth state + PKCE verifier during a Google/GitHub/42 redirect. */
   oauth: 'oauth_state',
+  /** "Signed in correctly, but the account is open elsewhere" (10 minutes). */
+  takeover: 'takeover_token',
+  /** Ties the "close all sessions" email link to the browser that asked for it. */
+  closeSessions: 'close_sessions',
   /**
    * Not secret, readable by the frontend: "someone is signed in, and the
    * access token expires at <ms>". Lets the app refresh before it expires
@@ -28,6 +32,8 @@ export const COOKIE_OPTIONS = {
   mfa: { ...base, path: '/api/auth' },
   trustedDevice: { ...base, path: '/api/auth' },
   oauth: { ...base, path: '/api/auth/oauth' },
+  takeover: { ...base, sameSite: 'strict', path: '/api/auth/sessions' },
+  closeSessions: { ...base, sameSite: 'strict', path: '/api/auth/sessions' },
   signedIn: { secure: true, sameSite: 'lax', path: '/' },
 } satisfies Record<string, CookieOptions>;
 

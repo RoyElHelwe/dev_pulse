@@ -2,6 +2,7 @@ import { Controller, Get, Param, Query, Req, Res } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { Public } from '../../common/auth/public.decorator';
 import { AppConfig } from '../../config/app-config';
+import { TAKEOVER_SECONDS } from '../auth.service';
 import { clientInfo } from '../client-info';
 import { COOKIE_OPTIONS, COOKIES, setSessionCookies } from '../cookies';
 import { safeRedirect } from '../crypto/redirect';
@@ -54,6 +55,10 @@ export class OAuthController {
       if (result.status === 'two-factor-required') {
         res.cookie(COOKIES.mfa, result.mfaToken, { ...COOKIE_OPTIONS.mfa, maxAge: 5 * 60 * 1000 });
         return res.redirect(302, `/two-factor?redirect=${encodeURIComponent(redirect)}`);
+      }
+      if (result.status === 'session-active') {
+        res.cookie(COOKIES.takeover, result.takeoverToken, { ...COOKIE_OPTIONS.takeover, maxAge: TAKEOVER_SECONDS * 1000 });
+        return res.redirect(302, '/login?error=session_active');
       }
       if (result.status !== 'signed-in') throw new OAuthError('oauth_failed');
       setSessionCookies(res, result.tokens, this.config);

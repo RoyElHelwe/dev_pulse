@@ -5,14 +5,23 @@ import { AppConfig } from '../config/app-config';
 import { PrismaService } from '../prisma/prisma.service';
 import type { SessionTokens } from './cookies';
 import { randomToken, sha256 } from './crypto/secrets';
+import { type SessionEndReason, SessionEvents } from './session-events';
 
 export interface ClientInfo {
   userAgent?: string;
   ip?: string;
+  /** The refresh token this browser already has, if any (same device signing in again). */
+  refreshToken?: string;
 }
 
 /** Short-lived signed tokens used during sign-in steps. */
-type PurposeToken = 'mfa' | 'trust' | 'oauth';
+type PurposeToken = 'mfa' | 'trust' | 'oauth' | 'takeover';
+
+/**
+ * A session counts as "in use" if it refreshed its tokens recently. An open
+ * app refreshes every ~14 minutes, so 20 minutes means "someone is there".
+ */
+export const ACTIVE_SESSION_WINDOW_MS = 20 * 60 * 1000;
 
 /** A refresh token reused within this window is a race between tabs, not theft. */
 const REUSE_GRACE_MS = 30_000;
@@ -23,6 +32,7 @@ export class TokensService {
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
     private readonly config: AppConfig,
+    private readonly events: SessionEvents,
   ) {}
 
   // ---- access token (JWT) --------------------------------------------------
@@ -86,7 +96,7 @@ export class TokensService {
       if (!row.replacedById) throw invalid('SESSION_ENDED');
       // Already exchanged: either two tabs refreshed at once, or a copy is being replayed.
       const raceBetweenTabs = Date.now() - row.revokedAt.getTime() < REUSE_GRACE_MS;
-      if (!raceBetweenTabs) await this.revokeSession(row.userId, row.familyId);
+      if (!raceBetweenTabs) await this.revokeSession(row.userId, row.familyId, 'security_alert');
       throw invalid('REFRESH_TOKEN_REUSED');
     }
     if (row.expiresAt.getTime() < Date.now()) throw invalid('REFRESH_TOKEN_EXPIRED');
@@ -114,19 +124,54 @@ export class TokensService {
     };
   }
 
-  /** Signs out one device. */
-  async revokeSession(userId: string, familyId: string) {
-    await this.prisma.refreshToken.updateMany({
+  /** Signs out one device of this user (never another user's: userId is part of the filter). */
+  async revokeSession(userId: string, familyId: string, reason: SessionEndReason = 'signed_out') {
+    const { count } = await this.prisma.refreshToken.updateMany({
       where: { userId, familyId, revokedAt: null },
       data: { revokedAt: new Date() },
     });
+    if (count > 0) this.events.emit([familyId], reason);
   }
 
-  /** Signs out every device, optionally keeping the current one. */
-  async revokeAllSessions(userId: string, exceptFamilyId?: string) {
-    await this.prisma.refreshToken.updateMany({
-      where: { userId, revokedAt: null, ...(exceptFamilyId && { familyId: { not: exceptFamilyId } }) },
-      data: { revokedAt: new Date() },
+  /** Signs out every device of the user, optionally keeping the current one. */
+  async revokeAllSessions(userId: string, exceptFamilyId?: string, reason: SessionEndReason = 'sessions_closed') {
+    const where = { userId, revokedAt: null, ...(exceptFamilyId && { familyId: { not: exceptFamilyId } }) };
+    const live = await this.prisma.refreshToken.findMany({ where, select: { familyId: true }, distinct: ['familyId'] });
+    await this.prisma.refreshToken.updateMany({ where, data: { revokedAt: new Date() } });
+    this.events.emit(
+      live.map((r) => r.familyId),
+      reason,
+    );
+  }
+
+  /** False once the device was signed out (checked on every request: instant sign-out). */
+  async isSessionAlive(familyId: string): Promise<boolean> {
+    const live = await this.prisma.refreshToken.count({
+      where: { familyId, revokedAt: null, expiresAt: { gt: new Date() } },
+    });
+    return live > 0;
+  }
+
+  /**
+   * Another device where the account is in use right now, if any. The
+   * browser's own session (same refresh token) doesn't count: that is the
+   * same device signing in again.
+   */
+  async findActiveSession(userId: string, ownRefreshToken?: string) {
+    const own = ownRefreshToken
+      ? await this.prisma.refreshToken.findUnique({ where: { tokenHash: sha256(ownRefreshToken) } })
+      : null;
+    const ownFamily = own?.userId === userId ? own.familyId : undefined;
+    return this.prisma.refreshToken.findFirst({
+      where: {
+        userId,
+        revokedAt: null,
+        expiresAt: { gt: new Date() },
+        createdAt: { gt: new Date(Date.now() - ACTIVE_SESSION_WINDOW_MS) },
+        ...(ownFamily && { familyId: { not: ownFamily } }),
+      },
+      orderBy: { createdAt: 'desc' },
+      select: { userAgent: true, createdAt: true },
     });
   }
 

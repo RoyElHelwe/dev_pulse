@@ -61,7 +61,7 @@ export class TwoFactorService {
       data: { enabledAt: new Date(), lastUsedStep: step, backupCodes: backupCodes.map((c) => sha256(normalizeBackupCode(c))) },
     });
     // Other devices signed in without 2FA: sign them out.
-    await this.tokens.revokeAllSessions(userId, sessionId);
+    await this.tokens.revokeAllSessions(userId, sessionId, 'security_alert');
     return { backupCodes };
   }
 

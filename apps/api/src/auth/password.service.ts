@@ -39,7 +39,7 @@ export class PasswordService {
       // Clicking the emailed link also proves the email address is theirs.
       data: { passwordHash: await hashPassword(dto.password), emailVerifiedAt: new Date() },
     });
-    await this.tokens.revokeAllSessions(userId);
+    await this.tokens.revokeAllSessions(userId, undefined, 'password_changed');
     await this.notifyChanged(user);
   }
 
@@ -53,7 +53,7 @@ export class PasswordService {
       }
     }
     await this.prisma.user.update({ where: { id: userId }, data: { passwordHash: await hashPassword(dto.newPassword) } });
-    await this.tokens.revokeAllSessions(userId, sessionId);
+    await this.tokens.revokeAllSessions(userId, sessionId, 'password_changed');
     await this.notifyChanged(user);
   }
 

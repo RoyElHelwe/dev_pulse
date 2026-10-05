@@ -7,8 +7,8 @@ import { IS_PUBLIC } from './public.decorator';
 
 /**
  * Global guard: reads the access token from the httpOnly cookie (browser) or
- * the Authorization header (scripts, API clients) and checks its signature.
- * No database query: that is the point of a short-lived JWT.
+ * the Authorization header (scripts, API clients), checks its signature, then
+ * checks that its device session was not signed out in the meantime.
  */
 @Injectable()
 export class AuthGuard implements CanActivate {
@@ -17,7 +17,7 @@ export class AuthGuard implements CanActivate {
     private readonly tokens: TokensService,
   ) {}
 
-  canActivate(context: ExecutionContext): boolean {
+  async canActivate(context: ExecutionContext): Promise<boolean> {
     if (context.getType() !== 'http') return true; // sockets use authenticateSocket()
     const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC, [
       context.getHandler(),
@@ -32,6 +32,10 @@ export class AuthGuard implements CanActivate {
 
     const user = this.tokens.verifyAccessToken(token);
     if (!user) throw new UnauthorizedException({ code: 'TOKEN_EXPIRED', message: 'Your session has expired.' });
+    // One small indexed query: a device that was signed out stops working at once.
+    if (!(await this.tokens.isSessionAlive(user.sessionId))) {
+      throw new UnauthorizedException({ code: 'SESSION_ENDED', message: 'You were signed out.' });
+    }
     (request as Request & { user: unknown }).user = user;
     return true;
   }

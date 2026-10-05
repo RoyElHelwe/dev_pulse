@@ -10,6 +10,8 @@ import { EmailTokensService } from './email-tokens.service';
 import { OAuthController } from './oauth/oauth.controller';
 import { OAuthService } from './oauth/oauth.service';
 import { PasswordService } from './password.service';
+import { SessionEvents } from './session-events';
+import { SessionTakeoverService } from './session-takeover.service';
 import { TokensService } from './tokens.service';
 import { TwoFactorService } from './two-factor.service';
 import { VerificationService } from './verification.service';
@@ -35,6 +37,8 @@ import { VerificationService } from './verification.service';
     PasswordService,
     TwoFactorService,
     OAuthService,
+    SessionEvents,
+    SessionTakeoverService,
     { provide: APP_GUARD, useClass: AuthGuard },
   ],
   exports: [TokensService],
