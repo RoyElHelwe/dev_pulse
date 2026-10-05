@@ -1,4 +1,4 @@
-import { pick, type Random } from '../render/draw';
+import { pick, type Random, weighted } from '../render/draw';
 import { BOTTOM, CLOTH, DYED_FROM, HAIR, SHOES, SKIN } from './palette';
 
 // A character is a recipe: a handful of choices from fixed menus. It's stored
@@ -52,7 +52,7 @@ export interface Recipe {
 
 type Key = keyof Recipe;
 
-/** Every field, in DNA order (append only: old codes must keep decoding). */
+/** Every field, in DNA order. Changing the list means a new DNA_VERSION (old codes stop decoding). */
 export const FIELDS: { key: Key; size: number; options?: readonly string[] }[] = [
   { key: 'build', size: BUILDS.length, options: BUILDS },
   { key: 'height', size: 3 },
@@ -95,8 +95,9 @@ export function decode(code: string): Recipe | null {
   const out: Record<string, unknown> = {};
   for (let i = 0; i < FIELDS.length; i++) {
     const field = FIELDS[i];
-    const v = parseInt(code[i + 1], 36);
-    if (Number.isNaN(v) || v >= field.size) return null;
+    const digit = code[i + 1];
+    const v = parseInt(digit, 36);
+    if (!/^[0-9a-z]$/.test(digit) || v >= field.size) return null;
     out[field.key] = field.options ? field.options[v] : field.key === 'freckles' ? v === 1 : v;
   }
   return out as unknown as Recipe;
@@ -140,25 +141,11 @@ export const PRESET_KEYS = Object.keys(PRESETS);
 /** What `character` holds (preset name or DNA) → recipe. Unknown → the first preset. */
 export function recipeOf(character: string | null | undefined): Recipe {
   if (!character) return PRESETS.maya;
-  return PRESETS[character] ?? decode(character) ?? PRESETS.maya;
-}
-
-export function isCharacter(character: string) {
-  return character in PRESETS || decode(character) !== null;
+  return Object.hasOwn(PRESETS, character) ? PRESETS[character] : (decode(character) ?? PRESETS.maya);
 }
 
 // ---------------------------------------------------------------------------
 // Generating: weighted menus + a few rules that keep every result readable.
-
-function weighted<T>(random: Random, entries: [T, number][]): T {
-  const total = entries.reduce((sum, [, w]) => sum + w, 0);
-  let roll = random() * total;
-  for (const [value, w] of entries) {
-    roll -= w;
-    if (roll < 0) return value;
-  }
-  return entries[entries.length - 1][0];
-}
 
 const indexes = (n: number) => Array.from({ length: n }, (_, i) => i);
 

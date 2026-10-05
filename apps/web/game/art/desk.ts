@@ -1,6 +1,6 @@
-import { pick, type Random, seededRandom } from '../render/draw';
+import { pick, seededRandom, weighted } from '../render/draw';
 import { drawCharacter } from './character';
-import { type Hex, oklch, type Ramp } from './color';
+import { type Hex, oklch, type Ramp, toOklch } from './color';
 import { CLOTH, GLOW, PAPER, PLANT, type Swatch, STICKY, TECH, WOOD } from './palette';
 import type { Pen } from './pen';
 import type { Recipe, Vibe } from './recipe';
@@ -80,13 +80,6 @@ const POOLS: Record<Vibe, { back: [PropKind, number][]; front: [PropKind, number
 
 type Screens = 'single' | 'dual' | 'ultrawide' | 'laptop';
 
-function weighted<T>(random: Random, entries: [T, number][]): T {
-  const total = entries.reduce((s, [, w]) => s + w, 0);
-  let roll = random() * total;
-  for (const [v, w] of entries) if ((roll -= w) < 0) return v;
-  return entries[0][0];
-}
-
 const PI = Math.PI;
 
 /** Draws the desk and everything on it; returns the lights it gives off. */
@@ -144,8 +137,8 @@ export function drawDesk(pen: Pen, w: number, h: number, options: DeskOptions): 
     if (on) lights.push({ x: 0, y: y0 + 14, radius: 52, color: GLOW.screen, strength: 0.6 });
   }
   if (vibe === 'gamer' && owner) {
-    // LED strip behind the screens, in the owner's colour.
-    const led = oklch(0.78, 0.17, (time / 30 + random() * 360) % 360);
+    // LED strip behind the screens, in the owner's colour, slowly cycling.
+    const led = oklch(0.78, 0.17, (time / 30 + toOklch(accent.base).h) % 360);
     pen.rect(-w * 0.32, y0 + 1.2, w * 0.64, 1.6, 0.8, led, 0.9);
     lights.push({ x: 0, y: y0 + 2, radius: 46, color: led, strength: 0.45 });
   }

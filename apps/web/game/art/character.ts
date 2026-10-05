@@ -33,9 +33,6 @@ export interface Pose {
   flat?: boolean;
 }
 
-/** Highest point of any character (afro, pompom), for picture frames. */
-export const CHARACTER_TOP = -60;
-
 const PI = Math.PI;
 
 export function drawCharacter(pen: Pen, recipe: Recipe, pose: Pose) {
@@ -434,7 +431,7 @@ export function drawCharacter(pen: Pen, recipe: Recipe, pose: Pose) {
         return;
       }
       if (style === 'mohawk') {
-        pen.pie(0, hy, 9.8, 0, 2 * PI, k.base, 0.3);
+        pen.circle(0, hy, 9.8, k.base, 0.3);
         blob(-2.4, hy - 15, 4.8, 23, 2.4, k);
         return;
       }
