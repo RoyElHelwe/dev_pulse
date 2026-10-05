@@ -20,9 +20,12 @@ export function OfficeView() {
   const [toast, setToast] = useState('');
   const { status, user, reloadUser } = useAuth();
   const router = useRouter();
+  // Set while leaving with a message, so the plain "no office" redirect doesn't win.
+  const leaving = useRef(false);
 
   const leave = useCallback(
     async (notice: string) => {
+      leaving.current = true;
       await reloadUser();
       router.replace(`/onboarding?notice=${notice}`);
     },
@@ -32,7 +35,7 @@ export function OfficeView() {
   // Signed out → sign in; no office yet → onboarding; otherwise load it.
   useEffect(() => {
     if (status === 'signed-out') router.replace('/login?redirect=/office');
-    if (status !== 'signed-in' || !user) return;
+    if (status !== 'signed-in' || !user || leaving.current) return;
     if (!user.workspace) return void router.replace('/onboarding');
     api<MyWorkspace>('/workspace').then(setWorkspace, () => void leave('no_workspace'));
   }, [status, user, router, leave]);
