@@ -7,7 +7,7 @@ import { deriveLabels, deriveZones, itemBounds, type Rect } from '../layout/deri
 import type { Furniture, OfficeLayout, Zone } from '../layout/types';
 import { Avatar, DIRECTIONS, type Direction } from '../objects/Avatar';
 import { DeskPlates, type DeskOwner } from '../objects/DeskPlates';
-import { lookOf } from '../objects/looks';
+import { recipeOf } from '../art/recipe';
 import { RemotePlayer } from '../objects/RemotePlayer';
 import { RoomBadges } from '../objects/RoomBadges';
 import { Interactions } from '../systems/Interactions';
@@ -15,7 +15,7 @@ import { Proximity } from '../systems/Proximity';
 import { roomFinder } from '../systems/rooms';
 import { drawFloor } from '../render/floors';
 import { FURNITURE } from '../render/furniture';
-import { ensureFurnitureTexture, ensureShadowTexture, textureScale } from '../render/sprites';
+import { ensureFurnitureTexture, ensureShadowTexture, setDeskOwners, textureScale } from '../render/sprites';
 import { drawWall, wallCollider } from '../render/walls';
 
 /** Someone else in the office, as the network describes them. */
@@ -79,6 +79,7 @@ export class OfficeScene extends Phaser.Scene {
   private currentZone: Zone | null = null;
   private userZoom = 1;
   private remotes = new Map<string, RemotePlayer>();
+  private desks: DeskOwner[] = [];
   private sprites = new Map<string, { image: Phaser.GameObjects.Image; shadow?: Phaser.GameObjects.Image; key: string }>();
   private editMode: EditMode | null = null;
   private proximity!: Proximity;
@@ -98,6 +99,7 @@ export class OfficeScene extends Phaser.Scene {
   init(data: OfficeSceneData) {
     this.opts = data;
     this.remotes = new Map();
+    this.desks = [];
     this.sprites = new Map();
     this.editMode = null;
     this.remoteZones = new Map();
@@ -130,7 +132,7 @@ export class OfficeScene extends Phaser.Scene {
     // Local player, at its previous place if it's still free, else near the entrance.
     const start =
       this.opts.startAt && this.isFree(this.opts.startAt.x, this.opts.startAt.y) ? this.opts.startAt : this.arrivalPoint(layout);
-    this.player = new Avatar(this, start.x, start.y, lookOf(this.opts.character), this.opts.name, this.opts.fontFamily, this.opts.dpr * 2);
+    this.player = new Avatar(this, start.x, start.y, recipeOf(this.opts.character), this.opts.name, this.opts.fontFamily, this.opts.dpr * 2);
     this.physics.add.existing(this.player);
     const body = this.player.body as Phaser.Physics.Arcade.Body;
     body.setSize(18, 10).setOffset(-9, -10).setCollideWorldBounds(true);
@@ -228,7 +230,7 @@ export class OfficeScene extends Phaser.Scene {
   upsertPlayer(p: PlayerState) {
     const existing = this.remotes.get(p.id);
     if (existing) return existing.push(p.x, p.y, DIRECTIONS[p.dir] ?? 'down', p.moving);
-    const remote = new RemotePlayer(this, p.x, p.y, lookOf(p.character), p.name, this.opts.fontFamily, this.opts.dpr * 2);
+    const remote = new RemotePlayer(this, p.x, p.y, recipeOf(p.character), p.name, this.opts.fontFamily, this.opts.dpr * 2);
     remote.avatar.setStatus(p.status);
     this.remotes.set(p.id, remote);
     this.setPlayerZone(p.id, p.zone ?? null);
@@ -249,8 +251,35 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   setDesks(desks: DeskOwner[]) {
+    this.desks = desks;
     this.plates.set(desks);
     this.interactions.setOwners(desks);
+    this.redecorateDesks();
+  }
+
+  /** Desks show their owner's things (mug in their colour, their kind of clutter...). */
+  private redecorateDesks() {
+    setDeskOwners(this, new Map(this.desks.filter((d) => d.character).map((d) => [d.deskId, d.character!])));
+    const scale = textureScale(this.opts.dpr);
+    const items = this.editMode ? [] : this.opts.layout.furniture.filter((f) => f.kind === 'desk');
+    for (const item of items) {
+      const sprite = this.sprites.get(item.id);
+      if (!sprite) continue;
+      const key = ensureFurnitureTexture(this, item, scale);
+      if (key === sprite.key) continue;
+      const old = sprite.key;
+      sprite.image.setTexture(key);
+      sprite.key = key;
+      // Desk textures are per desk and owner: nobody else uses the old one.
+      if (this.textures.exists(old)) this.textures.remove(old);
+    }
+  }
+
+  /** Someone changed character: their avatar and their desk follow. */
+  private ownerChanged(userId: string, character: string) {
+    if (!this.desks.some((d) => d.userId === userId)) return;
+    this.desks = this.desks.map((d) => (d.userId === userId ? { ...d, character } : d));
+    this.redecorateDesks();
   }
 
   setJoystick(x: number, y: number) {
@@ -278,12 +307,14 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   setPlayerCharacter(id: string, character: string) {
-    this.remotes.get(id)?.avatar.setLook(lookOf(character));
+    this.remotes.get(id)?.avatar.setLook(recipeOf(character));
+    this.ownerChanged(id, character);
   }
 
   setOwnLook(character: string) {
-    this.player.setLook(lookOf(character));
+    this.player.setLook(recipeOf(character));
     this.opts.character = character;
+    this.ownerChanged(this.opts.myId, character);
   }
 
   /** Current local position (kept when the layout reloads). */

@@ -116,6 +116,29 @@ officeEvents.on('object:interact', (e) => e.type === 'desk' && e.ownerId === me.
 Every `on` returns its own "off", handy in `useEffect`. The status bubble is
 `PATCH /api/workspace/me { status }` (e.g. the current task); it reaches everyone live.
 
+### Characters and desks are generated (`apps/web/game/art/`)
+
+A character is a **recipe**: 18 choices (build, height, skin, hairstyle and colour, beard,
+glasses, top, colours, pattern, bottom, shoes, hat, desk vibe). `WorkspaceMember.character`
+holds one of the 8 named presets (`maya`, `sam`…) or the recipe as a 19-character code
+(`1` + one base-36 digit per choice). The pickers offer the presets plus freshly generated
+characters ("New faces"); the API checks codes with `IsCharacter()`
+(`apps/api/src/workspace/characters.ts`, keep `DNA_SIZES` in sync with `recipe.ts`).
+
+| File | What |
+| --- | --- |
+| `color.ts`, `palette.ts` | Every colour, as OKLCH ramps (shadows cooler, highlights warmer) |
+| `recipe.ts` | Choices, codes, presets, random characters with contrast rules, mutate / breed |
+| `character.ts` | Draws a character in layers, 4 directions, moods, headset, mug |
+| `desk.ts` | A desk decorated for its owner: anchor slots, props by vibe, their colours; free desks stay bare |
+| `pen.ts` | One drawing interface for Phaser, canvas and SVG (the React previews use the same code) |
+| `lab/` | The art lab page: a simulated day at the office, a character studio, a lineup |
+
+- The status sets the face: "Focusing" → focused, "On break ☕" → smiling with a mug.
+- `Avatar.setInCall(inCall, talking)` puts the headset on (Z3/Z4: call it when a call starts and ends).
+- Each avatar frame is drawn once into a texture shared by everyone with the same recipe
+  (Phaser redraws Graphics shapes every frame). Desks are re-drawn when their owner changes.
+
 ## 6. The office editor
 
 Owners and admins: **Edit office** (top right). Editing happens in the real office, so what

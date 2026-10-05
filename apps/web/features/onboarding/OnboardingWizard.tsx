@@ -9,10 +9,9 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { TextField } from '@/components/ui/TextField';
 import { useAuth } from '@/features/auth/AuthProvider';
-import { CharacterPreview } from '@/features/workspace/CharacterPreview';
+import { CharacterGrid } from '@/features/workspace/CharacterGrid';
 import { LayoutPreview } from '@/features/workspace/LayoutPreview';
 import type { OfficeLayout } from '@/game/layout/types';
-import { LOOK_KEYS, type LookKey } from '@/game/objects/looks';
 import { api, ApiError } from '@/lib/api';
 import { cn } from '@/lib/cn';
 
@@ -58,7 +57,7 @@ export function OnboardingWizard() {
   const [teamSize, setTeamSize] = useState<number | null>(null);
   const [templates, setTemplates] = useState<Template[]>([]);
   const [templateId, setTemplateId] = useState<string | null>(null);
-  const [character, setCharacter] = useState<LookKey>('maya');
+  const [character, setCharacter] = useState('maya');
   const [error, setError] = useState('');
   const [creating, setCreating] = useState(false);
 
@@ -289,30 +288,14 @@ export function OnboardingWizard() {
           <>
             <h1 className="text-2xl font-semibold tracking-tight">Choose your character</h1>
             <p className="mt-1 text-zinc-600">This is how your team sees you in the office.</p>
-            <div
-              className="mt-6 grid grid-cols-4 gap-3 sm:grid-cols-8"
-              role="radiogroup"
-              aria-label="Character"
-            >
-              {LOOK_KEYS.map((key) => (
-                <button
-                  key={key}
-                  type="button"
-                  role="radio"
-                  aria-checked={character === key}
-                  aria-label={key}
-                  onClick={() => setCharacter(key)}
-                  className={cn(
-                    'rounded-2xl bg-zinc-50 p-2 ring-2 transition',
-                    character === key
-                      ? 'bg-emerald-50 ring-emerald-500'
-                      : 'ring-transparent hover:ring-zinc-300',
-                  )}
-                >
-                  <CharacterPreview character={key} className="mx-auto h-20" />
-                </button>
-              ))}
-            </div>
+            <CharacterGrid
+              value={character}
+              onPick={setCharacter}
+              fresh={8}
+              className="mt-6 gap-3 sm:grid-cols-8"
+              tileClassName="rounded-2xl p-2"
+              previewClassName="h-20"
+            />
           </>
         )}
 
