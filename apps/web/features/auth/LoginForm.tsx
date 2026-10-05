@@ -139,6 +139,7 @@ export function LoginForm() {
         <TextField
           label="Email"
           name="email"
+          defaultValue={params.get('email') ?? undefined}
           type="email"
           autoComplete="email"
           error={errors.email}

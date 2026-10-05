@@ -82,7 +82,14 @@ export function RegisterForm() {
       <form onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
         {formError && <Alert tone="error">{formError}</Alert>}
         <TextField label="Your name" name="displayName" autoComplete="name" maxLength={50} error={errors.displayName} />
-        <TextField label="Email" name="email" type="email" autoComplete="email" error={errors.email} />
+        <TextField
+          label="Email"
+          name="email"
+          type="email"
+          autoComplete="email"
+          defaultValue={params.get('email') ?? undefined}
+          error={errors.email}
+        />
         <TextField
           label="Password"
           name="password"
