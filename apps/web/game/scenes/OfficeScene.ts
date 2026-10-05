@@ -1,6 +1,8 @@
 import * as Phaser from 'phaser';
 import { officeEvents } from '@/features/office/events';
 import { TILE, WALK_SPEED } from '../constants';
+import { EditMode } from '../editor/EditMode';
+import type { LayoutEditor } from '../editor/LayoutEditor';
 import { deriveLabels, deriveZones, itemBounds, type Rect } from '../layout/derive';
 import type { Furniture, OfficeLayout, Zone } from '../layout/types';
 import { Avatar, DIRECTIONS, type Direction } from '../objects/Avatar';
@@ -54,6 +56,8 @@ export class OfficeScene extends Phaser.Scene {
   private currentZone: Zone | null = null;
   private userZoom = 1;
   private remotes = new Map<string, RemotePlayer>();
+  private sprites = new Map<string, { image: Phaser.GameObjects.Image; shadow?: Phaser.GameObjects.Image; key: string }>();
+  private editMode: EditMode | null = null;
   private lastSent = { at: 0, moving: false, dir: 'down' as Direction };
 
   constructor() {
@@ -63,6 +67,8 @@ export class OfficeScene extends Phaser.Scene {
   init(data: OfficeSceneData) {
     this.opts = data;
     this.remotes = new Map();
+    this.sprites = new Map();
+    this.editMode = null;
     this.currentZone = null;
     this.lastSent = { at: 0, moving: false, dir: 'down' };
   }
@@ -125,6 +131,8 @@ export class OfficeScene extends Phaser.Scene {
     });
     this.scale.on('resize', this.onResize, this);
     this.events.once('shutdown', () => {
+      this.editMode?.destroy();
+      this.editMode = null;
       this.scale.off('resize', this.onResize, this);
       if (this.currentZone) officeEvents.emit('zone:leave', toEvent(this.currentZone));
     });
@@ -135,7 +143,7 @@ export class OfficeScene extends Phaser.Scene {
     const body = this.player.body as Phaser.Physics.Arcade.Body;
     let vx = 0;
     let vy = 0;
-    if (!isTyping()) {
+    if (!isTyping() && !this.editMode) {
       const k = this.keys;
       vx = Number(k.right.isDown || k.d.isDown) - Number(k.left.isDown || k.a.isDown);
       vy = Number(k.down.isDown || k.s.isDown) - Number(k.up.isDown || k.w.isDown);
@@ -182,6 +190,25 @@ export class OfficeScene extends Phaser.Scene {
     return { x: this.player.x, y: this.player.y };
   }
 
+  // ---- editing -----------------------------------------------------------------
+
+  /** Organisers: switch to editing (the player stops, the camera is free). */
+  startEditing(editor: LayoutEditor, onProblem: (text: string) => void) {
+    if (this.editMode) return;
+    this.cameras.main.stopFollow();
+    this.editMode = new EditMode(
+      {
+        scene: this,
+        textureScale: textureScale(this.opts.dpr),
+        sprites: this.sprites,
+        depthOf: (item) => this.furnitureDepth(item),
+        shadowDepth: DEPTH.shadow,
+      },
+      editor,
+      onProblem,
+    );
+  }
+
   // ---- view --------------------------------------------------------------------
 
   zoomBy(factor: number) {
@@ -210,22 +237,29 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   private addFurniture(item: Furniture, scale: number) {
-    const spec = FURNITURE[item.kind];
     const b = pixels(itemBounds(item));
-    if (spec.solid) {
-      this.add
-        .image(b.x + 1, b.y + 4, ensureShadowTexture(this, item, scale))
-        .setOrigin(0)
-        .setScale(1 / scale)
-        .setDepth(DEPTH.shadow);
-    }
-    const depth =
-      spec.layer === 'floor' ? DEPTH.rug : DEPTH.furniture + (b.y + b.h + (spec.layer === 'wall' ? 40 : 0)) / 100000;
-    return this.add
-      .image(item.x * TILE, item.y * TILE, ensureFurnitureTexture(this, item, scale))
+    const shadow = FURNITURE[item.kind].solid
+      ? this.add
+          .image(b.x + 1, b.y + 4, ensureShadowTexture(this, item, scale))
+          .setOrigin(0)
+          .setScale(1 / scale)
+          .setDepth(DEPTH.shadow)
+      : undefined;
+    const key = ensureFurnitureTexture(this, item, scale);
+    const image = this.add
+      .image(item.x * TILE, item.y * TILE, key)
       .setScale(1 / scale)
       .setRotation(Phaser.Math.DegToRad(item.rotation ?? 0))
-      .setDepth(depth);
+      .setDepth(this.furnitureDepth(item))
+      .setData('furnitureId', item.id);
+    this.sprites.set(item.id, { image, shadow, key });
+  }
+
+  /** Rugs on the floor, the rest sorted by their bottom edge (things lower on screen are in front). */
+  private furnitureDepth(item: Furniture) {
+    const spec = FURNITURE[item.kind];
+    const b = pixels(itemBounds(item));
+    return spec.layer === 'floor' ? DEPTH.rug : DEPTH.furniture + (b.y + b.h + (spec.layer === 'wall' ? 40 : 0)) / 100000;
   }
 
   private addCollider(group: Phaser.Physics.Arcade.StaticGroup, x: number, y: number, w: number, h: number) {

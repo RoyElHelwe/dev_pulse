@@ -1,4 +1,5 @@
 import * as Phaser from 'phaser';
+import type { LayoutEditor } from './editor/LayoutEditor';
 import type { OfficeLayout } from './layout/types';
 import { OfficeScene, type OfficeSceneData, type PlayerState } from './scenes/OfficeScene';
 
@@ -17,6 +18,8 @@ export interface OfficeController {
   setOwnCharacter(character: string): void;
   /** Rebuild the office with a new layout (organiser saved), keeping everyone in place. */
   setLayout(layout: OfficeLayout): void;
+  /** Organisers: edit the office in place. Stop by calling setLayout (saved or original). */
+  startEditing(editor: LayoutEditor, onProblem: (text: string) => void): void;
   /** Where the local player is, to (re)announce it. */
   localPosition(): { x: number; y: number } | null;
   destroy(): void;
@@ -105,6 +108,7 @@ export function createGame(parent: HTMLElement, options: GameOptions): OfficeCon
       data = { ...data, layout, startAt: s?.localPosition() };
       s?.scene.restart(data);
     },
+    startEditing: (editor, onProblem) => scene()?.startEditing(editor, onProblem),
     localPosition: () => scene()?.localPosition() ?? null,
     destroy: () => {
       observer.disconnect();
