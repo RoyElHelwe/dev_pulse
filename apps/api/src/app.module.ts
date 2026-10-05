@@ -7,6 +7,7 @@ import { ConfigModule } from './config/config.module';
 import { HealthModule } from './health/health.module';
 import { MailModule } from './mail/mail.module';
 import { PrismaModule } from './prisma/prisma.module';
+import { WorkspaceModule } from './workspace/workspace.module';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { PrismaModule } from './prisma/prisma.module';
     PrismaModule,
     MailModule,
     AuthModule,
+    WorkspaceModule,
     HealthModule,
     // Feature modules get added here, one per folder:
     // UsersModule, InvitationsModule              (Mira)
