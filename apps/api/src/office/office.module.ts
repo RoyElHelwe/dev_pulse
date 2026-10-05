@@ -7,5 +7,6 @@ import { OfficeGateway } from './office.gateway';
   imports: [AuthModule],
   controllers: [OfficeController],
   providers: [OfficeGateway],
+  exports: [OfficeGateway],
 })
 export class OfficeModule {}

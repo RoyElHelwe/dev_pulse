@@ -127,6 +127,8 @@ export function connectOffice(controller: () => OfficeController | null, handler
   });
 
   return {
+    /** The live connection, for the other office features (voice, chat, meetings). */
+    socket,
     /** Called by the game ~20 times a second while walking. */
     sendMove(x: number, y: number, dir: number, moving: boolean) {
       if (socket.connected) socket.volatile.emit('move', [x, y, dir, moving ? 1 : 0]);

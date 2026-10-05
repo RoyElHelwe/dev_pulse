@@ -245,6 +245,11 @@ export class OfficeScene extends Phaser.Scene {
     this.remotes.get(id)?.avatar.setStatus(status);
   }
 
+  setVoice(id: string, inCall: boolean, talking: boolean) {
+    const avatar = id === this.opts.myId ? this.player : this.remotes.get(id)?.avatar;
+    avatar?.setInCall(inCall, talking);
+  }
+
   setOwnStatus(status: string | null) {
     this.opts.status = status;
     this.player.setStatus(status);

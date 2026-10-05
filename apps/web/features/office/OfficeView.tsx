@@ -2,7 +2,11 @@
 
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import type { Socket } from 'socket.io-client';
 import { useAuth } from '@/features/auth/AuthProvider';
+import { ChatPanel } from '@/features/chat/ChatPanel';
+import { MeetingsPanel } from '@/features/meetings/MeetingsPanel';
+import { VoiceControls } from '@/features/voice/VoiceControls';
 import type { MyWorkspace } from '@/features/workspace/types';
 import type { OfficeController } from '@/game/createGame';
 import { LayoutEditor } from '@/game/editor/LayoutEditor';
@@ -28,6 +32,7 @@ export function OfficeView() {
   const [people, setPeople] = useState<Presence[]>([]);
   const [toast, setToast] = useState('');
   const [online, setOnline] = useState(true);
+  const [socket, setSocket] = useState<Socket | null>(null);
   const { status, user, reloadUser } = useAuth();
   const router = useRouter();
   // Set while leaving with a message, so the plain "no office" redirect doesn't win.
@@ -100,6 +105,7 @@ export function OfficeView() {
       onConnection: setOnline,
       onRemoved: (reason) => void leave(reason),
     });
+    setSocket(connection.socket);
 
     (async () => {
       // Phaser touches `window`, so it is loaded only here, in the browser.
@@ -122,6 +128,7 @@ export function OfficeView() {
 
     return () => {
       cancelled = true;
+      setSocket(null);
       connection.disconnect();
       game?.destroy();
       controllerRef.current = null;
@@ -226,6 +233,15 @@ export function OfficeView() {
     return () => clearTimeout(timer);
   }, [toast]);
 
+  const features = {
+    socket,
+    controller: ready ? controllerRef.current : null,
+    workspace: workspace!,
+    people,
+    myId: myId!,
+    onToast: setToast,
+  };
+
   return (
     <div className="relative h-dvh w-full overflow-hidden bg-[#e4e0da]">
       <div ref={containerRef} className="absolute inset-0" />
@@ -240,6 +256,13 @@ export function OfficeView() {
         editing={!!editing}
         onEdit={startEditing}
       />
+      {workspace && myId && !editing && (
+        <>
+          <VoiceControls {...features} />
+          <ChatPanel {...features} />
+          <MeetingsPanel {...features} />
+        </>
+      )}
       {editing && (
         <EditorPanel
           editor={editing.editor}

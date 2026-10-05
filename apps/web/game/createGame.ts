@@ -20,6 +20,8 @@ export interface OfficeController {
   setPlayerZone(id: string, zone: string | null): void;
   setPlayerStatus(id: string, status: string | null): void;
   setOwnStatus(status: string | null): void;
+  /** Voice: `id` (yours or someone else's) is in a call → headset on; `talking` → its light blinks. */
+  setVoice(id: string, inCall: boolean, talking: boolean): void;
   /** Who sits where (name plates on desks). */
   setDesks(desks: DeskOwner[]): void;
   /** Touch joystick, -1..1 on each axis (0, 0 = stop). */
@@ -129,6 +131,7 @@ export function createGame(parent: HTMLElement, options: GameOptions): OfficeCon
       if (p) p.status = status;
       scene()?.setPlayerStatus(id, status);
     },
+    setVoice: (id, inCall, talking) => scene()?.setVoice(id, inCall, talking),
     setOwnStatus(status) {
       data = { ...data, status };
       scene()?.setOwnStatus(status);
