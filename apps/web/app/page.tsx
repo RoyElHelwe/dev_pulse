@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { StackStatus } from '@/components/StackStatus';
 import { buttonStyles } from '@/components/ui/Button';
 import { Logo } from '@/components/ui/Logo';
+import { HeaderActions } from '@/features/auth/HeaderActions';
 
 const FEATURES = [
   { icon: Users, title: 'Walk up to anyone', text: 'See who is around and join them, like in a real office.' },
@@ -17,9 +18,7 @@ export default function HomePage() {
 
       <header className="mx-auto flex max-w-6xl items-center justify-between px-4 py-5 sm:px-6">
         <Logo />
-        <Link href="/office" className={buttonStyles('secondary', 'sm')}>
-          Open the office
-        </Link>
+        <HeaderActions />
       </header>
 
       <main className="mx-auto max-w-6xl px-4 pt-16 pb-20 sm:px-6 sm:pt-24">

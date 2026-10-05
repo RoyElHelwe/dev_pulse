@@ -1,6 +1,8 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
+import { useAuth } from '@/features/auth/AuthProvider';
 import type { OfficeController } from '@/game/createGame';
 import { studioLayout } from '@/game/layout/studio';
 import { DEFAULT_LOOK } from '@/game/objects/looks';
@@ -10,8 +12,16 @@ import { OfficeHud } from './OfficeHud';
 export function OfficeView() {
   const containerRef = useRef<HTMLDivElement>(null);
   const [controller, setController] = useState<OfficeController | null>(null);
+  const { status, user } = useAuth();
+  const router = useRouter();
+  const name = user?.displayName;
 
   useEffect(() => {
+    if (status === 'signed-out') router.replace('/login?redirect=/office');
+  }, [status, router]);
+
+  useEffect(() => {
+    if (!name) return; // wait for the signed-in user
     let cancelled = false;
     let game: OfficeController | null = null;
 
@@ -22,7 +32,7 @@ export function OfficeView() {
       game = createGame(containerRef.current, {
         layout: studioLayout,
         look: DEFAULT_LOOK,
-        name: 'You', // R2/R3: the real display name from the profile
+        name,
         fontFamily: getComputedStyle(document.body).fontFamily,
       });
       setController(game);
@@ -33,7 +43,7 @@ export function OfficeView() {
       game?.destroy();
       setController(null);
     };
-  }, []);
+  }, [name]);
 
   return (
     <div className="relative h-dvh w-full overflow-hidden bg-[#e4e0da]">
