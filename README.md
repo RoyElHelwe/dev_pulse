@@ -7,9 +7,11 @@ talk by proximity voice, meet in meeting rooms, take a break in the chill room a
 tasks from your desk.
 
 > 🚧 In progress. The team plan (who builds what, and in which order) is in
-> **[docs/PLAN.md](docs/PLAN.md)**. Done so far: infrastructure, the 2D office (R1) and
-> authentication ([docs/AUTH.md](docs/AUTH.md)): email + password, Google / GitHub / 42,
-> 2FA, JWT access + refresh tokens.
+> **[docs/PLAN.md](docs/PLAN.md)**. Done so far: infrastructure, authentication
+> ([docs/AUTH.md](docs/AUTH.md)): email + password, Google / GitHub / 42, 2FA, JWT access +
+> refresh tokens, one device at a time; and the office ([docs/OFFICE.md](docs/OFFICE.md)):
+> onboarding with office templates, email invitations, roles, live multiplayer and the
+> organiser's office editor.
 
 ## Architecture
 

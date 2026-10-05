@@ -70,30 +70,29 @@ model User {
   passwordHash String?            // null for OAuth-only users
   displayName  String
   avatarUrl    String?
-  createdAt    DateTime @default(now())
-  memberships  WorkspaceMember[]
+  membership   WorkspaceMember?   // one office per person
 }
 
 model Workspace {
-  id        String   @id @default(cuid())
-  name      String
-  createdAt DateTime @default(now())
-  members   WorkspaceMember[]
+  id            String @id @default(cuid())
+  name          String
+  templateId    String            // loft | studio | campus
+  layout        Json              // OfficeLayout: rooms, walls, furniture, spawn
+  layoutVersion Int    @default(1) // bumped on every save (no lost updates)
+  members       WorkspaceMember[]
 }
 
 enum Role { OWNER ADMIN MEMBER }
 
 model WorkspaceMember {
-  id          String    @id @default(cuid())
-  userId      String
+  userId      String @unique      // a person is in one office at a time
   workspaceId String
-  role        Role      @default(MEMBER)
-  character   String    @default("default")   // sprite key chosen in onboarding
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  @@unique([userId, workspaceId])
+  role        Role   @default(MEMBER)
+  character   String @default("maya")
 }
 ```
+
+Full schema (with invitations): `apps/api/prisma/schema.prisma`. ✅ done
 
 ### C2 — Auth contract (Mira provides it, everyone uses it) ✅ done
 
@@ -104,8 +103,10 @@ Details and examples: **[docs/AUTH.md](AUTH.md)**.
   Get the caller with `@CurrentUser() user` (`{ id, sessionId }`) from `src/common/auth`.
 - Sockets: the same cookie is sent on the Socket.IO handshake. `authenticateSocket(socket, tokens)`
   sets `socket.data.user` (disconnect when it returns null).
-- Workspace access: `WorkspaceMemberGuard` checks the user belongs to `:workspaceId`
-  (added with the workspace tables, M4/M5).
+- Workspace access: `MembershipService.require(userId, roles?)` returns the caller's
+  membership (and workspace) or refuses (`NO_WORKSPACE`, `NOT_ALLOWED`). Each user has one
+  office, so routes use `/api/workspace` (singular) and never take a workspace id from the
+  client. Details: **[docs/OFFICE.md](OFFICE.md)**.
 - Frontend: `useAuth()` → `{ status, user, signOut }`; `api()` calls the API with cookies and
   refreshes tokens on its own. `/office` and `/settings` redirect to `/login` when signed out.
 - A user typing something wrong → `throw new FormError(code, message, field)` (HTTP 200 +
@@ -129,21 +130,24 @@ Zakaria.
 | `object:interact` | `{ type: 'desk' \| 'board', id }`                           | player presses **E** next to an object         |
 
 Map format: an `OfficeLayout` object (`apps/web/game/layout/types.ts`): plain JSON with
-rooms, walls, furniture and `zones` (`type`, `id`, `name`, rectangle in tiles). The office
-is drawn in code from that data (no tileset), so the same JSON can be stored in the
-database and turned into templates in R5. Example: `game/layout/studio.ts`.
+rooms (`kind`: open / meeting / lounge), walls, furniture and the spawn point, stored on the
+workspace. Zones are **derived** from it (`game/layout/derive.ts`): one per desk, one per
+meeting room and lounge. Templates: `apps/api/src/office/templates`.
 
 ### C4 — Realtime namespaces and REST prefixes
 
 | Namespace  | Owner   | Main events                                                                                   |
 | ---------- | ------- | --------------------------------------------------------------------------------------------- |
-| `/office`  | Roy     | `office:join {workspaceId}` → `office:state {players}`, `player:move`, `player:moved`, `player:left`, `presence:zone {userId, zone}` |
+| `/office`  | Roy     | ✅ joins your office on connect → `office:state {players}`; `move [x,y,dir,moving]` → `office:moved`; `office:joined`, `office:left`, `office:layout`, `office:updated`, `office:removed` |
+| `/session` | Mira    | ✅ `session:ended` (instant sign-out)                                                          |
 | `/tasks`   | Zakaria | `task:created`, `task:updated`, `task:deleted` (room = workspaceId)                           |
 | `/rtc`     | Zakaria | `rtc:offer`, `rtc:answer`, `rtc:ice` (relayed to `toUserId`), `rtc:hangup`                     |
 | `/chat`    | Helper  | `chat:join {roomId}`, `chat:message`, `chat:typing`                                           |
 
-REST: `/api/auth/*`, `/api/users/*`, `/api/workspaces/*`, `/api/workspaces/:id/invitations`,
-`/api/workspaces/:id/members`, `/api/workspaces/:id/tasks`, `/api/workspaces/:id/messages`.
+REST: `/api/auth/*` ✅, `/api/workspace` ✅ (+ `/members`, `/invitations`, `/layout`),
+`/api/invitations/:token` ✅, `/api/office/templates` ✅, `/api/users/*`,
+`/api/workspace/tasks`, `/api/workspace/messages`. The server finds the workspace from the
+signed-in user, so feature routes don't need a workspace id.
 
 ---
 
@@ -156,10 +160,10 @@ REST: `/api/auth/*`, `/api/users/*`, `/api/workspaces/*`, `/api/workspaces/:id/i
 | #  | Week  | Task | Depends | Unblocks |
 | -- | ----- | ---- | ------- | -------- |
 | M1 | W0–W1 | ✅ **Auth contract (C2)**: global `AuthGuard` + `@Public()`, `@CurrentUser()`, `authenticateSocket` (`WorkspaceMemberGuard` comes with M4/M5) | C1 | **everyone** |
-| M2 | W1    | ✅ Sign up / sign in / sign out (scrypt), JWT access + rotating refresh tokens, `/auth/me`, validation on front **and** back, email confirmation, forgot/reset/change password, signed-in devices, pages. Left: redirect to onboarding when the user has no workspace (with R3) | M1 | R3 |
+| M2 | W1    | ✅ Sign up / sign in / sign out (scrypt), JWT access + rotating refresh tokens, `/auth/me`, validation on front **and** back, email confirmation, forgot/reset/change password, signed-in devices, pages. ✅ Redirect to onboarding when the user has no workspace (with R3) | M1 | R3 |
 | M3 | W2    | Profile: edit display name, avatar upload (default avatar when none), public profile page `/u/[id]` | M2 | R2 (avatars/names in office) |
-| M4 | W2–W3 | **Invitations**: owner/admin invites by email → token link `/invite/[token]`; accept while logged in, or sign up then accept → creates `WorkspaceMember`; list and revoke pending invites; optional email via SMTP env | M2, C1 | R3 (join flow) |
-| M5 | W3    | Members management: list members, change role, remove member; roles enforced (OWNER/ADMIN/MEMBER) | M4 | everyone (role checks) |
+| M4 | W2–W3 | ✅ **Invitations**: owner/admin invites by email → token link `/invite/[token]`; accept while logged in, or sign up then accept → creates `WorkspaceMember`; list and revoke pending invites; optional email via SMTP env | M2, C1 | R3 (join flow) |
+| M5 | W3    | ✅ Members management: list members, change role, remove member; roles enforced (OWNER/ADMIN/MEMBER) | M4 | everyone (role checks) |
 | M6 | W4    | ✅ OAuth: Google, GitHub and 42. ✅ 2FA (TOTP + backup codes + trusted browser), also after OAuth | M2 | — |
 | M7 | W4    | Friends (add/remove, list) + online status (from socket connection) | M3 | H2 |
 | H1 | W5    | **Helper → Chill room** (see Zakaria's list) | R4 | — |
@@ -171,10 +175,10 @@ REST: `/api/auth/*`, `/api/users/*`, `/api/workspaces/*`, `/api/workspaces/:id/i
 | #  | Week  | Task | Depends | Unblocks |
 | -- | ----- | ---- | ------- | -------- |
 | R1 | W1    | ✅ Phaser inside Next.js (client-only dynamic import), office drawn from layout data, character with walk cycle, movement + collisions + camera follow, zone enter/leave | — | R2 |
-| R2 | W2    | **Multiplayer movement**: `/office` namespace, join the workspace room, broadcast moves (throttled ~10–15/s), interpolation for other players, join/leave, name labels | R1, M1 | **Z3, Z4** |
-| R3 | W2    | **Onboarding wizard**: first login with no workspace → create workspace (name) → pick office template → pick character → enter office. Invited users skip "create" but still pick a character | M1, C1 | M4 (join flow), demo |
+| R2 | W2    | ✅ **Multiplayer movement**: `/office` namespace, join the workspace room, broadcast moves (throttled ~10–15/s), interpolation for other players, join/leave, name labels | R1, M1 | **Z3, Z4** |
+| R3 | W2    | ✅ **Onboarding wizard**: first login with no workspace → create workspace (name) → pick office template → pick character → enter office. Invited users skip "create" but still pick a character | M1, C1 | M4 (join flow), demo |
 | R4 | W3    | **Zones and interactions (C3)**: `zones` layer, desk per member, `officeEvents` (near/far/distance, zone enter/leave, interact with **E**), `presence:zone` on server | R2 | **Z3 proximity, Z4, Z5, H1** |
-| R5 | W4    | Office templates / layout builder: 2–3 templates or a simple generator based on team size; saved as JSON on the workspace; owner can edit or delete the workspace | R3 | — |
+| R5 | W4    | ✅ Office templates (loft 8, studio 24, campus 48 desks) saved as JSON on the workspace; **office editor** for organisers (move/add/remove furniture, rename rooms, checked so the office can't break); rename or delete the workspace | R3 | — |
 | R6 | W5    | Polish: status bubble above avatars (data from Z5), minimap, reconnect after network loss, responsive layout | R4 | — |
 | F2 | W6    | Tech lead review, fresh-machine test (`git clone && make`), console has no errors | all | — |
 
