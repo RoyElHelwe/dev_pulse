@@ -14,6 +14,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { FURNITURE_KINDS } from '../office/layout/types';
+import { TEMPLATES } from '../office/templates';
 import { CHARACTERS } from './characters';
 
 const trim = () => Transform(({ value }) => (typeof value === 'string' ? value.trim().replace(/\s+/g, ' ') : value));
@@ -25,7 +26,7 @@ export class CreateWorkspaceDto {
   name: string;
 
   @IsString()
-  @IsIn(['loft', 'studio', 'campus'])
+  @IsIn(TEMPLATES.map((t) => t.id))
   templateId: string;
 
   @IsIn(CHARACTERS)
