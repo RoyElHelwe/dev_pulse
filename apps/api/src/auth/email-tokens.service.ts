@@ -1,5 +1,6 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import type { AuthTokenType } from '@prisma/client';
+import { FormError } from '../common/form-error';
 import { PrismaService } from '../prisma/prisma.service';
 import { randomToken, sha256 } from './crypto/secrets';
 
@@ -33,10 +34,7 @@ export class EmailTokensService {
     });
     const row = count === 1 ? await this.prisma.authToken.findUnique({ where: { tokenHash: sha256(token) } }) : null;
     if (!row) {
-      throw new BadRequestException({
-        code: 'INVALID_LINK',
-        message: 'This link is invalid or has expired. Please ask for a new one.',
-      });
+      throw new FormError('INVALID_LINK', 'This link is invalid or has expired. Please ask for a new one.');
     }
     return row.userId;
   }

@@ -1,4 +1,5 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
+import { FormError } from '../common/form-error';
 import { AppConfig } from '../config/app-config';
 import { MailService } from '../mail/mail.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -48,11 +49,7 @@ export class PasswordService {
     if (user.passwordHash) {
       const valid = dto.currentPassword && (await verifyPassword(dto.currentPassword, user.passwordHash));
       if (!valid) {
-        throw new UnauthorizedException({
-          code: 'WRONG_PASSWORD',
-          field: 'currentPassword',
-          message: 'Your current password is not correct.',
-        });
+        throw new FormError('WRONG_PASSWORD', 'Your current password is not correct.', 'currentPassword');
       }
     }
     await this.prisma.user.update({ where: { id: userId }, data: { passwordHash: await hashPassword(dto.newPassword) } });

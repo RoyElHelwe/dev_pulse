@@ -35,7 +35,13 @@ export async function api<T = void>(path: string, options: { method?: Method; bo
   }
   if (!res.ok) throw await toApiError(res);
   if (res.status === 204) return undefined as T;
-  return (await res.json()) as T;
+  const data = await res.json();
+  // Expected mistakes (wrong password, expired link...) come back as
+  // 200 { error } so the browser console stays clean; see FormError in the API.
+  if (data && typeof data === 'object' && 'error' in data && data.error?.code) {
+    throw new ApiError(res.status, data.error.code, data.error.field, data.error.message);
+  }
+  return data as T;
 }
 
 async function toApiError(res: Response): Promise<ApiError> {
