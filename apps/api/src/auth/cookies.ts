@@ -12,7 +12,11 @@ export const COOKIES = {
   trustedDevice: 'trusted_device',
   /** OAuth state + PKCE verifier during a Google/GitHub/42 redirect. */
   oauth: 'oauth_state',
-  /** Not secret, readable by the frontend: only says "someone is signed in". */
+  /**
+   * Not secret, readable by the frontend: "someone is signed in, and the
+   * access token expires at <ms>". Lets the app refresh before it expires
+   * (no failed requests) and lets Next.js redirect signed-out visitors.
+   */
   signedIn: 'signed_in',
 } as const;
 
@@ -39,7 +43,8 @@ export function setSessionCookies(res: Response, tokens: SessionTokens, config: 
     maxAge: config.accessTokenTtlSeconds * 1000,
   });
   res.cookie(COOKIES.refresh, tokens.refreshToken, { ...COOKIE_OPTIONS.refresh, maxAge: refreshMaxAge });
-  res.cookie(COOKIES.signedIn, '1', { ...COOKIE_OPTIONS.signedIn, maxAge: refreshMaxAge });
+  const accessExpiresAt = Date.now() + config.accessTokenTtlSeconds * 1000;
+  res.cookie(COOKIES.signedIn, String(accessExpiresAt), { ...COOKIE_OPTIONS.signedIn, maxAge: refreshMaxAge });
 }
 
 export function clearSessionCookies(res: Response) {
