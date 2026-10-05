@@ -1,7 +1,7 @@
 import type { Socket } from 'socket.io-client';
-import type { OfficeController } from '@/game/createGame';
+import type { OfficeController, OfficeSnapshot } from '@/game/createGame';
 import type { OfficeLayout, RoomKind } from '@/game/layout/types';
-import { roomFinder } from '@/game/systems/rooms';
+import { NEAR_RADIUS as NEAR } from '@/game/systems/Proximity';
 import { voiceStates } from './store';
 
 // Proximity voice: one peer-to-peer WebRTC audio call per person we can hear.
@@ -9,24 +9,25 @@ import { voiceStates } from './store';
 // the server relays the signaling only when it agrees (apps/api/src/voice).
 
 const ICE_SERVERS: RTCIceServer[] = [{ urls: 'stun:stun.l.google.com:19302' }];
-/** Tiles. Call under NEAR, hang up past FAR (no flicker at the edge), answer up to ANSWER. */
-const NEAR = 3;
-const FAR = 3.5;
-const ANSWER = 4;
+/** Tiles. Call under NEAR; answer and stay connected up to ANSWER (no flicker at the edge). */
+const ANSWER = NEAR + 1;
 const TICK_MS = 150;
 /** A call that doesn't connect in time is dropped and tried again later. */
 const CONNECT_TIMEOUT_MS = 12_000;
 const RETRY_MS = 5_000;
+/** Candidates that arrive before the offer are kept this long. */
+const EARLY_MS = 2_000;
 /** RMS level above which someone is talking; the light stays on a moment after. */
 const TALKING_LEVEL = 0.02;
 const TALKING_HOLD_MS = 300;
 
-/** Open space: full volume within a tile, silent at FAR. Meeting rooms: everyone clear. */
-const FALLOFF_OPEN: Partial<PannerOptions> = { distanceModel: 'linear', refDistance: 1, maxDistance: FAR, rolloffFactor: 1 };
+/** Open space: full volume within a tile, silent at ANSWER. Meeting rooms: everyone clear. */
+const FALLOFF_OPEN: Partial<PannerOptions> = { distanceModel: 'linear', refDistance: 1, maxDistance: ANSWER, rolloffFactor: 1 };
 const FALLOFF_MEETING: Partial<PannerOptions> = { distanceModel: 'linear', refDistance: 2, maxDistance: 30, rolloffFactor: 0.4 };
 
 /** What travels through the server. `bye`: hung up. */
 type Signal = { description?: RTCSessionDescriptionInit; candidate?: RTCIceCandidateInit; bye?: true };
+type Spot = OfficeSnapshot['me'];
 
 export interface VoiceSnapshot {
   joined: boolean;
@@ -54,8 +55,9 @@ export class VoiceManager {
   private micLevel: Level | null = null;
   private peers = new Map<string, Peer>();
   private retryAt = new Map<string, number>();
+  /** Candidates from someone whose offer hasn't made a call yet. */
+  private early = new Map<string, { at: number; candidates: RTCIceCandidateInit[] }>();
   private timer: ReturnType<typeof setInterval> | null = null;
-  private roomAt: (x: number, y: number) => string | null = () => null;
   private kinds = new Map<string, RoomKind>();
   private muted = false;
   private deafened = false;
@@ -83,11 +85,7 @@ export class VoiceManager {
   }
 
   setLayout(layout: OfficeLayout) {
-    this.roomAt = roomFinder(layout);
     this.kinds = new Map(layout.rooms.map((r) => [r.id, r.kind]));
-    // The game rebuilds the avatars: put the headsets back on next tick.
-    this.me = { inCall: false, talking: false };
-    this.peers.forEach((p) => (p.shown = null));
   }
 
   /**
@@ -136,6 +134,7 @@ export class VoiceManager {
     void this.ctx.close().catch(() => {});
     this.ctx = this.master = this.mic = this.micLevel = null;
     this.retryAt.clear();
+    this.early.clear();
     this.showMe(false, false);
     if (this.opts.socket.connected) this.opts.socket.emit('voice:leave');
     this.opts.onChange();
@@ -198,14 +197,20 @@ export class VoiceManager {
   /** Back online after a network drop: the server forgot our state. */
   private onConnect = () => this.sendState();
 
-  /** Can we hear `id` from here? `radius` in tiles (meeting rooms: anyone inside). */
-  private inEarshot(id: string, radius: number) {
+  private inMeeting(room: string | null) {
+    return room !== null && this.kinds.get(room) === 'meeting';
+  }
+
+  /** Can `me` hear `other`? Same room, and within `radius` tiles (meeting rooms: anyone inside). */
+  private hearable(me: Spot, other: Spot, radius: number) {
+    return other.room === me.room && (this.inMeeting(me.room) || Math.hypot(other.x - me.x, other.y - me.y) < radius);
+  }
+
+  /** Is `id` in voice and close enough to answer their call? */
+  private inEarshot(id: string) {
     const snap = this.opts.controller()?.snapshot();
     const other = snap?.others.find((o) => o.id === id);
-    if (!snap || !other) return false;
-    const room = this.roomAt(snap.me.x, snap.me.y);
-    if (this.roomAt(other.x, other.y) !== room) return false;
-    return (room !== null && this.kinds.get(room) === 'meeting') || Math.hypot(other.x - snap.me.x, other.y - snap.me.y) < radius;
+    return !!snap && !!other && voiceStates.has(id) && this.hearable(snap.me, other, ANSWER);
   }
 
   /** Every ~150 ms: who to call or hang up, where they are, who is talking. */
@@ -213,27 +218,23 @@ export class VoiceManager {
     const snap = this.opts.controller()?.snapshot();
     if (!snap || !this.ctx) return;
     const now = performance.now();
-    const myRoom = this.roomAt(snap.me.x, snap.me.y);
-    const meeting = myRoom !== null && this.kinds.get(myRoom) === 'meeting';
-    const before = this.peers.size;
+    const meeting = this.inMeeting(snap.me.room);
+    const before = this.peerKeys();
     const seen = new Set<string>();
 
     for (const other of snap.others) {
       seen.add(other.id);
-      const dx = other.x - snap.me.x;
-      const dy = other.y - snap.me.y;
       let peer = this.peers.get(other.id);
-      const want =
-        voiceStates.has(other.id) &&
-        this.roomAt(other.x, other.y) === myRoom &&
-        (meeting || Math.hypot(dx, dy) < (peer ? FAR : NEAR));
+      // Keep a call up to ANSWER, start one only under NEAR: the same rule on both sides.
+      const want = voiceStates.has(other.id) && this.hearable(snap.me, other, peer ? ANSWER : NEAR);
       if (peer && (!want || peer.stuck(now))) {
         if (want) this.retryAt.set(other.id, now + RETRY_MS);
         this.hangUp(other.id);
         continue;
       }
-      if (!peer && want && (this.retryAt.get(other.id) ?? 0) <= now) peer = this.call(other.id);
-      peer?.place(dx, dy, meeting);
+      // Offline: no new calls (the socket would queue the offers and send them all at once later).
+      if (!peer && want && this.opts.socket.connected && (this.retryAt.get(other.id) ?? 0) <= now) peer = this.call(other.id);
+      peer?.place(other.x - snap.me.x, other.y - snap.me.y, meeting);
     }
     for (const id of [...this.peers.keys()]) if (!seen.has(id)) this.hangUp(id);
 
@@ -246,8 +247,12 @@ export class VoiceManager {
       }
     }
     this.showMe(this.peers.size > 0, this.micOpen() && !!this.micLevel?.talking(now));
-    if (this.peers.size !== before) this.opts.onChange();
+    if (this.peerKeys() !== before) this.opts.onChange();
   };
+
+  private peerKeys() {
+    return [...this.peers.keys()].join();
+  }
 
   private showMe(inCall: boolean, talking: boolean) {
     if (this.me.inCall === inCall && this.me.talking === talking) return;
@@ -256,9 +261,11 @@ export class VoiceManager {
   }
 
   private call(id: string) {
-    const peer = new Peer(id, this.opts.myId < id, this.ctx!, this.master!, this.mic!, (data) =>
-      this.opts.socket.emit('rtc:signal', { to: id, data }),
-    );
+    const { socket } = this.opts;
+    const peer = new Peer(id, this.opts.myId < id, this.ctx!, this.master!, this.mic!, (data) => {
+      // Dropped while offline rather than queued; a stuck call is retried.
+      if (socket.connected) socket.emit('rtc:signal', { to: id, data });
+    });
     this.peers.set(id, peer);
     return peer;
   }
@@ -274,18 +281,36 @@ export class VoiceManager {
   }
 
   private onSignal = ({ from, data }: { from: string; data: Signal }) => {
-    if (!this.ctx || typeof from !== 'string' || !data || typeof data !== 'object') return;
+    // Not in voice yet (or still joining): nothing to answer with.
+    if (!this.ctx || !this.mic || typeof from !== 'string' || !data || typeof data !== 'object') return;
     let peer = this.peers.get(from);
     if (data.bye) {
-      if (peer) this.hangUp(from, false);
-      this.opts.onChange();
+      // They hung up: don't call straight back (they'd just hang up again).
+      this.retryAt.set(from, performance.now() + RETRY_MS);
+      if (peer) {
+        this.hangUp(from, false);
+        this.opts.onChange();
+      }
       return;
     }
     if (!peer) {
+      const now = performance.now();
+      if (data.candidate) {
+        // Arrived before the offer: keep it a moment.
+        const early = this.early.get(from);
+        if (early && now - early.at < EARLY_MS) early.candidates.push(data.candidate);
+        else this.early.set(from, { at: now, candidates: [data.candidate] });
+        return;
+      }
       // Someone calls us: answer if we can hear them too.
-      if (data.description?.type !== 'offer' || !voiceStates.has(from) || !this.inEarshot(from, ANSWER)) return;
+      if (data.description?.type !== 'offer' || !this.inEarshot(from)) return;
       peer = this.call(from);
       this.opts.onChange();
+      void peer.receive(data);
+      const early = this.early.get(from);
+      this.early.delete(from);
+      if (early && now - early.at < EARLY_MS) early.candidates.forEach((candidate) => void peer!.receive({ candidate }));
+      return;
     }
     void peer.receive(data);
   };

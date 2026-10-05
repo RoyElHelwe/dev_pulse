@@ -12,6 +12,21 @@ export const DEFAULT_VOICE_SETTINGS: VoiceSettings = { voiceMode: 'OPEN', pushTo
 /** Same rule as the API. */
 export const KEY_CODE = /^[A-Za-z0-9]{1,24}$/;
 
+/** Keys the office already uses: M mute, H deafen, E use, WASD and arrows walk. */
+export const OFFICE_KEYS = new Set([
+  'KeyM',
+  'KeyH',
+  'KeyE',
+  'KeyW',
+  'KeyA',
+  'KeyS',
+  'KeyD',
+  'ArrowUp',
+  'ArrowDown',
+  'ArrowLeft',
+  'ArrowRight',
+]);
+
 const NAMES: Record<string, string> = {
   Backquote: '`',
   Minus: '-',
@@ -40,10 +55,4 @@ export function keyName(code: string) {
   if (code.startsWith('Numpad')) return `Num ${code.slice(6)}`;
   if (code.startsWith('Arrow')) return `${code.slice(5)} arrow`;
   return code;
-}
-
-/** Focus is in a text field: keys are typing, not shortcuts. */
-export function isTyping() {
-  const el = document.activeElement;
-  return el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || (el instanceof HTMLElement && el.isContentEditable);
 }

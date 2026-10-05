@@ -74,6 +74,7 @@ export function createGame(parent: HTMLElement, options: GameOptions): OfficeCon
   let desks = options.desks;
   let locked: string[] = [];
   let bookings: RoomBooking[] = [];
+  const voice = new Map<string, { inCall: boolean; talking: boolean }>();
   const touch = window.matchMedia('(pointer: coarse)').matches;
   let data: OfficeSceneData = {
     ...options,
@@ -83,6 +84,7 @@ export function createGame(parent: HTMLElement, options: GameOptions): OfficeCon
     desks: () => desks,
     locked: () => locked,
     bookings: () => bookings,
+    voice: () => voice,
   };
 
   const game = new Phaser.Game({
@@ -151,7 +153,11 @@ export function createGame(parent: HTMLElement, options: GameOptions): OfficeCon
       if (p) p.status = status;
       scene()?.setPlayerStatus(id, status);
     },
-    setVoice: (id, inCall, talking) => scene()?.setVoice(id, inCall, talking),
+    setVoice(id, inCall, talking) {
+      if (inCall) voice.set(id, { inCall, talking });
+      else voice.delete(id);
+      scene()?.setVoice(id, inCall, talking);
+    },
     setOwnStatus(status) {
       data = { ...data, status };
       scene()?.setOwnStatus(status);

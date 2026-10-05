@@ -1,7 +1,7 @@
 'use client';
 
 import { CalendarClock, ChevronLeft, ChevronRight, X } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Socket } from 'socket.io-client';
 import { Alert } from '@/components/ui/Alert';
 import { Button, buttonStyles } from '@/components/ui/Button';
@@ -21,7 +21,7 @@ type View = { kind: 'grid' } | { kind: 'new'; roomId: string; start: number; end
  * the office: rooms booked without you are closed to you (the game makes them
  * solid), and a toast says when a meeting you're in starts.
  */
-export function MeetingsPanel({ socket, controller, workspace, myId, onToast }: OfficeFeatureProps) {
+export function MeetingsPanel({ socket, controller, workspace, myId, onToast, editing }: OfficeFeatureProps) {
   const rooms = useMemo(() => workspace.layout.rooms.filter((r) => r.kind === 'meeting'), [workspace.layout]);
   const now = useMinute();
   const today = startOfDay(new Date(now));
@@ -43,14 +43,19 @@ export function MeetingsPanel({ socket, controller, workspace, myId, onToast }: 
     [bookings, now, rooms],
   );
 
+  // Tell the game only when what it shows changes (not every minute).
+  const officeKey = active.map((b) => `${b.roomId}:${b.endsAt}:${b.attendeeIds.includes(myId)}`).join();
+  const activeRef = useRef(active);
+  activeRef.current = active;
   useEffect(() => {
     if (!controller) return;
-    controller.setRoomBookings(active.map((b) => ({ roomId: b.roomId, until: hm(new Date(b.endsAt)) })));
-    const notMine = active.filter((b) => !b.attendeeIds.includes(myId));
+    const list = activeRef.current;
+    controller.setRoomBookings(list.map((b) => ({ roomId: b.roomId, until: hm(new Date(b.endsAt)) })));
+    const notMine = list.filter((b) => !b.attendeeIds.includes(myId));
     const movedFrom = controller.setLockedRooms(notMine.map((b) => b.roomId));
     const booking = notMine.find((b) => b.roomId === movedFrom);
     if (booking) onToast(`${roomName(booking.roomId)} is booked until ${hm(new Date(booking.endsAt))}.`);
-  }, [controller, active, myId, onToast, roomName]);
+  }, [controller, officeKey, myId, onToast, roomName]);
 
   // "Your meeting starts" once per booking, when it has just started.
   const announced = useRef(new Set<string>());
@@ -64,12 +69,23 @@ export function MeetingsPanel({ socket, controller, workspace, myId, onToast }: 
 
   // ---- panel ----------------------------------------------------------------------------
 
+  // Focus moves into the panel when it opens, and back to the "Rooms" button when it closes.
+  const panelRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false);
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    if (open) panelRef.current?.focus();
   }, [open]);
+  const close = () => {
+    setOpen(false);
+    buttonRef.current?.focus();
+  };
+  // Escape: from the form back to the grid first, then closed.
+  const onKeyDown = (e: KeyboardEvent) => {
+    if (e.key !== 'Escape') return;
+    e.stopPropagation();
+    if (view.kind === 'grid') close();
+    else setView({ kind: 'grid' });
+  };
 
   const pick = useCallback(
     (roomId: string, from: number, to: number) => {
@@ -79,7 +95,8 @@ export function MeetingsPanel({ socket, controller, workspace, myId, onToast }: 
     [day],
   );
 
-  if (rooms.length === 0) return null;
+  // While the office is edited: hidden, but the rules above keep running.
+  if (rooms.length === 0 || editing) return null;
   const dayBookings = bookings.filter((b) => Date.parse(b.startsAt) < addDays(day, 1).getTime() && Date.parse(b.endsAt) > day.getTime());
   const selected = view.kind === 'booking' ? bookings.find((b) => b.id === view.id) : undefined;
   const minDay = addDays(today, -7);
@@ -88,16 +105,25 @@ export function MeetingsPanel({ socket, controller, workspace, myId, onToast }: 
   return (
     <>
       <Panel className="absolute top-[4.5rem] right-4 p-1">
-        <button type="button" onClick={() => setOpen(!open)} aria-expanded={open} className={buttonStyles('ghost', 'sm', 'h-9')}>
+        <button
+          ref={buttonRef}
+          type="button"
+          onClick={() => setOpen(!open)}
+          aria-expanded={open}
+          className={buttonStyles('ghost', 'sm', 'h-9')}
+        >
           <CalendarClock className="size-4" /> Rooms
         </button>
       </Panel>
 
       {open && (
         <Panel
+          ref={panelRef}
           role="dialog"
           aria-label="Meeting rooms"
-          className="absolute inset-x-2 top-[7.75rem] bottom-4 z-30 flex flex-col overflow-hidden sm:right-4 sm:left-auto sm:w-[min(52rem,calc(100vw-2rem))]"
+          tabIndex={-1}
+          onKeyDown={onKeyDown}
+          className="absolute inset-x-2 top-[7.75rem] bottom-4 z-30 flex flex-col overflow-hidden outline-none sm:right-4 sm:left-auto sm:w-[min(52rem,calc(100vw-2rem))]"
         >
           <header className="flex items-center gap-1 border-b border-zinc-200/70 py-2 pr-2 pl-4">
             <h2 className="mr-auto font-semibold">Meeting rooms</h2>
@@ -118,7 +144,7 @@ export function MeetingsPanel({ socket, controller, workspace, myId, onToast }: 
                 </IconButton>
               </>
             )}
-            <IconButton aria-label="Close" onClick={() => setOpen(false)}>
+            <IconButton aria-label="Close" onClick={close}>
               <X className="size-4" />
             </IconButton>
           </header>

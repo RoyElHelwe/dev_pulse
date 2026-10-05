@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Socket } from 'socket.io-client';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { ChatPanel } from '@/features/chat/ChatPanel';
@@ -236,14 +236,19 @@ export function OfficeView() {
     return () => clearTimeout(timer);
   }, [toast]);
 
-  const features = {
-    socket,
-    controller: ready ? controllerRef.current : null,
-    workspace: workspace!,
-    people,
-    myId: myId!,
-    onToast: setToast,
-  };
+  const isEditing = !!editing;
+  const features = useMemo(
+    () => ({
+      socket,
+      controller: ready ? controllerRef.current : null,
+      workspace: workspace!,
+      people,
+      myId: myId!,
+      onToast: setToast,
+      editing: isEditing,
+    }),
+    [socket, ready, workspace, people, myId, isEditing],
+  );
 
   return (
     <div className="relative h-dvh w-full overflow-hidden bg-[#e4e0da]">
@@ -259,7 +264,8 @@ export function OfficeView() {
         editing={!!editing}
         onEdit={startEditing}
       />
-      {workspace && myId && !editing && (
+      {/* Kept mounted while editing, so calls and chat carry on (they hide their UI). */}
+      {workspace && myId && (
         <>
           <VoiceControls {...features} />
           <ChatPanel {...features} />

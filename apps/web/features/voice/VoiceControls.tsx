@@ -3,14 +3,15 @@
 import { HeadphoneOff, Headphones, Mic, MicOff, PhoneOff, Settings } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
-import { IconButton } from '@/components/ui/IconButton';
+import { IconButton, iconButtonStyles } from '@/components/ui/IconButton';
 import { Kbd } from '@/components/ui/Kbd';
 import { Panel } from '@/components/ui/Panel';
 import type { OfficeFeatureProps } from '@/features/office/types';
 import { CharacterFace } from '@/features/workspace/CharacterPreview';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/cn';
-import { DEFAULT_VOICE_SETTINGS, isTyping, keyName, type VoiceSettings } from './settings';
+import { isTyping } from '@/lib/dom';
+import { DEFAULT_VOICE_SETTINGS, keyName, type VoiceSettings } from './settings';
 import { type VoiceEntry, voiceStates } from './store';
 import { type VoiceSnapshot, VoiceManager } from './VoiceManager';
 
@@ -20,7 +21,7 @@ const IDLE: VoiceSnapshot = { joined: false, muted: false, deafened: false, push
  * Bottom-centre voice bar: mic (join, then mute), deafen, leave, who we hear.
  * Shortcuts: M mutes, H deafens (D walks right), the push-to-talk key talks.
  */
-export function VoiceControls({ socket, controller, workspace, people, myId, onToast }: OfficeFeatureProps) {
+export function VoiceControls({ socket, controller, workspace, people, myId, onToast, editing }: OfficeFeatureProps) {
   const [voice, setVoice] = useState<VoiceSnapshot>(IDLE);
   const [settings, setSettings] = useState<VoiceSettings>(DEFAULT_VOICE_SETTINGS);
   const [joining, setJoining] = useState(false);
@@ -83,15 +84,17 @@ export function VoiceControls({ socket, controller, workspace, people, myId, onT
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
       const manager = managerRef.current;
-      if (!manager || e.ctrlKey || e.metaKey || e.altKey || isTyping()) return;
+      if (!manager || isTyping()) return;
       const state = manager.snapshot();
       if (!state.joined) return;
+      // Before the modifier check: the push-to-talk key may be Ctrl, Alt...
       if (e.code === pttKey) {
         e.preventDefault(); // Space mustn't scroll or press the focused button
         return manager.setKeyHeld(true);
       }
-      if (e.repeat) return;
-      if (e.code === 'KeyM') manager.setMuted(!state.muted);
+      if (e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
+      // Like the mic button: while deafened, M undeafens.
+      if (e.code === 'KeyM') return state.deafened ? manager.setDeafened(false) : manager.setMuted(!state.muted);
       if (e.code === 'KeyH') manager.setDeafened(!state.deafened);
     };
     const up = (e: KeyboardEvent) => {
@@ -113,6 +116,7 @@ export function VoiceControls({ socket, controller, workspace, people, myId, onT
   async function onMic() {
     const manager = managerRef.current;
     if (!manager) return;
+    if (voice.deafened) return manager.setDeafened(false);
     if (voice.joined) return manager.setMuted(!voice.muted);
     setJoining(true);
     const result = await manager.join(); // asks for the mic the first time
@@ -123,14 +127,17 @@ export function VoiceControls({ socket, controller, workspace, people, myId, onT
   }
 
   const micOff = voice.joined && (voice.muted || voice.deafened);
-  const micLabel = !voice.joined ? 'Join voice' : voice.muted ? 'Unmute (M)' : 'Mute (M)';
+  // Deafened turns the mic off too: the mic button then undeafens.
+  const micLabel = !voice.joined ? 'Join voice' : voice.deafened ? 'Undeafen (M)' : voice.muted ? 'Unmute (M)' : 'Mute (M)';
   const heard = voice.peers.map((id) => people.find((p) => p.id === id)).filter((p) => !!p);
 
+  // While the office is edited the call goes on; only the bar is hidden.
+  if (editing) return null;
   return (
     <Panel className="absolute top-20 left-1/2 z-10 flex -translate-x-1/2 items-center gap-1 p-1 sm:top-auto sm:bottom-5">
       <IconButton
         aria-label={micLabel}
-        aria-pressed={voice.joined ? voice.muted : undefined}
+        aria-pressed={voice.joined && !voice.deafened ? voice.muted : undefined}
         onClick={onMic}
         disabled={!socket || joining}
         className={cn(
@@ -190,7 +197,7 @@ export function VoiceControls({ socket, controller, workspace, people, myId, onT
         href="/settings/voice"
         aria-label="Voice settings"
         title="Voice settings"
-        className="inline-flex size-9 items-center justify-center rounded-full text-zinc-500 transition hover:bg-zinc-900/5 hover:text-zinc-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500"
+        className={iconButtonStyles('text-zinc-500')}
       >
         <Settings className="size-4" />
       </Link>
