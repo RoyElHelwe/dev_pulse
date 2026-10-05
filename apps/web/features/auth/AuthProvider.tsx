@@ -1,7 +1,7 @@
 'use client';
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { io, type Socket } from 'socket.io-client';
+import type { Socket } from 'socket.io-client';
 import {
   accessTokenExpiry,
   api,
@@ -11,6 +11,7 @@ import {
   onSessionEnded,
   refreshTokens,
 } from '@/lib/api';
+import { openSocket } from '@/lib/socket';
 import type { SignedOutReason, User } from './types';
 
 type Status = 'loading' | 'signed-in' | 'signed-out';
@@ -105,7 +106,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Live link to the server: tells this tab the moment its session is closed.
   useEffect(() => {
     if (status !== 'signed-in') return;
-    const socket = io('/session');
+    const connection = openSocket('/session');
+    const { socket } = connection;
     socketRef.current = socket;
     let retries = 0;
     socket.on('session:ended', ({ reason }: { reason: SignedOutReason }) => forceSignOut(reason));
@@ -119,7 +121,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     });
     return () => {
-      socket.disconnect();
+      connection.close();
       socketRef.current = null;
     };
   }, [status, forceSignOut]);
