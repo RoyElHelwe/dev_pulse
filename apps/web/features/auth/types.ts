@@ -8,6 +8,8 @@ export interface User {
   hasPassword: boolean;
   twoFactorEnabled: boolean;
   providers: string[];
+  /** The office this user belongs to; null → onboarding or an invitation. */
+  workspace: { id: string; name: string; role: 'OWNER' | 'ADMIN' | 'MEMBER' } | null;
   createdAt: string;
 }
 

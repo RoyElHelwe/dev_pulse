@@ -1,12 +1,15 @@
-// An office layout is plain data (no Phaser), so it can be stored in the
-// database later (R5: templates / generator) and sent to every client.
-// All positions and sizes are in tiles (see TILE).
+// The office layout, loaded from the API (GET /api/workspace). Same shape as
+// apps/api/src/office/layout/types.ts (keep both in sync). Units are tiles.
 
 export type FloorKind = 'oak' | 'carpet' | 'terrazzo';
+
+/** Meeting rooms and lounges become zones (voice calls, chill room...). */
+export type RoomKind = 'open' | 'meeting' | 'lounge';
 
 export interface Room {
   id: string;
   name: string;
+  kind: RoomKind;
   x: number;
   y: number;
   w: number;
@@ -16,7 +19,7 @@ export interface Room {
   color?: number;
 }
 
-/** A straight wall from (x1, y1) to (x2, y2). Leave gaps for doors. */
+/** A straight wall from (x1, y1) to (x2, y2). Gaps are doors. */
 export interface Wall {
   x1: number;
   y1: number;
@@ -48,8 +51,7 @@ export type FurnitureKind =
 
 /**
  * A piece of furniture, centred on (x, y), with its unrotated size w × h.
- * rotation 0 = the person using it faces north (up the screen),
- * e.g. a desk with the monitor at the top and the chair below it.
+ * rotation 0 = the person using it faces north (up the screen).
  */
 export interface Furniture {
   id: string;
@@ -60,6 +62,15 @@ export interface Furniture {
   h: number;
   rotation?: 0 | 90 | 180 | 270;
   color?: number;
+}
+
+export interface OfficeLayout {
+  width: number;
+  height: number;
+  rooms: Room[];
+  walls: Wall[];
+  furniture: Furniture[];
+  spawn: { x: number; y: number };
 }
 
 /** Areas the game reports to the features (meeting call, chill room, desk). */
@@ -73,25 +84,4 @@ export interface Zone {
   y: number;
   w: number;
   h: number;
-}
-
-export interface FloorLabel {
-  text: string;
-  x: number;
-  y: number;
-  /** Use 'dark' on light floors. */
-  tone?: 'light' | 'dark';
-}
-
-export interface OfficeLayout {
-  id: string;
-  name: string;
-  width: number;
-  height: number;
-  rooms: Room[];
-  walls: Wall[];
-  furniture: Furniture[];
-  zones: Zone[];
-  labels: FloorLabel[];
-  spawn: { x: number; y: number };
 }

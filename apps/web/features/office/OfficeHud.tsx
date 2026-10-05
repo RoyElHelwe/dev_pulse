@@ -8,9 +8,12 @@ import { Kbd } from '@/components/ui/Kbd';
 import { Logo } from '@/components/ui/Logo';
 import { Panel } from '@/components/ui/Panel';
 import { UserMenu } from '@/features/auth/UserMenu';
+import type { MyWorkspace } from '@/features/workspace/types';
 import type { OfficeController } from '@/game/createGame';
 import { cn } from '@/lib/cn';
+import type { Presence } from './connection';
 import { officeEvents, type ZoneEvent } from './events';
+import { PresenceList } from './PresenceList';
 
 const ZONE_LABEL: Record<ZoneEvent['type'], string> = {
   meeting: 'Meeting room',
@@ -20,10 +23,12 @@ const ZONE_LABEL: Record<ZoneEvent['type'], string> = {
 
 interface OfficeHudProps {
   controller: OfficeController | null;
-  officeName: string;
+  workspace: MyWorkspace | null;
+  people: Presence[];
+  toast: string;
 }
 
-export function OfficeHud({ controller, officeName }: OfficeHudProps) {
+export function OfficeHud({ controller, workspace, people, toast }: OfficeHudProps) {
   const zone = useCurrentZone();
   const [showHelp, setShowHelp] = useState(true);
 
@@ -42,8 +47,8 @@ export function OfficeHud({ controller, officeName }: OfficeHudProps) {
         </Link>
         <span className="h-5 w-px bg-zinc-200" />
         <div className="leading-tight">
-          <p className="text-[11px] font-medium tracking-wide text-zinc-500 uppercase">
-            {officeName}
+          <p className="max-w-48 truncate text-[11px] font-medium tracking-wide text-zinc-500 uppercase">
+            {workspace?.name ?? '…'}
           </p>
           <p className="flex items-center gap-1 text-sm font-semibold" aria-live="polite">
             <MapPin className="size-3.5 text-emerald-600" aria-hidden="true" />
@@ -55,6 +60,7 @@ export function OfficeHud({ controller, officeName }: OfficeHudProps) {
 
       {/* Top right: view controls and the user menu. */}
       <div className="absolute top-4 right-4 flex items-center gap-2">
+        <PresenceList people={people} />
         <Panel className="flex items-center gap-0.5 p-1">
           <IconButton
             aria-label="Zoom out"
@@ -108,6 +114,12 @@ export function OfficeHud({ controller, officeName }: OfficeHudProps) {
           <Kbd>Scroll</Kbd> to zoom
         </span>
       </Panel>
+
+      {toast && (
+        <Panel role="status" className="absolute top-20 left-1/2 -translate-x-1/2 px-4 py-2.5 text-sm font-medium text-zinc-700">
+          {toast}
+        </Panel>
+      )}
 
       {/* Loading state. */}
       {!controller && (
