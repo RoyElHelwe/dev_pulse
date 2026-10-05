@@ -39,9 +39,32 @@ export class RenameWorkspaceDto {
   name: string;
 }
 
-export class CharacterDto {
+/** What a member changes about themselves in the office. */
+export class UpdateMeDto {
+  @IsOptional()
   @IsIn(CHARACTERS)
-  character: string;
+  character?: string;
+
+  /** Empty = no status. */
+  @IsOptional()
+  @trim()
+  @IsString()
+  @Length(0, 40, { message: 'A status is 40 characters at most.' })
+  status?: string;
+}
+
+export class AcceptInvitationDto {
+  @IsOptional()
+  @IsIn(CHARACTERS)
+  character?: string;
+}
+
+export class DeskDto {
+  /** A desk id, or null for "no desk". */
+  @IsOptional()
+  @IsString()
+  @Length(1, 40)
+  deskId: string | null;
 }
 
 export class FurnitureDto {

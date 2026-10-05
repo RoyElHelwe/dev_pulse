@@ -6,6 +6,7 @@ import { AppConfig } from '../config/app-config';
 import { MailService } from '../mail/mail.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { randomCharacter } from '../workspace/characters';
+import { DesksService } from '../workspace/desks.service';
 import { CAN_MANAGE, MembershipService } from '../workspace/membership.service';
 
 const VALID_DAYS = 7;
@@ -22,6 +23,7 @@ export class InvitationsService {
     private readonly membership: MembershipService,
     private readonly mail: MailService,
     private readonly config: AppConfig,
+    private readonly desks: DesksService,
   ) {}
 
   async create(userId: string, email: string, role: Role) {
@@ -110,7 +112,7 @@ export class InvitationsService {
   }
 
   /** Joins the office: must be signed in with the invited email and not in another office. */
-  async accept(userId: string, token: string) {
+  async accept(userId: string, token: string, character?: string) {
     const row = await this.prisma.invitation.findUnique({ where: { tokenHash: sha256(token) } });
     if (!row || this.status(row) !== 'pending') {
       throw new FormError('INVALID_INVITATION', 'This invitation is no longer valid. Ask for a new one.');
@@ -135,9 +137,10 @@ export class InvitationsService {
       });
       if (count !== 1) throw new FormError('INVALID_INVITATION', 'This invitation was already used.');
       await tx.workspaceMember.create({
-        data: { userId, workspaceId: row.workspaceId, role: row.role, character: randomCharacter() },
+        data: { userId, workspaceId: row.workspaceId, role: row.role, character: character ?? randomCharacter() },
       });
     });
+    await this.desks.sync(row.workspaceId);
   }
 
   async decline(token: string) {

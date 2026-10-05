@@ -70,11 +70,16 @@ model WorkspaceMember {
   role        Role     @default(MEMBER)
   /// Character look key (apps/web/game/objects/looks.ts).
   character   String   @default("maya")
+  /// Their desk: a desk furniture id of the layout (null when every desk is taken).
+  deskId      String?
+  /// Short status shown above the avatar ("Focusing", "On break"...).
+  status      String?
   joinedAt    DateTime @default(now())
 
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
+  @@unique([workspaceId, deskId])
   @@index([workspaceId])
 }
 
