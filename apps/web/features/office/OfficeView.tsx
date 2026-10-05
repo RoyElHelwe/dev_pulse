@@ -10,6 +10,7 @@ import type { OfficeLayout } from '@/game/layout/types';
 import { api, ApiError } from '@/lib/api';
 import { connectOffice, type Presence } from './connection';
 import { EditorPanel } from './EditorPanel';
+import { officeEvents } from './events';
 import { OfficeHud } from './OfficeHud';
 
 interface Editing {
@@ -26,6 +27,7 @@ export function OfficeView() {
   const [workspace, setWorkspace] = useState<MyWorkspace | null>(null);
   const [people, setPeople] = useState<Presence[]>([]);
   const [toast, setToast] = useState('');
+  const [online, setOnline] = useState(true);
   const { status, user, reloadUser } = useAuth();
   const router = useRouter();
   // Set while leaving with a message, so the plain "no office" redirect doesn't win.
@@ -87,6 +89,15 @@ export function OfficeView() {
         controllerRef.current?.setOwnCharacter(character);
         setWorkspace((w) => (w ? { ...w, character } : w));
       },
+      onOwnStatus(status) {
+        controllerRef.current?.setOwnStatus(status);
+        setWorkspace((w) => (w ? { ...w, status } : w));
+      },
+      onDesks(desks) {
+        controllerRef.current?.setDesks(desks);
+        setWorkspace((w) => (w ? { ...w, desks, deskId: desks.find((d) => d.userId === myId)?.deskId ?? null } : w));
+      },
+      onConnection: setOnline,
       onRemoved: (reason) => void leave(reason),
     });
 
@@ -96,10 +107,14 @@ export function OfficeView() {
       if (cancelled || !containerRef.current) return;
       game = createGame(containerRef.current, {
         layout: workspace.layout,
+        myId,
         character: workspace.character,
         name,
+        status: workspace.status,
+        desks: workspace.desks,
         fontFamily: getComputedStyle(document.body).fontFamily,
         onMove: connection.sendMove,
+        onZone: connection.sendZone,
       });
       controllerRef.current = game;
       setReady(true);
@@ -185,6 +200,17 @@ export function OfficeView() {
     return () => window.removeEventListener('beforeunload', warn);
   }, [editing]);
 
+  // Until the task manager (Z5) and meeting tools (Z4) listen to E, say what's there.
+  useEffect(
+    () =>
+      officeEvents.on('object:interact', (e) => {
+        if (e.type === 'board') return setToast('Screen: sharing arrives with the meeting rooms.');
+        const whose = !e.ownerId ? `${e.name} is free.` : e.ownerId === myId ? 'Your desk.' : `${e.name}.`;
+        setToast(`${whose} Tasks will open here.`);
+      }),
+    [myId],
+  );
+
   useEffect(() => {
     if (!toast) return;
     const timer = setTimeout(() => setToast(''), 4000);
@@ -201,6 +227,7 @@ export function OfficeView() {
         workspace={workspace}
         people={people}
         toast={toast}
+        online={online}
         editing={!!editing}
         onEdit={startEditing}
       />
