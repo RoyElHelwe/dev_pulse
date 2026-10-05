@@ -19,8 +19,20 @@ export interface Workspace {
 
 /** A browser page that remembers its console errors (the app must keep the console clean). */
 export async function openPage(browser: Browser, name: string, options: BrowserContextOptions = {}) {
-  const context = await browser.newContext(options);
+  const context = await browser.newContext({ permissions: ['microphone'], ...options });
   const page = await context.newPage();
+  // Keep the voice connections, so tests can check that a call really connected.
+  await page.addInitScript(() => {
+    const calls: RTCPeerConnection[] = [];
+    (window as unknown as { __calls: RTCPeerConnection[] }).__calls = calls;
+    const Native = window.RTCPeerConnection;
+    window.RTCPeerConnection = class extends Native {
+      constructor(config?: RTCConfiguration) {
+        super(config);
+        calls.push(this);
+      }
+    } as typeof RTCPeerConnection;
+  });
   const problems: string[] = [];
   page.on('console', (m) => {
     if (m.type() === 'error' || m.type() === 'warning') problems.push(`${name} ${m.type()}: ${m.text()}`);
@@ -75,3 +87,7 @@ export async function invite(page: Page, email: string): Promise<string> {
   );
   return local(page, result.link);
 }
+
+/** Voice calls of this page that are connected right now. */
+export const connectedCalls = (page: Page) =>
+  page.evaluate(() => (window as unknown as { __calls: RTCPeerConnection[] }).__calls.filter((c) => c.connectionState === 'connected').length);

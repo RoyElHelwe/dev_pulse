@@ -1,5 +1,5 @@
 import { expect, type Page, test } from '@playwright/test';
-import { inOffice, invite, openPage, peopleList, register, workspace } from './helpers';
+import { connectedCalls, inOffice, invite, openPage, peopleList, register, workspace } from './helpers';
 import { walkTo } from './nav';
 
 // One story, in order, with the same people (sign-ups are rate limited):
@@ -54,12 +54,47 @@ test('an invited teammate picks a character and joins', async () => {
   expect(w.desks).toHaveLength(2);
 });
 
-test('people near each other are "nearby", until one walks away', async () => {
+test('people near each other are "nearby" and hear each other, until one walks away', async () => {
   await expect.poll(() => peopleList(org)).toContain('Nearby');
+  for (const page of [org, staff]) await page.getByRole('button', { name: 'Join voice' }).click();
+  await expect.poll(() => connectedCalls(org), { timeout: 30_000 }).toBe(1);
+  await expect.poll(() => connectedCalls(staff)).toBe(1);
   const { layout } = await workspace(staff);
   const open = layout.rooms.find((r) => r.kind === 'open')!;
   await walkTo(staff, layout, open.x + 2, open.y + 2);
   await expect.poll(() => peopleList(org)).not.toContain('Nearby');
+  await expect.poll(() => connectedCalls(org)).toBe(0);
+  for (const page of [org, staff]) await page.getByRole('button', { name: 'Leave voice' }).click();
+  await expect(org.getByRole('button', { name: 'Join voice' })).toBeVisible();
+});
+
+test('a message to the office reaches everyone', async () => {
+  await org.getByRole('button', { name: 'Open chat' }).click();
+  await org.getByLabel('Message the office').fill('Stand-up in 5 minutes');
+  await org.getByLabel('Message the office').press('Enter');
+  await staff.getByRole('button', { name: /Open chat/ }).click();
+  await expect(staff.getByRole('log').getByText('Stand-up in 5 minutes')).toBeVisible();
+  for (const page of [org, staff]) await page.getByRole('button', { name: 'Close chat' }).click();
+});
+
+test('a meeting room is booked once per time slot', async () => {
+  const { layout } = await workspace(org);
+  const room = layout.rooms.find((r) => r.kind === 'meeting')!;
+  // Tomorrow 10:00-11:00, so nobody is locked out of the room in the next tests.
+  const start = new Date();
+  start.setDate(start.getDate() + 1);
+  start.setHours(10, 0, 0, 0);
+  const book = (page: Page, title: string) =>
+    page.evaluate(
+      (body) => fetch('/api/workspace/bookings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then((r) => r.json()),
+      { roomId: room.id, title, startsAt: start.toISOString(), endsAt: new Date(start.getTime() + 3_600_000).toISOString(), attendeeIds: [] },
+    );
+  expect((await book(org, 'Planning')).error).toBeUndefined();
+  expect((await book(staff, 'Retro')).error?.code).toBe('ROOM_TAKEN');
+  await staff.getByRole('button', { name: 'Rooms' }).click();
+  await expect(staff.getByRole('dialog', { name: 'Meeting rooms' })).toBeVisible();
+  await staff.keyboard.press('Escape');
+  await expect(staff.getByRole('dialog', { name: 'Meeting rooms' })).toBeHidden();
 });
 
 test('a status shows to everyone', async () => {
