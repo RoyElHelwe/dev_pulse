@@ -4,6 +4,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { AuthGuard } from '../common/auth/auth.guard';
 import { AppConfig } from '../config/app-config';
 import { AuthController } from './auth.controller';
+import { AuthService } from './auth.service';
 import { deriveKey } from './crypto/secrets';
 import { TokensService } from './tokens.service';
 
@@ -20,7 +21,7 @@ import { TokensService } from './tokens.service';
     }),
   ],
   controllers: [AuthController],
-  providers: [TokensService, { provide: APP_GUARD, useClass: AuthGuard }],
+  providers: [AuthService, TokensService, { provide: APP_GUARD, useClass: AuthGuard }],
   exports: [TokensService],
 })
 export class AuthModule {}
