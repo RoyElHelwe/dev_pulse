@@ -5,7 +5,8 @@ import { validateLayout } from '../office/layout/validate';
 import type { OfficeLayout } from '../office/layout/types';
 import { findTemplate } from '../office/templates';
 import { PrismaService } from '../prisma/prisma.service';
-import type { CreateWorkspaceDto, UpdateLayoutDto } from './dto';
+import { DesksService } from './desks.service';
+import type { CreateWorkspaceDto, UpdateLayoutDto, UpdateMeDto } from './dto';
 import { CAN_MANAGE, MembershipService } from './membership.service';
 import { WorkspaceEvents } from './workspace-events';
 
@@ -15,6 +16,7 @@ export class WorkspaceService {
     private readonly prisma: PrismaService,
     private readonly membership: MembershipService,
     private readonly events: WorkspaceEvents,
+    private readonly desks: DesksService,
   ) {}
 
   /** The organiser creates the office from a template and becomes its owner. */
@@ -23,7 +25,7 @@ export class WorkspaceService {
       throw new FormError('ALREADY_IN_WORKSPACE', 'You already belong to an office.');
     }
     const template = findTemplate(dto.templateId)!;
-    await this.prisma.workspace.create({
+    const workspace = await this.prisma.workspace.create({
       data: {
         name: dto.name,
         templateId: template.id,
@@ -31,12 +33,18 @@ export class WorkspaceService {
         members: { create: { userId, role: 'OWNER', character: dto.character } },
       },
     });
+    await this.desks.sync(workspace.id);
     return this.mine(userId);
   }
 
   /** Everything the office page needs. */
   async mine(userId: string) {
-    const member = await this.membership.require(userId);
+    let member = await this.membership.require(userId);
+    // No desk yet (offices created before desks existed, or a desk freed up since): try again.
+    if (!member.deskId) {
+      await this.desks.sync(member.workspaceId);
+      member = await this.membership.require(userId);
+    }
     const { workspace } = member;
     const memberCount = await this.prisma.workspaceMember.count({ where: { workspaceId: workspace.id } });
     return {
@@ -47,6 +55,9 @@ export class WorkspaceService {
       layoutVersion: workspace.layoutVersion,
       role: member.role,
       character: member.character,
+      status: member.status,
+      deskId: member.deskId,
+      desks: await this.desks.list(workspace.id),
       memberCount,
     };
   }
@@ -67,11 +78,16 @@ export class WorkspaceService {
     this.events.emit({ type: 'deleted', workspaceId: member.workspaceId });
   }
 
-  async setCharacter(userId: string, character: string) {
+  /** Your character and status in the office (both shown to everyone, live). */
+  async updateMe(userId: string, dto: UpdateMeDto) {
     const member = await this.membership.require(userId);
-    await this.prisma.workspaceMember.update({ where: { userId }, data: { character } });
-    this.events.emit({ type: 'member-updated', workspaceId: member.workspaceId, userId, character });
-    return { character };
+    const status = dto.status === undefined ? undefined : dto.status || null;
+    const updated = await this.prisma.workspaceMember.update({
+      where: { userId },
+      data: { character: dto.character, status },
+    });
+    this.events.emit({ type: 'member-updated', workspaceId: member.workspaceId, userId, character: dto.character, status });
+    return { character: updated.character, status: updated.status };
   }
 
   /**
@@ -120,6 +136,7 @@ export class WorkspaceService {
     }
     const version = current.layoutVersion + 1;
     this.events.emit({ type: 'layout', workspaceId: current.id, layout, version, by: userId });
+    await this.desks.sync(current.id);
     return { layout, version };
   }
 }

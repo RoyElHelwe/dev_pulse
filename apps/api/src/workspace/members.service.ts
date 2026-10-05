@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { FormError } from '../common/form-error';
 import { PrismaService } from '../prisma/prisma.service';
+import { DesksService } from './desks.service';
 import { MembershipService } from './membership.service';
 import { WorkspaceEvents } from './workspace-events';
 
@@ -10,6 +11,7 @@ export class MembersService {
     private readonly prisma: PrismaService,
     private readonly membership: MembershipService,
     private readonly events: WorkspaceEvents,
+    private readonly desks: DesksService,
   ) {}
 
   async list(userId: string) {
@@ -26,6 +28,7 @@ export class MembersService {
       avatarUrl: m.user.avatarUrl,
       role: m.role,
       character: m.character,
+      deskId: m.deskId,
       joinedAt: m.joinedAt,
     }));
   }
@@ -50,6 +53,7 @@ export class MembersService {
     }
     await this.prisma.workspaceMember.delete({ where: { userId: targetId } });
     this.events.emit({ type: 'member-removed', workspaceId: me.workspaceId, userId: targetId });
+    await this.desks.sync(me.workspaceId);
   }
 
   private async target(workspaceId: string, userId: string) {

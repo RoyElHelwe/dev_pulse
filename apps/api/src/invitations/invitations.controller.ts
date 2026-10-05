@@ -5,6 +5,7 @@ import { IsEmailField } from '../auth/dto/validation';
 import type { AuthUser } from '../common/auth/auth-user';
 import { CurrentUser } from '../common/auth/current-user.decorator';
 import { Public } from '../common/auth/public.decorator';
+import { AcceptInvitationDto } from '../workspace/dto';
 import { InvitationsService } from './invitations.service';
 
 class InviteDto {
@@ -56,8 +57,8 @@ export class InvitationsController {
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @Post('invitations/:token/accept')
   @HttpCode(204)
-  accept(@CurrentUser() user: AuthUser, @Param('token') token: string) {
-    return this.invitations.accept(user.id, token);
+  accept(@CurrentUser() user: AuthUser, @Param('token') token: string, @Body() dto: AcceptInvitationDto) {
+    return this.invitations.accept(user.id, token, dto.character);
   }
 
   @Public()

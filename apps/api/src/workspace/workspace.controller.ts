@@ -2,7 +2,8 @@ import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Put } from
 import { IsIn, IsString, MaxLength } from 'class-validator';
 import type { AuthUser } from '../common/auth/auth-user';
 import { CurrentUser } from '../common/auth/current-user.decorator';
-import { CharacterDto, CreateWorkspaceDto, RenameWorkspaceDto, UpdateLayoutDto } from './dto';
+import { CreateWorkspaceDto, DeskDto, RenameWorkspaceDto, UpdateLayoutDto, UpdateMeDto } from './dto';
+import { DesksService } from './desks.service';
 import { MembersService } from './members.service';
 import { WorkspaceService } from './workspace.service';
 
@@ -23,6 +24,7 @@ export class WorkspaceController {
   constructor(
     private readonly workspaces: WorkspaceService,
     private readonly members: MembersService,
+    private readonly desks: DesksService,
   ) {}
 
   @Get()
@@ -47,8 +49,8 @@ export class WorkspaceController {
   }
 
   @Patch('me')
-  setCharacter(@CurrentUser() user: AuthUser, @Body() dto: CharacterDto) {
-    return this.workspaces.setCharacter(user.id, dto.character);
+  updateMe(@CurrentUser() user: AuthUser, @Body() dto: UpdateMeDto) {
+    return this.workspaces.updateMe(user.id, dto);
   }
 
   @Put('layout')
@@ -65,6 +67,12 @@ export class WorkspaceController {
   @HttpCode(204)
   changeRole(@CurrentUser() user: AuthUser, @Param('userId') target: string, @Body() dto: RoleDto) {
     return this.members.changeRole(user.id, target, dto.role);
+  }
+
+  @Put('members/:userId/desk')
+  @HttpCode(204)
+  assignDesk(@CurrentUser() user: AuthUser, @Param('userId') target: string, @Body() dto: DeskDto) {
+    return this.desks.assign(user.id, target, dto.deskId ?? null);
   }
 
   @Delete('members/:userId')

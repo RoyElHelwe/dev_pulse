@@ -30,6 +30,10 @@ interface Player {
   y: number;
   dir: Dir;
   moving: boolean;
+  /** Status shown above the avatar (stored on the membership). */
+  status: string | null;
+  /** The zone they stand in (meeting room, lounge, desk), as their game reports it. */
+  zone: string | null;
   sockets: Set<string>;
 }
 
@@ -42,6 +46,7 @@ interface SocketData {
 }
 
 const MAX_MOVES_PER_SECOND = 40;
+const ZONE_ID = /^[\w:-]{1,64}$/;
 
 const wsRoom = (id: string) => `ws:${id}`;
 const userRoom = (id: string) => `user:${id}`;
@@ -108,6 +113,8 @@ export class OfficeGateway implements OnGatewayInit, OnGatewayConnection, OnGate
         y: office.spawn.y * TILE,
         dir: 0,
         moving: false,
+        status: member.status,
+        zone: null,
         sockets: new Set(),
       };
       office.players.set(player.id, player);
@@ -151,6 +158,18 @@ export class OfficeGateway implements OnGatewayInit, OnGatewayConnection, OnGate
       .volatile.emit('office:moved', [player.id, player.x, player.y, player.dir, player.moving ? 1 : 0]);
   }
 
+  /** The zone the player just entered (or null when they left it): who is in which room. */
+  @SubscribeMessage('zone')
+  zone(@ConnectedSocket() socket: Socket, @MessageBody() body: unknown) {
+    const data = socket.data as SocketData;
+    if (!this.withinBudget(data)) return;
+    const zone = typeof body === 'string' && ZONE_ID.test(body) ? body : null;
+    const player = this.offices.get(data.workspaceId)?.players.get(data.userId);
+    if (!player || player.zone === zone) return;
+    player.zone = zone;
+    socket.to(wsRoom(data.workspaceId)).except(userRoom(data.userId)).emit('office:zone', [player.id, zone]);
+  }
+
   onModuleDestroy() {
     this.subscriptions.unsubscribe();
   }
@@ -173,7 +192,7 @@ export class OfficeGateway implements OnGatewayInit, OnGatewayConnection, OnGate
   }
 
   private publicPlayer(p: Player) {
-    return { id: p.id, name: p.name, character: p.character, x: p.x, y: p.y, dir: p.dir, moving: p.moving };
+    return { id: p.id, name: p.name, character: p.character, x: p.x, y: p.y, dir: p.dir, moving: p.moving, status: p.status, zone: p.zone };
   }
 
   private onWorkspaceEvent(event: WorkspaceEvent) {
@@ -187,9 +206,13 @@ export class OfficeGateway implements OnGatewayInit, OnGatewayConnection, OnGate
       case 'member-updated': {
         const player = office?.players.get(event.userId);
         if (player && event.character) player.character = event.character;
-        room.emit('office:updated', { id: event.userId, character: event.character, role: event.role });
+        if (player && event.status !== undefined) player.status = event.status;
+        room.emit('office:updated', { id: event.userId, character: event.character, role: event.role, status: event.status });
         break;
       }
+      case 'desks':
+        room.emit('office:desks', { desks: event.desks });
+        break;
       case 'member-removed':
         this.server.to(userRoom(event.userId)).emit('office:removed', { reason: 'removed' });
         setTimeout(() => this.server.in(userRoom(event.userId)).disconnectSockets(true), 500);
