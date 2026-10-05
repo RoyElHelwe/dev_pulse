@@ -1,4 +1,5 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, Post, Req, Res } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 import type { AuthUser } from '../common/auth/auth-user';
 import { CurrentUser } from '../common/auth/current-user.decorator';
@@ -29,12 +30,14 @@ export class AuthController {
   ) {}
 
   @Public()
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @Post('register')
   async register(@Body() dto: RegisterDto, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
     return this.respond(await this.auth.register(dto, clientInfo(req)), res);
   }
 
   @Public()
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @Post('login')
   @HttpCode(200)
   async login(@Body() dto: LoginDto, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
@@ -46,6 +49,7 @@ export class AuthController {
 
   /** After the password step: check the code and finish signing in. */
   @Public()
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @Post('2fa/verify')
   @HttpCode(200)
   async verifyTwoFactor(@Body() dto: TwoFactorVerifyDto, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
@@ -95,6 +99,7 @@ export class AuthController {
 
   /** Sends a new confirmation link (same answer whether the account exists or not). */
   @Public()
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @Post('email/resend')
   @HttpCode(204)
   resendVerification(@Body() dto: EmailDto) {
@@ -102,6 +107,7 @@ export class AuthController {
   }
 
   @Public()
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @Post('password/forgot')
   @HttpCode(204)
   forgotPassword(@Body() dto: EmailDto) {
@@ -109,6 +115,7 @@ export class AuthController {
   }
 
   @Public()
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @Post('password/reset')
   @HttpCode(204)
   resetPassword(@Body() dto: ResetPasswordDto) {
@@ -143,6 +150,7 @@ export class AuthController {
 
   /** New access token + new refresh token (the old one stops working). */
   @Public()
+  @Throttle({ default: { limit: 60, ttl: 60_000 } })
   @Post('refresh')
   @HttpCode(204)
   async refresh(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
