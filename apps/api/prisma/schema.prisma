@@ -30,10 +30,52 @@ model User {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
-  refreshTokens RefreshToken[]
-  oauthAccounts OAuthAccount[]
-  authTokens    AuthToken[]
-  twoFactor     TwoFactor?
+  refreshTokens   RefreshToken[]
+  oauthAccounts   OAuthAccount[]
+  authTokens      AuthToken[]
+  twoFactor       TwoFactor?
+  membership      WorkspaceMember?
+  invitationsSent Invitation[]
+}
+
+/// An organisation and its virtual office. Created by its owner (the organiser).
+model Workspace {
+  id            String   @id @default(cuid())
+  name          String
+  /// Template the office started from (studio, loft, campus...).
+  templateId    String
+  /// The office: rooms, walls, furniture (see apps/api/src/office/layout/types.ts).
+  layout        Json
+  /// Bumped on every save, so two editors can't overwrite each other.
+  layoutVersion Int      @default(1)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  members     WorkspaceMember[]
+  invitations Invitation[]
+}
+
+/// OWNER: the organiser (one per workspace). ADMIN: can invite and edit the office.
+enum Role {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+/// A person in a workspace. One workspace per user (userId is unique).
+model WorkspaceMember {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  workspaceId String
+  role        Role     @default(MEMBER)
+  /// Character look key (apps/web/game/objects/looks.ts).
+  character   String   @default("maya")
+  joinedAt    DateTime @default(now())
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
 }
 
 // ============================================================================
@@ -116,6 +158,34 @@ model TwoFactor {
   lockedUntil    DateTime?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  REVOKED
+}
+
+/// An emailed invitation to join a workspace. Only works for that email address.
+model Invitation {
+  id          String           @id @default(cuid())
+  workspaceId String
+  email       String
+  role        Role             @default(MEMBER)
+  /// SHA-256 of the token in the link.
+  tokenHash   String           @unique
+  status      InvitationStatus @default(PENDING)
+  invitedById String
+  expiresAt   DateTime
+  createdAt   DateTime         @default(now())
+  answeredAt  DateTime?
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  invitedBy User      @relation(fields: [invitedById], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, status])
+  @@index([email])
 }
 
 // ============================================================================
