@@ -7,6 +7,8 @@ import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { deriveKey } from './crypto/secrets';
 import { EmailTokensService } from './email-tokens.service';
+import { OAuthController } from './oauth/oauth.controller';
+import { OAuthService } from './oauth/oauth.service';
 import { PasswordService } from './password.service';
 import { TokensService } from './tokens.service';
 import { TwoFactorService } from './two-factor.service';
@@ -24,7 +26,7 @@ import { VerificationService } from './verification.service';
       }),
     }),
   ],
-  controllers: [AuthController],
+  controllers: [AuthController, OAuthController],
   providers: [
     AuthService,
     TokensService,
@@ -32,6 +34,7 @@ import { VerificationService } from './verification.service';
     VerificationService,
     PasswordService,
     TwoFactorService,
+    OAuthService,
     { provide: APP_GUARD, useClass: AuthGuard },
   ],
   exports: [TokensService],
