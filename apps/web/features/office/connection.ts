@@ -1,7 +1,7 @@
-import { io } from 'socket.io-client';
 import type { DeskOwner, OfficeController, PlayerState } from '@/game/createGame';
 import type { OfficeLayout } from '@/game/layout/types';
 import { refreshTokens } from '@/lib/api';
+import { openSocket } from '@/lib/socket';
 
 /** Someone in the office right now (for the presence list). */
 export interface Presence {
@@ -40,7 +40,8 @@ interface Handlers {
  * and the function the game calls when we move.
  */
 export function connectOffice(controller: () => OfficeController | null, handlers: Handlers) {
-  const socket = io('/office');
+  const connection = openSocket('/office');
+  const { socket } = connection;
   const people = new Map<string, Presence>();
   const publish = () => handlers.onPresence([...people.values()]);
   let retries = 0;
@@ -122,7 +123,7 @@ export function connectOffice(controller: () => OfficeController | null, handler
     }
     // The server refused for a passing reason (database restarting...): socket.io
     // doesn't retry refusals by itself, so try again in a moment.
-    if (!socket.active && error.message !== 'SESSION_ENDED') setTimeout(() => socket.connect(), 2000);
+    if (!socket.active && error.message !== 'SESSION_ENDED') connection.retry(2000);
   });
 
   return {
@@ -139,7 +140,7 @@ export function connectOffice(controller: () => OfficeController | null, handler
     disconnect() {
       window.removeEventListener('offline', offline);
       window.removeEventListener('online', online);
-      socket.disconnect();
+      connection.close();
     },
   };
 }
