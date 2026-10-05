@@ -79,17 +79,22 @@ model OAuthAccount {
 enum AuthTokenType {
   VERIFY_EMAIL
   RESET_PASSWORD
+  /// "Close all my sessions" link, sent when the account is open on another device.
+  CLOSE_SESSIONS
 }
 
 /// One-time tokens sent by email (verify email, reset password).
 model AuthToken {
-  id        String        @id @default(cuid())
-  userId    String
-  type      AuthTokenType
-  tokenHash String        @unique
-  expiresAt DateTime
-  usedAt    DateTime?
-  createdAt DateTime      @default(now())
+  id          String        @id @default(cuid())
+  userId      String
+  type        AuthTokenType
+  tokenHash   String        @unique
+  /// SHA-256 of a secret cookie of the browser that asked for the link. The
+  /// link only works in that browser (or elsewhere with the account password).
+  bindingHash String?
+  expiresAt   DateTime
+  usedAt      DateTime?
+  createdAt   DateTime      @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 

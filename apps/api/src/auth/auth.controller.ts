@@ -5,15 +5,17 @@ import type { AuthUser } from '../common/auth/auth-user';
 import { CurrentUser } from '../common/auth/current-user.decorator';
 import { Public } from '../common/auth/public.decorator';
 import { AppConfig } from '../config/app-config';
-import { AuthService, type SignInResult } from './auth.service';
+import { AuthService, type SignInResult, TAKEOVER_SECONDS } from './auth.service';
 import { clientInfo } from './client-info';
 import { clearSessionCookies, COOKIE_OPTIONS, COOKIES, setSessionCookies } from './cookies';
+import { CloseSessionsDto } from './dto/close-sessions.dto';
 import { EmailDto, TokenDto } from './dto/email.dto';
 import { LoginDto } from './dto/login.dto';
 import { ChangePasswordDto, ResetPasswordDto } from './dto/password.dto';
 import { TwoFactorCodeDto, TwoFactorSetupDto, TwoFactorVerifyDto } from './dto/two-factor.dto';
 import { RegisterDto } from './dto/register.dto';
 import { PasswordService } from './password.service';
+import { SessionTakeoverService } from './session-takeover.service';
 import { TokensService } from './tokens.service';
 import { TwoFactorService } from './two-factor.service';
 import { VerificationService } from './verification.service';
@@ -26,6 +28,7 @@ export class AuthController {
     private readonly verification: VerificationService,
     private readonly passwords: PasswordService,
     private readonly twoFactor: TwoFactorService,
+    private readonly takeover: SessionTakeoverService,
     private readonly config: AppConfig,
   ) {}
 
@@ -145,7 +148,32 @@ export class AuthController {
   @Delete('sessions/:id')
   @HttpCode(204)
   async revokeSession(@CurrentUser() user: AuthUser, @Param('id') id: string) {
-    await this.tokens.revokeSession(user.id, id);
+    await this.tokens.revokeSession(user.id, id, 'sessions_closed');
+  }
+
+  // ---- "already open on another device" ------------------------------------
+
+  /** Emails a link that closes every session. Needs the takeover cookie from a full sign-in. */
+  @Public()
+  @Throttle({ default: { limit: 3, ttl: 60_000 } })
+  @Post('sessions/close-request')
+  @HttpCode(200)
+  async requestCloseSessions(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    const { sentTo, binding } = await this.takeover.requestLink(req.cookies?.[COOKIES.takeover], clientInfo(req));
+    res.cookie(COOKIES.closeSessions, binding, { ...COOKIE_OPTIONS.closeSessions, maxAge: 15 * 60 * 1000 });
+    return { sentTo };
+  }
+
+  /** The emailed link: closes every session (and signs out this browser too). */
+  @Public()
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @Post('sessions/close')
+  @HttpCode(204)
+  async closeSessions(@Body() dto: CloseSessionsDto, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    await this.takeover.closeAll(dto.token, req.cookies?.[COOKIES.closeSessions], dto.password, clientInfo(req));
+    clearSessionCookies(res);
+    res.clearCookie(COOKIES.closeSessions, COOKIE_OPTIONS.closeSessions);
+    res.clearCookie(COOKIES.takeover, COOKIE_OPTIONS.takeover);
   }
 
   /** New access token + new refresh token (the old one stops working). */
@@ -175,12 +203,16 @@ export class AuthController {
   @Post('logout-all')
   @HttpCode(204)
   async logoutAll(@CurrentUser() user: AuthUser, @Res({ passthrough: true }) res: Response) {
-    await this.tokens.revokeAllSessions(user.id);
+    await this.tokens.revokeAllSessions(user.id, undefined, 'sessions_closed');
     clearSessionCookies(res);
   }
 
   /** Sets the cookies for the result; the body never contains tokens. */
   private respond(result: SignInResult, res: Response) {
+    if (result.status === 'session-active') {
+      res.cookie(COOKIES.takeover, result.takeoverToken, { ...COOKIE_OPTIONS.takeover, maxAge: TAKEOVER_SECONDS * 1000 });
+      return { status: result.status, device: result.device };
+    }
     if (result.status === 'two-factor-required') {
       res.cookie(COOKIES.mfa, result.mfaToken, { ...COOKIE_OPTIONS.mfa, maxAge: 5 * 60 * 1000 });
       return { status: result.status };
