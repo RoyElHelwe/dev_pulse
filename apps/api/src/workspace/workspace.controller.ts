@@ -2,7 +2,7 @@ import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Put } from
 import { IsIn, IsString, MaxLength } from 'class-validator';
 import type { AuthUser } from '../common/auth/auth-user';
 import { CurrentUser } from '../common/auth/current-user.decorator';
-import { CreateWorkspaceDto, DeskDto, RenameWorkspaceDto, UpdateLayoutDto, UpdateMeDto } from './dto';
+import { CreateWorkspaceDto, DeskDto, RenameWorkspaceDto, SwitchTemplateDto, UpdateLayoutDto, UpdateMeDto } from './dto';
 import { DesksService } from './desks.service';
 import { MembersService } from './members.service';
 import { WorkspaceService } from './workspace.service';
@@ -51,6 +51,11 @@ export class WorkspaceController {
   @Patch('me')
   updateMe(@CurrentUser() user: AuthUser, @Body() dto: UpdateMeDto) {
     return this.workspaces.updateMe(user.id, dto);
+  }
+
+  @Put('template')
+  switchTemplate(@CurrentUser() user: AuthUser, @Body() dto: SwitchTemplateDto) {
+    return this.workspaces.switchTemplate(user.id, dto);
   }
 
   @Put('layout')
