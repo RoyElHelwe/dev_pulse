@@ -82,7 +82,10 @@ export class TokensService {
     if (!row) throw invalid('INVALID_REFRESH_TOKEN');
 
     if (row.revokedAt) {
-      const raceBetweenTabs = row.replacedById && Date.now() - row.revokedAt.getTime() < REUSE_GRACE_MS;
+      // Revoked without a replacement: signed out, or password changed.
+      if (!row.replacedById) throw invalid('SESSION_ENDED');
+      // Already exchanged: either two tabs refreshed at once, or a copy is being replayed.
+      const raceBetweenTabs = Date.now() - row.revokedAt.getTime() < REUSE_GRACE_MS;
       if (!raceBetweenTabs) await this.revokeSession(row.userId, row.familyId);
       throw invalid('REFRESH_TOKEN_REUSED');
     }
