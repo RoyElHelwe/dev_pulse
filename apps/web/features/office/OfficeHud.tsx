@@ -1,6 +1,6 @@
 'use client';
 
-import { LocateFixed, MapPin, Minus, Plus, UserPlus } from 'lucide-react';
+import { LocateFixed, MapPin, Minus, PencilRuler, Plus, UserPlus } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { IconButton } from '@/components/ui/IconButton';
@@ -29,9 +29,12 @@ interface OfficeHudProps {
   workspace: MyWorkspace | null;
   people: Presence[];
   toast: string;
+  /** The office editor is open (it brings its own panels). */
+  editing: boolean;
+  onEdit(): void;
 }
 
-export function OfficeHud({ controller, workspace, people, toast }: OfficeHudProps) {
+export function OfficeHud({ controller, workspace, people, toast, editing, onEdit }: OfficeHudProps) {
   const zone = useCurrentZone();
   const { user } = useAuth();
   const manager = canManage(workspace?.role);
@@ -42,6 +45,22 @@ export function OfficeHud({ controller, workspace, people, toast }: OfficeHudPro
     const timer = setTimeout(() => setShowHelp(false), 8000);
     return () => clearTimeout(timer);
   }, []);
+
+  if (editing) {
+    return (
+      <>
+        <Panel className="absolute right-4 bottom-5 flex items-center gap-0.5 p-1">
+          <IconButton aria-label="Zoom out" onClick={() => controller?.zoomOut()}>
+            <Minus className="size-4" />
+          </IconButton>
+          <IconButton aria-label="Zoom in" onClick={() => controller?.zoomIn()}>
+            <Plus className="size-4" />
+          </IconButton>
+        </Panel>
+        {toast && <Toast text={toast} />}
+      </>
+    );
+  }
 
   return (
     <>
@@ -66,7 +85,10 @@ export function OfficeHud({ controller, workspace, people, toast }: OfficeHudPro
       {/* Top right: view controls and the user menu. */}
       <div className="absolute top-4 right-4 flex items-center gap-2">
         {manager && (
-          <Panel className="hidden p-1 lg:block">
+          <Panel className="hidden items-center gap-0.5 p-1 lg:flex">
+            <button type="button" onClick={onEdit} disabled={!controller} className={buttonStyles('ghost', 'sm', 'h-9')}>
+              <PencilRuler className="size-4" /> Edit office
+            </button>
             <Link href="/team" className={buttonStyles('ghost', 'sm', 'h-9')}>
               <UserPlus className="size-4" /> Invite
             </Link>
@@ -129,11 +151,7 @@ export function OfficeHud({ controller, workspace, people, toast }: OfficeHudPro
 
       {workspace && user && <CharacterSwitcher name={user.displayName} character={workspace.character} />}
 
-      {toast && (
-        <Panel role="status" className="absolute top-20 left-1/2 -translate-x-1/2 px-4 py-2.5 text-sm font-medium text-zinc-700">
-          {toast}
-        </Panel>
-      )}
+      {toast && <Toast text={toast} />}
 
       {/* Loading state. */}
       {!controller && (
@@ -145,6 +163,14 @@ export function OfficeHud({ controller, workspace, people, toast }: OfficeHudPro
         </div>
       )}
     </>
+  );
+}
+
+function Toast({ text }: { text: string }) {
+  return (
+    <Panel role="status" className="absolute bottom-20 left-1/2 -translate-x-1/2 px-4 py-2.5 text-sm font-medium text-zinc-700">
+      {text}
+    </Panel>
   );
 }
 

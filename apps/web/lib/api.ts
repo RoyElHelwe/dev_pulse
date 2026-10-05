@@ -9,6 +9,8 @@ export class ApiError extends Error {
     /** Which form field the error is about, when the API says so. */
     readonly field: string | undefined,
     message: string,
+    /** Extra data some errors carry (e.g. which furniture breaks the office). */
+    readonly details?: unknown,
   ) {
     super(message);
   }
@@ -49,7 +51,7 @@ export async function api<T = void>(path: string, options: { method?: Method; bo
   // Expected mistakes (wrong password, expired link...) come back as
   // 200 { error } so the browser console stays clean; see FormError in the API.
   if (data && typeof data === 'object' && 'error' in data && data.error?.code) {
-    throw new ApiError(res.status, data.error.code, data.error.field, data.error.message);
+    throw new ApiError(res.status, data.error.code, data.error.field, data.error.message, data.error.details);
   }
   return data as T;
 }
