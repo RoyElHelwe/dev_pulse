@@ -1,5 +1,10 @@
 import { Module } from '@nestjs/common';
+import { SettingsController } from './settings.controller';
+import { SettingsService } from './settings.service';
 
-/** Placeholder: filled in by the settings feature. */
-@Module({})
+/** Personal preferences: GET / PATCH /api/settings. */
+@Module({
+  controllers: [SettingsController],
+  providers: [SettingsService],
+})
 export class SettingsModule {}
