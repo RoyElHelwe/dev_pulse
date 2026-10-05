@@ -1,0 +1,32 @@
+// Single database schema for the whole project.
+//
+// Rules to avoid merge conflicts:
+//   - Each person only edits the models inside their own section.
+//   - Changes to the CORE section are discussed with the whole team first.
+//   - After editing, run `make db` to push the schema and regenerate the client.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================================
+// CORE (shared by everyone – agreed together on day 1)
+//   User, Workspace, WorkspaceMember
+// ============================================================================
+
+// ============================================================================
+// MIRA – auth, profile, invitations
+// ============================================================================
+
+// ============================================================================
+// ROY – onboarding, office map, game
+// ============================================================================
+
+// ============================================================================
+// ZAKARIA (+ helper) – tasks, voice, meeting room, chill room
+// ============================================================================

@@ -1,0 +1,30 @@
+# Dev override: hot reload for api + web, database reachable from the host.
+# Used by `make dev` (docker compose -f docker-compose.yml -f docker-compose.dev.yml up).
+services:
+  db:
+    ports:
+      - '5432:5432'
+
+  api:
+    build:
+      target: dev
+    environment:
+      NODE_ENV: development
+    ports:
+      - '5555:5555' # prisma studio (make studio)
+    volumes:
+      - ./apps/api:/app
+      - /app/node_modules
+      - /app/dist
+
+  web:
+    build:
+      target: dev
+    environment:
+      NODE_ENV: development
+      WATCHPACK_POLLING: 'true'
+      ALLOWED_DEV_ORIGINS: ${SERVER_NAME:-localhost}
+    volumes:
+      - ./apps/web:/app
+      - /app/node_modules
+      - /app/.next
