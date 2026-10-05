@@ -113,6 +113,7 @@ export function OfficeView() {
       if (cancelled || !containerRef.current) return;
       game = createGame(containerRef.current, {
         layout: workspace.layout,
+        players: connection.players(),
         myId,
         character: workspace.character,
         name,

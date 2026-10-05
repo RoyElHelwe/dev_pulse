@@ -47,6 +47,8 @@ export interface OfficeController {
 
 interface GameOptions {
   layout: OfficeLayout;
+  /** Everyone already in the office (the game may finish loading after the first update). */
+  players: PlayerState[];
   myId: string;
   character: string;
   name: string;
@@ -70,7 +72,7 @@ export function createGame(parent: HTMLElement, options: GameOptions): OfficeCon
   });
 
   // Other people live here, outside the scene, so a layout reload keeps them.
-  const players = new Map<string, PlayerState>();
+  const players = new Map(options.players.map((p) => [p.id, p]));
   let desks = options.desks;
   let locked: string[] = [];
   let bookings: RoomBooking[] = [];
