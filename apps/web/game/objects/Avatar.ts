@@ -4,6 +4,9 @@ import type { CharacterLook } from './looks';
 
 export type Direction = 'down' | 'up' | 'left' | 'right';
 
+/** Network order of directions (0 down, 1 up, 2 left, 3 right). */
+export const DIRECTIONS: Direction[] = ['down', 'up', 'left', 'right'];
+
 const SHOES = 0x1f2125;
 const EYES = 0x2a2522;
 
@@ -22,7 +25,7 @@ export class Avatar extends Phaser.GameObjects.Container {
     scene: Phaser.Scene,
     x: number,
     y: number,
-    private readonly look: CharacterLook,
+    private look: CharacterLook,
     name: string,
     fontFamily: string,
     textResolution: number,
@@ -55,18 +58,37 @@ export class Avatar extends Phaser.GameObjects.Container {
     this.redraw();
   }
 
-  /** Call every frame with the current velocity. */
+  get facing(): Direction {
+    return this.direction;
+  }
+
+  /** Call every frame with the current velocity (local player). */
   animate(vx: number, vy: number, deltaMs: number) {
     const moving = vx !== 0 || vy !== 0;
-    if (moving) {
-      this.direction =
-        Math.abs(vx) > Math.abs(vy) ? (vx < 0 ? 'left' : 'right') : vy < 0 ? 'up' : 'down';
-      this.phase += deltaMs * 0.018;
-    } else {
-      this.phase = 0;
-    }
-    if (moving || this.moving) this.redraw();
+    const direction = moving
+      ? Math.abs(vx) > Math.abs(vy)
+        ? vx < 0
+          ? 'left'
+          : 'right'
+        : vy < 0
+          ? 'up'
+          : 'down'
+      : this.direction;
+    this.animateAs(direction, moving, deltaMs);
+  }
+
+  /** Call every frame with a known direction (other players, from the network). */
+  animateAs(direction: Direction, moving: boolean, deltaMs: number) {
+    const changed = direction !== this.direction;
+    this.direction = direction;
+    this.phase = moving ? this.phase + deltaMs * 0.018 : 0;
+    if (moving || this.moving || changed) this.redraw();
     this.moving = moving;
+  }
+
+  setLook(look: CharacterLook) {
+    this.look = look;
+    this.redraw();
   }
 
   private redraw() {
