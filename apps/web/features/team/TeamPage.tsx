@@ -412,10 +412,13 @@ function TemplateSwitcher({ workspace, onSwitched }: { workspace: MyWorkspace; o
   const [result, setResult] = useState<{ tone: 'success' | 'error'; text: string } | null>(null);
 
   useEffect(() => {
-    api<Template[]>('/office/templates').then(setTemplates, () => undefined);
-  }, []);
+    // The generated office is previewed as it would be made: for the people here now.
+    const query = `team=${workspace.memberCount}&seed=${encodeURIComponent(workspace.name)}`;
+    api<Template[]>(`/office/templates?${query}`).then(setTemplates, () => undefined);
+  }, [workspace.memberCount, workspace.name]);
 
   const same = picked === workspace.templateId;
+  const rebuild = same && picked === 'generated';
   const target = templates.find((t) => t.id === picked);
   const desks = target ? numberedDesks(target.layout).length : 0;
   const tooSmall = !!target && workspace.memberCount > desks;
@@ -425,7 +428,13 @@ function TemplateSwitcher({ workspace, onSwitched }: { workspace: MyWorkspace; o
     setResult(null);
     try {
       await api('/workspace/template', { method: 'PUT', body: { templateId: picked, version: workspace.layoutVersion } });
-      setResult({ tone: 'success', text: same ? 'The original furniture is back.' : `Your office is now ${target?.name}.` });
+      const text =
+        picked === 'generated'
+          ? `Your office is now made for ${workspace.memberCount} people.`
+          : same
+            ? 'The original furniture is back.'
+            : `Your office is now ${target?.name}.`;
+      setResult({ tone: 'success', text });
       setConfirming(false);
       onSwitched();
     } catch (err) {
@@ -442,7 +451,7 @@ function TemplateSwitcher({ workspace, onSwitched }: { workspace: MyWorkspace; o
         Move everyone to a bigger or smaller office, or start again from the original furniture. People in the office see
         the change at once; desks are handed out again.
       </p>
-      <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4" role="radiogroup" aria-label="Office layout">
+      <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5" role="radiogroup" aria-label="Office layout">
         {templates.map((t) => (
           <button
             key={t.id}
@@ -482,7 +491,7 @@ function TemplateSwitcher({ workspace, onSwitched }: { workspace: MyWorkspace; o
       <div className="mt-3 flex flex-wrap items-center gap-2">
         {!confirming ? (
           <Button variant="secondary" disabled={!target || tooSmall} onClick={() => setConfirming(true)}>
-            {same ? 'Reset to the original furniture' : `Move to ${target?.name ?? '…'}`}
+            {rebuild ? 'Make it again for your team' : same ? 'Reset to the original furniture' : `Move to ${target?.name ?? '…'}`}
           </Button>
         ) : (
           <>

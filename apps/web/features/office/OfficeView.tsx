@@ -271,7 +271,7 @@ export function OfficeView() {
           onSave={save}
           onDiscard={discard}
           onReload={reloadLatest}
-          onReset={resetToTemplate}
+          onReset={workspace?.templateId === 'generated' ? undefined : resetToTemplate}
           onProblem={setToast}
         />
       )}
