@@ -297,6 +297,7 @@ export class OfficeScene extends Phaser.Scene {
   startEditing(editor: LayoutEditor, onProblem: (text: string) => void) {
     if (this.editMode) return;
     this.cameras.main.stopFollow();
+    this.plates.setVisible(false);
     this.editMode = new EditMode(
       {
         scene: this,
@@ -381,8 +382,10 @@ export class OfficeScene extends Phaser.Scene {
     return spawn;
   }
 
-  /** True if the player's body fits at these feet coordinates. */
+  /** True if the player's body fits at these feet coordinates (inside the office). */
   private isFree(x: number, y: number) {
+    const { width, height } = this.opts.layout;
+    if (x < TILE / 2 || y < TILE || x > (width - 0.5) * TILE || y > (height - 0.5) * TILE) return false;
     const body = { x: x - 9, y: y - 10, w: 18, h: 10 };
     return !this.obstacles.some((o) => body.x < o.x + o.w && o.x < body.x + body.w && body.y < o.y + o.h && o.y < body.y + body.h);
   }

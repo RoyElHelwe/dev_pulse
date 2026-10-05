@@ -182,6 +182,15 @@ export function OfficeView() {
     }
   }, [editing, stopEditing]);
 
+  const resetToTemplate = useCallback(async () => {
+    if (!editing) return;
+    if (!window.confirm('Put back the original furniture and room names? You can still undo, or close without saving.')) return;
+    const latest = await api<MyWorkspace>('/workspace').catch(() => null);
+    const templates = await api<{ id: string; layout: OfficeLayout }[]>('/office/templates').catch(() => []);
+    const template = templates.find((t) => t.id === latest?.templateId);
+    if (template) editing.editor.reset(template.layout);
+  }, [editing]);
+
   const reloadLatest = useCallback(async () => {
     const latest = await api<MyWorkspace>('/workspace').catch(() => null);
     if (!latest) return;
@@ -239,6 +248,8 @@ export function OfficeView() {
           onSave={save}
           onDiscard={discard}
           onReload={reloadLatest}
+          onReset={resetToTemplate}
+          onProblem={setToast}
         />
       )}
     </div>

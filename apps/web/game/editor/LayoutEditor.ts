@@ -1,3 +1,4 @@
+import { itemBounds } from '../layout/derive';
 import type { Furniture, FurnitureKind, OfficeLayout } from '../layout/types';
 import { catalogEntry } from './catalog';
 import { placementProblem, type PlacementProblem } from './rules';
@@ -14,7 +15,10 @@ interface Snapshot {
 export interface EditorState {
   furniture: Furniture[];
   roomNames: Record<string, string>;
+  /** The piece shown in the inspector (the last one clicked). */
   selectedId: string | null;
+  /** Everything selected (shift-click or a box drawn with shift). */
+  selectedIds: string[];
   /** Kind being placed from the palette (follows the mouse until clicked). */
   placing: { kind: FurnitureKind; w: number; h: number; color?: number } | null;
   /** Items the server said break the office (unreachable desk...). */
@@ -32,7 +36,9 @@ export interface EditorState {
 export class LayoutEditor {
   private furniture: Furniture[];
   private roomNames: Record<string, string>;
-  private selectedId: string | null = null;
+  private selection: string[] = [];
+  /** Positions when a drag started (to move a group by the same amount). */
+  private dragStart: Map<string, { x: number; y: number }> | null = null;
   private placing: EditorState['placing'] = null;
   private flagged: string[] = [];
   private past: Snapshot[] = [];
@@ -69,16 +75,34 @@ export class LayoutEditor {
 
   // ---- selection and placing -----------------------------------------------------
 
-  select(id: string | null) {
-    this.selectedId = id;
+  /** Select one piece; `add` toggles it in the current selection (shift-click). */
+  select(id: string | null, add = false) {
+    if (!id) this.selection = add ? this.selection : [];
+    else if (!add) this.selection = [id];
+    else if (this.selection.includes(id)) this.selection = this.selection.filter((s) => s !== id);
+    else this.selection = [...this.selection, id];
     this.placing = null;
     this.publish();
+  }
+
+  /** Select every piece whose centre is inside the rectangle (tiles). */
+  selectBox(x1: number, y1: number, x2: number, y2: number, add = false) {
+    const [ax, bx] = [Math.min(x1, x2), Math.max(x1, x2)];
+    const [ay, by] = [Math.min(y1, y2), Math.max(y1, y2)];
+    const inside = this.furniture.filter((f) => f.x >= ax && f.x <= bx && f.y >= ay && f.y <= by).map((f) => f.id);
+    this.selection = add ? [...new Set([...this.selection, ...inside])] : inside;
+    this.placing = null;
+    this.publish();
+  }
+
+  isSelected(id: string) {
+    return this.selection.includes(id);
   }
 
   startPlacing(kind: FurnitureKind, w?: number, h?: number) {
     const entry = catalogEntry(kind)!;
     this.placing = { kind, w: w ?? entry.w, h: h ?? entry.h, color: entry.colors?.[0] };
-    this.selectedId = null;
+    this.selection = [];
     this.publish();
   }
 
@@ -98,67 +122,80 @@ export class LayoutEditor {
     if (problem) return problem;
     this.record();
     this.furniture.push(item);
-    this.selectedId = item.id;
+    this.selection = [item.id];
     this.placing = null;
     this.publish();
     return null;
   }
 
-  /** Live move while dragging (no undo step until `endDrag`). */
-  dragTo(id: string, x: number, y: number) {
-    const item = this.item(id);
-    if (!item) return;
-    item.x = snap(x);
-    item.y = snap(y);
+  /** Starts dragging the selection (one undo step for the whole drag). */
+  beginDrag() {
+    this.record();
+    this.dragStart = new Map(this.selected().map((f) => [f.id, { x: f.x, y: f.y }]));
+  }
+
+  /** Live move while dragging, by (dx, dy) tiles from where the drag started. */
+  dragBy(dx: number, dy: number) {
+    if (!this.dragStart) return;
+    const sx = snap(dx);
+    const sy = snap(dy);
+    for (const [id, start] of this.dragStart) {
+      const item = this.item(id);
+      if (item) Object.assign(item, { x: start.x + sx, y: start.y + sy });
+    }
     this.publish();
   }
 
-  /** Remembers where a drag started, so it can be undone or cancelled. */
-  beginDrag() {
-    this.record();
-  }
-
-  /** Drops the item; if it doesn't fit, it goes back where it was. */
-  endDrag(id: string): PlacementProblem | null {
-    const item = this.item(id);
-    const problem = item ? this.problemOf(item) : null;
+  /** Drops the selection; if any piece doesn't fit, everything goes back. */
+  endDrag(): PlacementProblem | null {
+    const problem = this.firstProblem(this.selected());
     const before = this.past[this.past.length - 1];
     const moved = before && JSON.stringify(before.furniture) !== JSON.stringify(this.furniture);
     if (problem || !moved) {
       this.past.pop();
       if (before) this.furniture = before.furniture.map((f) => ({ ...f }));
     }
+    this.dragStart = null;
     this.publish();
     return problem;
   }
 
-  nudge(id: string, dx: number, dy: number): PlacementProblem | null {
-    const item = this.item(id);
-    if (!item) return null;
-    return this.tryChange(id, { x: snap(item.x + dx), y: snap(item.y + dy) });
+  /** Problems of the dragged pieces right now (to tint them while dragging). */
+  dragProblem(): PlacementProblem | null {
+    return this.dragStart ? this.firstProblem(this.selected()) : null;
   }
 
-  rotate(id: string, clockwise = true): PlacementProblem | null {
-    const item = this.item(id);
-    if (!item) return null;
-    const rotation = (((item.rotation ?? 0) + (clockwise ? 90 : 270)) % 360) as Furniture['rotation'];
-    return this.tryChange(id, { rotation });
+  nudge(dx: number, dy: number): PlacementProblem | null {
+    return this.changeSelected((f) => ({ x: snap(f.x + dx), y: snap(f.y + dy) }));
+  }
+
+  /** Each selected piece turns in place. */
+  rotate(clockwise = true): PlacementProblem | null {
+    return this.changeSelected((f) => ({ rotation: (((f.rotation ?? 0) + (clockwise ? 90 : 270)) % 360) as Furniture['rotation'] }));
   }
 
   setColor(id: string, color: number) {
-    this.tryChange(id, { color });
+    const item = this.item(id);
+    if (!item) return;
+    this.record();
+    item.color = color;
+    this.publish();
   }
 
-  duplicate(id: string): PlacementProblem | null {
-    const item = this.item(id);
-    if (!item) return null;
-    // Try a free spot next to the original: right, below, left, above.
+  /** Copies the selection next to itself (right, below, left or above: the first free side). */
+  duplicate(): PlacementProblem | null {
+    const group = this.selected();
+    if (group.length === 0) return null;
+    const box = bounds(group);
     for (const [dx, dy] of [[1, 0], [0, 1], [-1, 0], [0, -1]]) {
-      const copy = { ...item, id: newId(item.kind), x: snap(item.x + dx * (item.w + 0.5)), y: snap(item.y + dy * (item.h + 0.5)) };
-      if (!this.problemOf(copy)) {
+      const ox = snap(dx * (box.w + 0.5));
+      const oy = snap(dy * (box.h + 0.5));
+      const copies = group.map((f) => ({ ...f, id: newId(f.kind), x: f.x + ox, y: f.y + oy }));
+      const others = [...this.furniture, ...copies];
+      if (copies.every((c) => !placementProblem(c, this.layout, others))) {
         this.record();
-        this.furniture.push(copy);
-        this.selectedId = copy.id;
+        this.furniture.push(...copies);
+        this.selection = copies.map((c) => c.id);
         this.publish();
         return null;
       }
@@ -166,11 +203,21 @@ export class LayoutEditor {
     return 'overlap';
   }
 
-  remove(id: string) {
-    if (!this.item(id)) return;
+  remove() {
+    if (this.selection.length === 0) return;
     this.record();
-    this.furniture = this.furniture.filter((f) => f.id !== id);
-    if (this.selectedId === id) this.selectedId = null;
+    const gone = new Set(this.selection);
+    this.furniture = this.furniture.filter((f) => !gone.has(f.id));
+    this.selection = [];
+    this.publish();
+  }
+
+  /** Puts back the template's original furniture and room names (one undo step, saved like any edit). */
+  reset(original: OfficeLayout) {
+    this.record();
+    this.furniture = original.furniture.map((f) => ({ ...f }));
+    this.roomNames = Object.fromEntries(original.rooms.map((r) => [r.id, r.name]));
+    this.selection = [];
     this.publish();
   }
 
@@ -195,10 +242,10 @@ export class LayoutEditor {
     this.restore(next);
   }
 
-  /** Marks the items the server refused (and selects the first one). */
+  /** Marks the items the server refused (and selects them). */
   flag(ids: string[]) {
     this.flagged = ids;
-    if (ids[0]) this.selectedId = ids[0];
+    if (ids.length > 0) this.selection = ids.filter((id) => this.item(id));
     this.publish();
   }
 
@@ -213,13 +260,31 @@ export class LayoutEditor {
 
   // ---- internals -------------------------------------------------------------------
 
-  private tryChange(id: string, patch: Partial<Furniture>): PlacementProblem | null {
-    const item = this.item(id);
-    if (!item) return null;
-    const problem = this.problemOf({ ...item, ...patch });
-    if (problem) return problem;
+  private selected() {
+    return this.selection.map((id) => this.item(id)).filter((f): f is Furniture => !!f);
+  }
+
+  private firstProblem(items: Furniture[]) {
+    for (const item of items) {
+      const problem = this.problemOf(item);
+      if (problem) return problem;
+    }
+    return null;
+  }
+
+  /** Applies a change to every selected piece, only if all of them still fit. */
+  private changeSelected(change: (f: Furniture) => Partial<Furniture>): PlacementProblem | null {
+    const group = this.selected();
+    if (group.length === 0) return null;
+    const ids = new Set(group.map((f) => f.id));
+    const next = this.furniture.map((f) => (ids.has(f.id) ? { ...f, ...change(f) } : f));
+    for (const f of next) {
+      if (!ids.has(f.id)) continue;
+      const problem = placementProblem(f, this.layout, next);
+      if (problem) return problem;
+    }
     this.record();
-    Object.assign(item, patch);
+    this.furniture = next;
     this.publish();
     return null;
   }
@@ -238,7 +303,7 @@ export class LayoutEditor {
   private restore(s: Snapshot) {
     this.furniture = s.furniture.map((f) => ({ ...f }));
     this.roomNames = { ...s.rooms };
-    if (this.selectedId && !this.item(this.selectedId)) this.selectedId = null;
+    this.selection = this.selection.filter((id) => this.item(id));
     this.publish();
   }
 
@@ -246,7 +311,8 @@ export class LayoutEditor {
     this.state = {
       furniture: this.furniture,
       roomNames: this.roomNames,
-      selectedId: this.selectedId,
+      selectedId: this.selection[this.selection.length - 1] ?? null,
+      selectedIds: this.selection,
       placing: this.placing,
       flagged: this.flagged,
       dirty: JSON.stringify(this.snapshot()) !== this.initial,
@@ -255,6 +321,13 @@ export class LayoutEditor {
     };
     this.listeners.forEach((l) => l());
   }
+}
+
+function bounds(items: Furniture[]) {
+  const boxes = items.map(itemBounds);
+  const x = Math.min(...boxes.map((b) => b.x));
+  const y = Math.min(...boxes.map((b) => b.y));
+  return { x, y, w: Math.max(...boxes.map((b) => b.x + b.w)) - x, h: Math.max(...boxes.map((b) => b.y + b.h)) - y };
 }
 
 function newId(kind: string) {
