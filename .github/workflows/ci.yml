@@ -28,4 +28,6 @@ jobs:
       - if: matrix.app == 'api'
         run: pnpm prisma generate
       - run: pnpm typecheck
+      - if: matrix.app == 'api'
+        run: pnpm test
       - run: pnpm build
