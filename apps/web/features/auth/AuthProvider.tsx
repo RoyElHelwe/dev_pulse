@@ -1,7 +1,14 @@
 'use client';
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { accessTokenExpiry, api, isAccessTokenFresh, isSignedInCookieSet, refreshTokens } from '@/lib/api';
+import {
+  accessTokenExpiry,
+  api,
+  clearSignedInCookie,
+  isAccessTokenFresh,
+  isSignedInCookieSet,
+  refreshTokens,
+} from '@/lib/api';
 import type { User } from './types';
 
 type Status = 'loading' | 'signed-in' | 'signed-out';
@@ -25,6 +32,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [status, setStatus] = useState<Status>('loading');
 
   const setUser = useCallback((next: User | null) => {
+    if (!next) clearSignedInCookie();
     setUserState(next);
     setStatus(next ? 'signed-in' : 'signed-out');
   }, []);

@@ -87,6 +87,11 @@ export function accessTokenExpiry(): number | null {
   return match ? Number(match[1]) : null;
 }
 
+/** Forget a stale "signed in" hint (e.g. after being signed out on another device). */
+export function clearSignedInCookie() {
+  document.cookie = 'signed_in=; Max-Age=0; path=/; secure; samesite=lax';
+}
+
 export function isSignedInCookieSet() {
   return accessTokenExpiry() !== null;
 }

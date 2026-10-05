@@ -7,6 +7,7 @@ import { IconButton } from '@/components/ui/IconButton';
 import { Kbd } from '@/components/ui/Kbd';
 import { Logo } from '@/components/ui/Logo';
 import { Panel } from '@/components/ui/Panel';
+import { UserMenu } from '@/features/auth/UserMenu';
 import type { OfficeController } from '@/game/createGame';
 import { cn } from '@/lib/cn';
 import { officeEvents, type ZoneEvent } from './events';
@@ -41,7 +42,9 @@ export function OfficeHud({ controller, officeName }: OfficeHudProps) {
         </Link>
         <span className="h-5 w-px bg-zinc-200" />
         <div className="leading-tight">
-          <p className="text-[11px] font-medium tracking-wide text-zinc-500 uppercase">{officeName}</p>
+          <p className="text-[11px] font-medium tracking-wide text-zinc-500 uppercase">
+            {officeName}
+          </p>
           <p className="flex items-center gap-1 text-sm font-semibold" aria-live="polite">
             <MapPin className="size-3.5 text-emerald-600" aria-hidden="true" />
             {zone ? zone.name : 'Open space'}
@@ -50,19 +53,36 @@ export function OfficeHud({ controller, officeName }: OfficeHudProps) {
         </div>
       </Panel>
 
-      {/* Top right: view controls. */}
-      <Panel className="absolute top-4 right-4 flex items-center gap-0.5 p-1">
-        <IconButton aria-label="Zoom out" onClick={() => controller?.zoomOut()} disabled={!controller}>
-          <Minus className="size-4" />
-        </IconButton>
-        <IconButton aria-label="Zoom in" onClick={() => controller?.zoomIn()} disabled={!controller}>
-          <Plus className="size-4" />
-        </IconButton>
-        <span className="mx-0.5 h-5 w-px bg-zinc-200" />
-        <IconButton aria-label="Reset view" onClick={() => controller?.resetView()} disabled={!controller}>
-          <LocateFixed className="size-4" />
-        </IconButton>
-      </Panel>
+      {/* Top right: view controls and the user menu. */}
+      <div className="absolute top-4 right-4 flex items-center gap-2">
+        <Panel className="flex items-center gap-0.5 p-1">
+          <IconButton
+            aria-label="Zoom out"
+            onClick={() => controller?.zoomOut()}
+            disabled={!controller}
+          >
+            <Minus className="size-4" />
+          </IconButton>
+          <IconButton
+            aria-label="Zoom in"
+            onClick={() => controller?.zoomIn()}
+            disabled={!controller}
+          >
+            <Plus className="size-4" />
+          </IconButton>
+          <span className="mx-0.5 h-5 w-px bg-zinc-200" />
+          <IconButton
+            aria-label="Reset view"
+            onClick={() => controller?.resetView()}
+            disabled={!controller}
+          >
+            <LocateFixed className="size-4" />
+          </IconButton>
+        </Panel>
+        <Panel className="hidden p-1 sm:block">
+          <UserMenu />
+        </Panel>
+      </div>
 
       {/* Bottom: how to move. */}
       <Panel
