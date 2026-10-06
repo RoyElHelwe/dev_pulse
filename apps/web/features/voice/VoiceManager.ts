@@ -2,6 +2,7 @@ import type { Socket } from 'socket.io-client';
 import type { OfficeController, OfficeSnapshot } from '@/game/createGame';
 import type { OfficeLayout, RoomKind } from '@/game/layout/types';
 import { NEAR_RADIUS as NEAR } from '@/game/systems/Proximity';
+import { meetingGain, openGain, relativeTo } from './spatial';
 import { voiceStates } from './store';
 
 // Proximity voice: one peer-to-peer WebRTC audio call per person we can hear.
@@ -21,9 +22,9 @@ const EARLY_MS = 2_000;
 const TALKING_LEVEL = 0.02;
 const TALKING_HOLD_MS = 300;
 
-/** Open space: full volume within a tile, silent at ANSWER. Meeting rooms: everyone clear. */
-const FALLOFF_OPEN: Partial<PannerOptions> = { distanceModel: 'linear', refDistance: 1, maxDistance: ANSWER, rolloffFactor: 1 };
-const FALLOFF_MEETING: Partial<PannerOptions> = { distanceModel: 'linear', refDistance: 2, maxDistance: 30, rolloffFactor: 0.4 };
+/** Loudness is ours (spatial.ts, one GainNode per call): the panner only does direction (no distance gain). */
+const PANNER: PannerOptions = { panningModel: 'HRTF', distanceModel: 'linear', refDistance: 1, maxDistance: 10_000, rolloffFactor: 0 };
+const SMOOTH_S = 0.08;
 
 /** What travels through the server. `bye`: hung up. */
 type Signal = { description?: RTCSessionDescriptionInit; candidate?: RTCIceCandidateInit; bye?: true };
@@ -59,6 +60,8 @@ export class VoiceManager {
   private early = new Map<string, { at: number; candidates: RTCIceCandidateInit[] }>();
   private timer: ReturnType<typeof setInterval> | null = null;
   private kinds = new Map<string, RoomKind>();
+  /** Longer side of each room, tiles: the far-wall distance of a meeting room. */
+  private spans = new Map<string, number>();
   private muted = false;
   private deafened = false;
   private pushToTalk = false;
@@ -86,6 +89,7 @@ export class VoiceManager {
 
   setLayout(layout: OfficeLayout) {
     this.kinds = new Map(layout.rooms.map((r) => [r.id, r.kind]));
+    this.spans = new Map(layout.rooms.map((r) => [r.id, Math.max(r.w, r.h)]));
   }
 
   /**
@@ -218,7 +222,7 @@ export class VoiceManager {
     const snap = this.opts.controller()?.snapshot();
     if (!snap || !this.ctx) return;
     const now = performance.now();
-    const meeting = this.inMeeting(snap.me.room);
+    const span = this.inMeeting(snap.me.room) ? (this.spans.get(snap.me.room!) ?? 0) : 0;
     const before = this.peerKeys();
     const seen = new Set<string>();
 
@@ -236,7 +240,15 @@ export class VoiceManager {
       // ICE candidates. Offline: no new calls (the socket would queue the offers and send them all at once later).
       const caller = this.opts.myId < other.id;
       if (!peer && want && caller && this.opts.socket.connected && (this.retryAt.get(other.id) ?? 0) <= now) peer = this.call(other.id);
-      peer?.place(other.x - snap.me.x, other.y - snap.me.y, meeting);
+      if (peer) {
+        // Loudness from the distance (meeting room: whole room, floor at the far wall; open space:
+        // silent at ANSWER); direction from where we face (our seat's direction when sitting).
+        const dx = other.x - snap.me.x;
+        const dy = other.y - snap.me.y;
+        const distance = Math.hypot(dx, dy);
+        const gain = span > 0 ? meetingGain(distance, span) : openGain(distance, ANSWER);
+        peer.place(relativeTo(dx, dy, snap.me.dir), gain);
+      }
     }
     for (const id of [...this.peers.keys()]) if (!seen.has(id)) this.hangUp(id);
 
@@ -333,9 +345,10 @@ class Peer {
   private readonly pc: RTCPeerConnection;
   private readonly createdAt = performance.now();
   private readonly panner: PannerNode;
+  /** Distance falloff (the panner only pans). Starts silent until the first `place`. */
+  private readonly volume: GainNode;
   private makingOffer = false;
   private ignoreOffer = false;
-  private meeting: boolean | null = null;
   private audio: HTMLAudioElement | null = null;
   private source: MediaStreamAudioSourceNode | null = null;
   private level: Level | null = null;
@@ -349,9 +362,12 @@ class Peer {
     mic: MediaStream,
     private readonly send: (data: Signal) => void,
   ) {
-    // Listener stays at the origin facing "up the screen" (the default: forward = -z).
-    this.panner = new PannerNode(ctx, { panningModel: 'HRTF', ...FALLOFF_OPEN });
-    this.panner.connect(out);
+    // Listener stays at the origin facing "up the screen" (the default: forward = -z); the
+    // speaker's offset is rotated by our facing before it gets here (spatial.ts `relativeTo`).
+    this.panner = new PannerNode(ctx, PANNER);
+    this.volume = new GainNode(ctx, { gain: 0 });
+    this.panner.connect(this.volume);
+    this.volume.connect(out);
 
     this.pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
     for (const track of mic.getAudioTracks()) this.pc.addTrack(track, mic);
@@ -397,18 +413,12 @@ class Peer {
     return state === 'failed' || state === 'closed' || (state !== 'connected' && now - this.createdAt > CONNECT_TIMEOUT_MS);
   }
 
-  /** Where they stand relative to us, in tiles (screen x → x, screen y → z). */
-  place(dx: number, dy: number, meeting: boolean) {
+  /** Where they stand in our frame (tiles, forward = -z) and how loud they are (0..1). */
+  place(at: { x: number; z: number }, gain: number) {
     const t = this.ctx.currentTime;
-    this.panner.positionX.setTargetAtTime(dx, t, 0.05);
-    this.panner.positionZ.setTargetAtTime(dy, t, 0.05);
-    if (meeting !== this.meeting) {
-      this.meeting = meeting;
-      const falloff = meeting ? FALLOFF_MEETING : FALLOFF_OPEN;
-      this.panner.refDistance = falloff.refDistance!;
-      this.panner.maxDistance = falloff.maxDistance!;
-      this.panner.rolloffFactor = falloff.rolloffFactor!;
-    }
+    this.panner.positionX.setTargetAtTime(at.x, t, SMOOTH_S);
+    this.panner.positionZ.setTargetAtTime(at.z, t, SMOOTH_S);
+    this.volume.gain.setTargetAtTime(gain, t, SMOOTH_S);
   }
 
   talking(now: number) {
@@ -420,6 +430,7 @@ class Peer {
     this.source?.disconnect();
     this.level?.disconnect();
     this.panner.disconnect();
+    this.volume.disconnect();
     if (this.audio) {
       this.audio.pause();
       this.audio.srcObject = null;
