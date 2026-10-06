@@ -33,9 +33,20 @@ const MEETING_NAMES = ['Huddle', 'Studio', 'War room', 'Board room'];
 const LOUNGE_NAMES = ['Lounge', 'Kitchen', 'Garden', 'Library'];
 const OPEN_NAMES = ['Open space', 'Workroom', 'Commons', 'Workspace'];
 
-const PROTECTED_KINDS = new Set<string>(['desk', 'chair', 'meetingTable', 'board']);
+const PROTECTED_KINDS = new Set<string>(['desk', 'chair', 'meetingTable', 'board', 'foosball', 'cardTable', 'legoBoard']);
 
-export function addWing(layout: OfficeLayout, side: WingSide, seed: string, index: number): WingResult {
+export interface AddWingOptions {
+  special?: 'chill';
+}
+
+export function addWing(
+  layout: OfficeLayout,
+  side: WingSide,
+  seed: string,
+  index: number,
+  options?: AddWingOptions,
+): WingResult {
+  const isChill = options?.special === 'chill';
   const rand = seededRandom(`${seed}:${side}:${index}`);
 
   const origW = layout.width;
@@ -94,167 +105,222 @@ export function addWing(layout: OfficeLayout, side: WingSide, seed: string, inde
   const sharedCoord = isLeft ? depth : isRight ? origW : origH;
 
   if (isLeft || isRight) {
-    const R = Math.min(16, Math.max(12, Math.round(origH - 14)));
+    if (isChill) {
+      const chillRoomId = layout.rooms.some((r) => r.id === 'chill') ? `wing${index}-chill` : 'chill';
+      wingRooms.push({
+        id: chillRoomId,
+        name: 'Chill room',
+        kind: 'chill',
+        x: wingX,
+        y: 0,
+        w: depth,
+        h: origH,
+        floor: 'terrazzo',
+      });
 
-    // Extra room at north end
-    wingRooms.push({
-      id: `wing${index}-extra`,
-      name: extraName,
-      kind: extraKind,
-      x: wingX,
-      y: 0,
-      w: depth,
-      h: R,
-      floor: extraFloor,
-      color: extraColor,
-    });
+      extraSpanAlongShared = { start: 0, end: 0 };
+      wingOpenSpanAlongShared = { start: 1, end: origH - 1 };
+      wingOpenAisle = { start: 1, end: origH - 1 };
 
-    // Open room below extra room
-    wingRooms.push({
-      id: `wing${index}-open`,
-      name: openName,
-      kind: 'open',
-      x: wingX,
-      y: R,
-      w: depth,
-      h: origH - R,
-      floor: openFloor,
-    });
-
-    extraSpanAlongShared = { start: 0, end: R };
-    wingOpenSpanAlongShared = { start: R, end: origH };
-    wingOpenAisle = { start: R, end: origH };
-
-    // Extra room furniture
-    if (isMeeting) {
-      b.meetingRoom(wingX, depth, 5, 0);
-    } else {
-      const loungeVariant = rand() < 0.5 ? 'chill' : 'kitchen';
-      if (loungeVariant === 'chill') {
-        b.chillCorner(wingX + depth / 2, pick(SOFAS, rand), 0);
+      if (isLeft) {
+        b.chillRoom(0, 0, 9, origH);
+        wingWalls.push({ x1: wingX, y1: 0, x2: wingX + depth, y2: 0, kind: 'solid' });
+        wingWalls.push({ x1: 0, y1: 0, x2: 0, y2: origH, kind: 'solid' });
+        wingWalls.push({ x1: 0, y1: origH, x2: depth, y2: origH, kind: 'solid', face: false });
       } else {
-        b.kitchen(wingX + 1, 5, 0);
-        b.barTable(wingX + depth / 2, 6.5);
-        b.add({ kind: 'plant', x: wingX + 1.2, y: 10.8, w: 1, h: 1 });
+        b.chillRoom(wingX + 4, 0, 9, origH);
+        wingWalls.push({ x1: wingX, y1: 0, x2: wingX + depth, y2: 0, kind: 'solid' });
+        wingWalls.push({ x1: wingX + depth, y1: 0, x2: wingX + depth, y2: origH, kind: 'solid' });
+        wingWalls.push({ x1: wingX, y1: origH, x2: wingX + depth, y2: origH, kind: 'solid', face: false });
       }
-    }
-
-    // Glass wall between extra room and open room with 3-wide door
-    const doorGapX = isLeft ? 9.5 : wingX + 0.5;
-    wingWalls.push(
-      { x1: wingX, y1: R, x2: doorGapX, y2: R, kind: 'glass' },
-      { x1: doorGapX + 3, y1: R, x2: wingX + depth, y2: R, kind: 'glass' },
-    );
-
-    // Open room clusters stacked vertically
-    // Keep cluster >= 3.05 from outer wall so future wings on the same side are not blocked,
-    // leaving a 2.85 aisle along the shared wall.
-    const clusterOx = isLeft ? wingX + 3.05 : wingX + 2.85;
-    const oy1 = R + 0.8;
-    const oy2 = R + 7.0;
-    b.deskCluster(clusterOx, oy1);
-    b.deskCluster(clusterOx, oy2);
-
-    // Leftover space plant along outer wall
-    if (isLeft) {
-      b.add({ kind: 'plant', x: 1.0, y: origH - 1.2, w: 1.1, h: 1.1 });
     } else {
-      b.add({ kind: 'plant', x: wingX + depth - 1.0, y: origH - 1.2, w: 1.1, h: 1.1 });
-    }
+      const R = Math.min(16, Math.max(12, Math.round(origH - 14)));
 
-    // Outer walls of the wing
-    wingWalls.push({ x1: wingX, y1: 0, x2: wingX + depth, y2: 0, kind: 'solid' });
-    if (isLeft) {
-      wingWalls.push({ x1: 0, y1: 0, x2: 0, y2: origH, kind: 'solid' });
-      wingWalls.push({ x1: 0, y1: origH, x2: depth, y2: origH, kind: 'solid', face: false });
-    } else {
-      wingWalls.push({ x1: wingX + depth, y1: 0, x2: wingX + depth, y2: origH, kind: 'solid' });
-      wingWalls.push({ x1: wingX, y1: origH, x2: wingX + depth, y2: origH, kind: 'solid', face: false });
+      // Extra room at north end
+      wingRooms.push({
+        id: `wing${index}-extra`,
+        name: extraName,
+        kind: extraKind,
+        x: wingX,
+        y: 0,
+        w: depth,
+        h: R,
+        floor: extraFloor,
+        color: extraColor,
+      });
+
+      // Open room below extra room
+      wingRooms.push({
+        id: `wing${index}-open`,
+        name: openName,
+        kind: 'open',
+        x: wingX,
+        y: R,
+        w: depth,
+        h: origH - R,
+        floor: openFloor,
+      });
+
+      extraSpanAlongShared = { start: 0, end: R };
+      wingOpenSpanAlongShared = { start: R, end: origH };
+      wingOpenAisle = { start: R, end: origH };
+
+      // Extra room furniture
+      if (isMeeting) {
+        b.meetingRoom(wingX, depth, 5, 0);
+      } else {
+        const loungeVariant = rand() < 0.5 ? 'chill' : 'kitchen';
+        if (loungeVariant === 'chill') {
+          b.chillCorner(wingX + depth / 2, pick(SOFAS, rand), 0);
+        } else {
+          b.kitchen(wingX + 1, 5, 0);
+          b.barTable(wingX + depth / 2, 6.5);
+          b.add({ kind: 'plant', x: wingX + 1.2, y: 10.8, w: 1, h: 1 });
+        }
+      }
+
+      // Glass wall between extra room and open room with 3-wide door
+      const doorGapX = isLeft ? 9.5 : wingX + 0.5;
+      wingWalls.push(
+        { x1: wingX, y1: R, x2: doorGapX, y2: R, kind: 'glass' },
+        { x1: doorGapX + 3, y1: R, x2: wingX + depth, y2: R, kind: 'glass' },
+      );
+
+      // Open room clusters stacked vertically
+      // Keep cluster >= 3.05 from outer wall so future wings on the same side are not blocked,
+      // leaving a 2.85 aisle along the shared wall.
+      const clusterOx = isLeft ? wingX + 3.05 : wingX + 2.85;
+      const oy1 = R + 0.8;
+      const oy2 = R + 7.0;
+      b.deskCluster(clusterOx, oy1);
+      b.deskCluster(clusterOx, oy2);
+
+      // Leftover space plant along outer wall
+      if (isLeft) {
+        b.add({ kind: 'plant', x: 1.0, y: origH - 1.2, w: 1.1, h: 1.1 });
+      } else {
+        b.add({ kind: 'plant', x: wingX + depth - 1.0, y: origH - 1.2, w: 1.1, h: 1.1 });
+      }
+
+      // Outer walls of the wing
+      wingWalls.push({ x1: wingX, y1: 0, x2: wingX + depth, y2: 0, kind: 'solid' });
+      if (isLeft) {
+        wingWalls.push({ x1: 0, y1: 0, x2: 0, y2: origH, kind: 'solid' });
+        wingWalls.push({ x1: 0, y1: origH, x2: depth, y2: origH, kind: 'solid', face: false });
+      } else {
+        wingWalls.push({ x1: wingX + depth, y1: 0, x2: wingX + depth, y2: origH, kind: 'solid' });
+        wingWalls.push({ x1: wingX, y1: origH, x2: wingX + depth, y2: origH, kind: 'solid', face: false });
+      }
     }
   } else {
     // BOTTOM wing
-    // Choose west or east end for extra room based on pre-existing gaps on shared wall
-    const gapsOnShared = findWallGaps(shiftedWalls, 'HORIZONTAL', origH, 0, origW);
-    const westGaps = gapsOnShared.filter((g) => overlapsInterval(g.start, g.end, 0, 14)).length;
-    const eastGaps = gapsOnShared.filter((g) => overlapsInterval(g.start, g.end, origW - 14, origW)).length;
+    if (isChill) {
+      const chillRoomId = layout.rooms.some((r) => r.id === 'chill') ? `wing${index}-chill` : 'chill';
+      wingRooms.push({
+        id: chillRoomId,
+        name: 'Chill room',
+        kind: 'chill',
+        x: 0,
+        y: origH,
+        w: origW,
+        h: depth,
+        floor: 'terrazzo',
+      });
 
-    let isWest: boolean;
-    if (westGaps < eastGaps) isWest = true;
-    else if (eastGaps < westGaps) isWest = false;
-    else isWest = rand() < 0.5;
+      extraSpanAlongShared = { start: 0, end: 0 };
+      wingOpenSpanAlongShared = { start: 1, end: origW - 1 };
+      wingOpenAisle = { start: 1, end: origW - 1 };
 
-    const extraX = isWest ? 0 : origW - 14;
-    const openX = isWest ? 14 : 0;
-    const openW = origW - 14;
-
-    wingRooms.push({
-      id: `wing${index}-extra`,
-      name: extraName,
-      kind: extraKind,
-      x: extraX,
-      y: origH,
-      w: 14,
-      h: depth,
-      floor: extraFloor,
-      color: extraColor,
-    });
-
-    wingRooms.push({
-      id: `wing${index}-open`,
-      name: openName,
-      kind: 'open',
-      x: openX,
-      y: origH,
-      w: openW,
-      h: depth,
-      floor: openFloor,
-    });
-
-    extraSpanAlongShared = { start: extraX, end: extraX + 14 };
-    wingOpenSpanAlongShared = { start: openX, end: openX + openW };
-    wingOpenAisle = { start: openX, end: openX + openW };
-
-    // Extra room furniture
-    if (isMeeting) {
-      b.meetingRoom(extraX, 14, 5, origH);
+      b.chillRoom(0, origH + 4, origW, 13);
+      wingWalls.push(
+        { x1: 0, y1: origH, x2: 0, y2: origH + depth, kind: 'solid' },
+        { x1: origW, y1: origH, x2: origW, y2: origH + depth, kind: 'solid' },
+        { x1: 0, y1: origH + depth, x2: origW, y2: origH + depth, kind: 'solid', face: false },
+      );
     } else {
-      const loungeVariant = rand() < 0.5 ? 'chill' : 'kitchen';
-      if (loungeVariant === 'chill') {
-        b.chillCorner(extraX + 7, pick(SOFAS, rand), origH);
+      // Choose west or east end for extra room based on pre-existing gaps on shared wall
+      const gapsOnShared = findWallGaps(shiftedWalls, 'HORIZONTAL', origH, 0, origW);
+      const westGaps = gapsOnShared.filter((g) => overlapsInterval(g.start, g.end, 0, 14)).length;
+      const eastGaps = gapsOnShared.filter((g) => overlapsInterval(g.start, g.end, origW - 14, origW)).length;
+
+      let isWest: boolean;
+      if (westGaps < eastGaps) isWest = true;
+      else if (eastGaps < westGaps) isWest = false;
+      else isWest = rand() < 0.5;
+
+      const extraX = isWest ? 0 : origW - 14;
+      const openX = isWest ? 14 : 0;
+      const openW = origW - 14;
+
+      wingRooms.push({
+        id: `wing${index}-extra`,
+        name: extraName,
+        kind: extraKind,
+        x: extraX,
+        y: origH,
+        w: 14,
+        h: depth,
+        floor: extraFloor,
+        color: extraColor,
+      });
+
+      wingRooms.push({
+        id: `wing${index}-open`,
+        name: openName,
+        kind: 'open',
+        x: openX,
+        y: origH,
+        w: openW,
+        h: depth,
+        floor: openFloor,
+      });
+
+      extraSpanAlongShared = { start: extraX, end: extraX + 14 };
+      wingOpenSpanAlongShared = { start: openX, end: openX + openW };
+      wingOpenAisle = { start: openX, end: openX + openW };
+
+      // Extra room furniture
+      if (isMeeting) {
+        b.meetingRoom(extraX, 14, 5, origH);
       } else {
-        b.kitchen(extraX + 1, 5, origH);
-        b.barTable(extraX + 7, origH + 6.5);
-        b.add({ kind: 'plant', x: extraX + 1.2, y: origH + 10.8, w: 1, h: 1 });
+        const loungeVariant = rand() < 0.5 ? 'chill' : 'kitchen';
+        if (loungeVariant === 'chill') {
+          b.chillCorner(extraX + 7, pick(SOFAS, rand), origH);
+        } else {
+          b.kitchen(extraX + 1, 5, origH);
+          b.barTable(extraX + 7, origH + 6.5);
+          b.add({ kind: 'plant', x: extraX + 1.2, y: origH + 10.8, w: 1, h: 1 });
+        }
       }
+
+      // Dividing wall between extra room and open room
+      const divX = isWest ? 14 : origW - 14;
+      const divDoorY = isWest ? origH + 0.5 : origH + 3.0;
+      wingWalls.push(
+        { x1: divX, y1: origH, x2: divX, y2: divDoorY, kind: 'glass' },
+        { x1: divX, y1: divDoorY + 3, x2: divX, y2: origH + depth, kind: 'glass' },
+      );
+
+      // Open room clusters centred below north aisle
+      const clusterOy = origH + 4.5;
+      const clusterGap = Math.min(3.0, Math.max(1.4, (openW - 14.2) / 3));
+      const totalClusterW = 14.2 + clusterGap;
+      const clusterLeft = openX + (openW - totalClusterW) / 2;
+      b.deskCluster(clusterLeft, clusterOy);
+      b.deskCluster(clusterLeft + 7.1 + clusterGap, clusterOy);
+
+      // Entrance on outer south wall
+      const entranceX = openX + openW / 2;
+      wingWalls.push(
+        { x1: 0, y1: origH + depth, x2: 0, y2: origH, kind: 'solid' },
+        { x1: origW, y1: origH + depth, x2: origW, y2: origH, kind: 'solid' },
+        { x1: 0, y1: origH + depth, x2: entranceX - 2, y2: origH + depth, kind: 'solid', face: false },
+        { x1: entranceX + 2, y1: origH + depth, x2: origW, y2: origH + depth, kind: 'solid', face: false },
+      );
+
+      b.doormat(entranceX, origH + depth);
+      newSpawn = { x: entranceX, y: origH + depth - 2.5 };
     }
-
-    // Dividing wall between extra room and open room
-    const divX = isWest ? 14 : origW - 14;
-    const divDoorY = isWest ? origH + 0.5 : origH + 3.0;
-    wingWalls.push(
-      { x1: divX, y1: origH, x2: divX, y2: divDoorY, kind: 'glass' },
-      { x1: divX, y1: divDoorY + 3, x2: divX, y2: origH + depth, kind: 'glass' },
-    );
-
-    // Open room clusters centred below north aisle
-    const clusterOy = origH + 4.5;
-    const clusterGap = Math.min(3.0, Math.max(1.4, (openW - 14.2) / 3));
-    const totalClusterW = 14.2 + clusterGap;
-    const clusterLeft = openX + (openW - totalClusterW) / 2;
-    b.deskCluster(clusterLeft, clusterOy);
-    b.deskCluster(clusterLeft + 7.1 + clusterGap, clusterOy);
-
-    // Entrance on outer south wall
-    const entranceX = openX + openW / 2;
-    wingWalls.push(
-      { x1: 0, y1: origH + depth, x2: 0, y2: origH, kind: 'solid' },
-      { x1: origW, y1: origH + depth, x2: origW, y2: origH, kind: 'solid' },
-      { x1: 0, y1: origH + depth, x2: entranceX - 2, y2: origH + depth, kind: 'solid', face: false },
-      { x1: entranceX + 2, y1: origH + depth, x2: origW, y2: origH + depth, kind: 'solid', face: false },
-    );
-
-    b.doormat(entranceX, origH + depth);
-    newSpawn = { x: entranceX, y: origH + depth - 2.5 };
   }
 
   // Convert old south wall to interior wall for BOTTOM
@@ -403,7 +469,7 @@ export function addWing(layout: OfficeLayout, side: WingSide, seed: string, inde
       y: wingY,
       w: wingW,
       h: wingH,
-      deskCount: 8,
+      deskCount: isChill ? 0 : 8,
     },
     shift,
   };

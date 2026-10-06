@@ -28,6 +28,7 @@ export interface MyWorkspace {
   memberCount: number;
   wings: OfficeWingInfo[];
   canExpand: boolean;
+  canAddChill?: boolean;
 }
 
 /** Owners and admins invite people and edit the office. */

@@ -62,6 +62,7 @@ model Workspace {
   bookings     RoomBooking[]
   tasks        Task[]
   wings        OfficeWing[]
+  gameResults  GameResult[]
 }
 
 enum WingSide {
@@ -349,3 +350,21 @@ model Task {
   @@index([workspaceId, status, rank])
   @@index([workspaceId, assigneeId])
 }
+
+// ============================================================================
+// GAMES (apps/api/src/games)
+// ============================================================================
+
+model GameResult {
+  id          String   @id @default(cuid())
+  workspaceId String
+  game        String
+  winners     String[]
+  losers      String[]
+  createdAt   DateTime @default(now())
+
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, game, createdAt])
+}
+

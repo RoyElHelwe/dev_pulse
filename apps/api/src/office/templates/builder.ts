@@ -82,6 +82,53 @@ export class LayoutBuilder {
     this.add({ kind: 'rug', x: cx, y: wallY - 0.65, w: 3.6, h: 0.9, color: 0x6b6f73 });
   }
 
+  /** Card table (2.2 × 2.2) with 6 chairs facing the table. */
+  cardTableWithSeats(cx: number, cy: number) {
+    this.add({ kind: 'cardTable', x: cx, y: cy, w: 2.2, h: 2.2 });
+    // 2 chairs north, facing south (down = 180)
+    this.add({ kind: 'chair', x: cx - 0.55, y: cy - 1.55, w: 0.85, h: 0.85, rotation: 180 });
+    this.add({ kind: 'chair', x: cx + 0.55, y: cy - 1.55, w: 0.85, h: 0.85, rotation: 180 });
+    // 2 chairs south, facing north (up = 0)
+    this.add({ kind: 'chair', x: cx - 0.55, y: cy + 1.55, w: 0.85, h: 0.85, rotation: 0 });
+    this.add({ kind: 'chair', x: cx + 0.55, y: cy + 1.55, w: 0.85, h: 0.85, rotation: 0 });
+    // 1 chair west, facing east (right = 90)
+    this.add({ kind: 'chair', x: cx - 1.55, y: cy, w: 0.85, h: 0.85, rotation: 90 });
+    // 1 chair east, facing west (left = 270)
+    this.add({ kind: 'chair', x: cx + 1.55, y: cy, w: 0.85, h: 0.85, rotation: 270 });
+  }
+
+  /** Game room: 1 foosball, 1 cardTable with 6 seats, 1 legoBoard, rug & plant for charm. */
+  chillRoom(rx: number, ry: number, rw = 11, rh = 12) {
+    if (rh >= 18 && rw <= 14) {
+      // Tall room (e.g. vertical wing)
+      const cx = rx + rw / 2;
+      this.add({ kind: 'legoBoard', x: cx, y: ry + 0.45, w: 4, h: 0.5 });
+      this.add({ kind: 'foosball', x: cx, y: ry + 4.5, w: 3, h: 1.6 });
+      this.add({ kind: 'rug', x: cx, y: ry + 10.5, w: 4.5, h: 4.5, color: 0xd9cdbb });
+      this.cardTableWithSeats(cx, ry + 10.5);
+      this.add({ kind: 'plant', x: rx + 1.5, y: ry + 15.5, w: 1, h: 1 });
+    } else if (rw >= 20) {
+      // Wide room (e.g. bottom wing)
+      const cx = rx + rw / 2;
+      const cy = ry + rh / 2;
+      this.add({ kind: 'legoBoard', x: cx, y: ry + rh - 0.45, w: 4, h: 0.5 });
+      this.add({ kind: 'foosball', x: cx - 5.5, y: cy, w: 3, h: 1.6 });
+      this.add({ kind: 'rug', x: cx + 3.5, y: cy, w: 4.5, h: 4.5, color: 0xd9cdbb });
+      this.cardTableWithSeats(cx + 3.5, cy);
+      this.add({ kind: 'plant', x: cx - 9.5, y: cy, w: 1, h: 1 });
+    } else {
+      // Compact room (e.g. loft 11 × 12)
+      const legoX = rx + rw / 2;
+      this.add({ kind: 'legoBoard', x: legoX, y: ry + 0.45, w: 4, h: 0.5 });
+      this.add({ kind: 'foosball', x: rx + 3.2, y: ry + 4.5, w: 3, h: 1.6 });
+      const tableX = rx + rw - 3.2;
+      const tableY = ry + 6.5;
+      this.add({ kind: 'rug', x: tableX, y: tableY, w: 4.5, h: 4.5, color: 0xd9cdbb });
+      this.cardTableWithSeats(tableX, tableY);
+      this.add({ kind: 'plant', x: rx + rw - 1.2, y: ry + 1.8, w: 1, h: 1 });
+    }
+  }
+
   build(layout: Omit<OfficeLayout, 'furniture'>): OfficeLayout {
     return { ...layout, furniture: this.furniture };
   }

@@ -55,11 +55,14 @@ export class WorkspaceService {
       orderBy: { createdAt: 'asc' },
       select: { id: true, side: true, x: true, y: true, w: true, h: true, deskCount: true },
     });
+    const currentLayout = workspace.layout as unknown as OfficeLayout;
+    const canManage = CAN_MANAGE.includes(member.role);
+    const hasChill = currentLayout?.rooms?.some((r) => r.kind === 'chill') ?? false;
     return {
       id: workspace.id,
       name: workspace.name,
       templateId: workspace.templateId,
-      layout: workspace.layout as unknown as OfficeLayout,
+      layout: currentLayout,
       layoutVersion: workspace.layoutVersion,
       role: member.role,
       character: member.character,
@@ -68,7 +71,8 @@ export class WorkspaceService {
       desks: await this.desks.list(workspace.id),
       memberCount,
       wings,
-      canExpand: CAN_MANAGE.includes(member.role) && workspace.templateId === 'loft',
+      canExpand: canManage && workspace.templateId === 'loft',
+      canAddChill: canManage && !hasChill,
     };
   }
 
@@ -196,10 +200,23 @@ export class WorkspaceService {
 
   /** Expand the Loft office with a new wing. */
   async addWing(userId: string, dto: WingDto) {
+    return this.applyWing(userId, dto, false);
+  }
+
+  /** Add a chill wing (allowed for any template, once per office). */
+  async addChillWing(userId: string, dto: WingDto) {
+    return this.applyWing(userId, dto, true);
+  }
+
+  private async applyWing(userId: string, dto: WingDto, isChill: boolean) {
     const member = await this.membership.require(userId, CAN_MANAGE);
     const current = member.workspace;
-    if (current.templateId !== 'loft') {
+    const currentLayout = current.layout as unknown as OfficeLayout;
+    if (!isChill && current.templateId !== 'loft') {
       throw new FormError('WINGS_UNSUPPORTED', 'Only the Loft office can be expanded.');
+    }
+    if (isChill && currentLayout.rooms?.some((r) => r.kind === 'chill')) {
+      throw new FormError('CHILL_EXISTS', 'This office already has a chill room.');
     }
     if (dto.version !== current.layoutVersion) {
       throw new FormError('LAYOUT_CHANGED', 'The office was changed meanwhile. Reload the page and try again.');
@@ -210,7 +227,13 @@ export class WorkspaceService {
 
     let result: WingResult;
     try {
-      result = addWing(current.layout as unknown as OfficeLayout, dto.side, seed, index);
+      result = addWing(
+        currentLayout,
+        dto.side,
+        seed,
+        index,
+        isChill ? { special: 'chill' } : undefined,
+      );
     } catch (err) {
       const e = err as any;
       if (e instanceof WingError || e?.code === 'NO_DOOR' || e?.code === 'WING_INVALID') {

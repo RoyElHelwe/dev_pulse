@@ -64,6 +64,11 @@ export class WorkspaceController {
     return this.workspaces.addWing(user.id, dto);
   }
 
+  @Post('wings/chill')
+  addChillWing(@CurrentUser() user: AuthUser, @Body() dto: WingDto) {
+    return this.workspaces.addChillWing(user.id, dto);
+  }
+
   @Put('template')
   switchTemplate(@CurrentUser() user: AuthUser, @Body() dto: SwitchTemplateDto) {
     return this.workspaces.switchTemplate(user.id, dto);
