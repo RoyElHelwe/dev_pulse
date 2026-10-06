@@ -1,0 +1,1744 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dev Pulse — Architecture, Codebase & 42 Evaluation Masterclass</title>
+  <style>
+    :root {
+      --bg: #070a13;
+      --sidebar-bg: #0b0f19;
+      --card-bg: #111726;
+      --card-border: #1e293b;
+      --accent: #38bdf8;
+      --accent-glow: rgba(56, 189, 248, 0.2);
+      --accent-hover: #7dd3fc;
+      --emerald: #10b981;
+      --emerald-glow: rgba(16, 185, 129, 0.2);
+      --amber: #f59e0b;
+      --amber-glow: rgba(245, 158, 11, 0.2);
+      --purple: #a855f7;
+      --purple-glow: rgba(168, 85, 247, 0.2);
+      --rose: #f43f5e;
+      --rose-glow: rgba(244, 63, 94, 0.2);
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --code-bg: #030712;
+      --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+      height: 100vh;
+      overflow: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #475569; }
+
+    /* Sidebar Navigation */
+    aside {
+      width: 340px;
+      background: var(--sidebar-bg);
+      border-right: 1px solid var(--card-border);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      z-index: 20;
+    }
+
+    .brand {
+      padding: 24px 20px 20px;
+      border-bottom: 1px solid var(--card-border);
+    }
+    .brand-title {
+      font-size: 1.3rem;
+      font-weight: 800;
+      color: var(--accent);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      letter-spacing: -0.02em;
+    }
+    .brand-badge {
+      font-size: 0.65rem;
+      background: var(--accent-glow);
+      color: var(--accent);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      padding: 2px 7px;
+      border-radius: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+    .brand-sub {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      margin-top: 6px;
+      line-height: 1.4;
+    }
+
+    .nav-search {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--card-border);
+    }
+    .nav-search input {
+      width: 100%;
+      background: #030712;
+      border: 1px solid #1e293b;
+      border-radius: 6px;
+      padding: 8px 12px;
+      color: var(--text);
+      font-size: 0.85rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .nav-search input:focus { border-color: var(--accent); }
+
+    .nav-list {
+      list-style: none;
+      overflow-y: auto;
+      padding: 12px 10px;
+      flex: 1;
+    }
+    .nav-item {
+      padding: 10px 14px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 0.84rem;
+      font-weight: 500;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 4px;
+      transition: all 0.15s ease;
+      position: relative;
+    }
+    .nav-item:hover {
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--text);
+    }
+    .nav-item.active {
+      background: var(--accent-glow);
+      color: var(--accent);
+      font-weight: 600;
+    }
+    .nav-item.active::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 6px;
+      bottom: 6px;
+      width: 3px;
+      background: var(--accent);
+      border-radius: 0 4px 4px 0;
+    }
+    .nav-num {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      opacity: 0.6;
+    }
+    .nav-tag {
+      font-size: 0.65rem;
+      padding: 2px 6px;
+      border-radius: 4px;
+      margin-left: auto;
+      background: rgba(255, 255, 255, 0.08);
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+
+    /* Main Deck Area */
+    main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      background: radial-gradient(circle at 85% 15%, rgba(56, 189, 248, 0.05) 0%, transparent 50%),
+                  radial-gradient(circle at 20% 80%, rgba(168, 85, 247, 0.03) 0%, transparent 60%);
+      position: relative;
+    }
+
+    .topbar {
+      height: 60px;
+      border-bottom: 1px solid var(--card-border);
+      padding: 0 28px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: rgba(11, 15, 25, 0.7);
+      backdrop-filter: blur(12px);
+      z-index: 10;
+    }
+    .slide-info {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .slide-step {
+      font-family: var(--font-mono);
+      font-size: 0.82rem;
+      color: var(--text-muted);
+    }
+    .slide-breadcrumb {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--accent);
+    }
+
+    .topbar-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .btn {
+      background: #1e293b;
+      color: var(--text);
+      border: 1px solid var(--card-border);
+      padding: 7px 14px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.82rem;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.15s ease;
+    }
+    .btn:hover {
+      background: #334155;
+      border-color: #475569;
+    }
+    .btn-primary {
+      background: var(--accent);
+      color: #030712;
+      font-weight: 600;
+      border-color: var(--accent);
+    }
+    .btn-primary:hover {
+      background: var(--accent-hover);
+    }
+
+    .viewport {
+      flex: 1;
+      overflow-y: auto;
+      padding: 40px 48px 80px;
+    }
+
+    .slide {
+      display: none;
+      max-width: 1240px;
+      margin: 0 auto;
+      animation: slideIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .slide.active { display: block; }
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Presentation Typography */
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--accent);
+      margin-bottom: 10px;
+    }
+    .eyebrow-dot {
+      width: 6px;
+      height: 6px;
+      background: var(--accent);
+      border-radius: 50%;
+    }
+    .title {
+      font-size: 2.3rem;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      line-height: 1.15;
+      margin-bottom: 16px;
+      background: linear-gradient(135deg, #ffffff 40%, #94a3b8 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .subtitle {
+      font-size: 1.05rem;
+      color: var(--text-muted);
+      line-height: 1.6;
+      margin-bottom: 32px;
+      max-width: 950px;
+    }
+
+    /* Layout Grids */
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 24px;
+      margin-bottom: 28px;
+    }
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+      margin-bottom: 28px;
+    }
+    .grid-4 {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      margin-bottom: 28px;
+    }
+
+    /* Cards */
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 22px;
+      position: relative;
+      transition: all 0.2s ease;
+    }
+    .card:hover {
+      border-color: rgba(56, 189, 248, 0.4);
+      transform: translateY(-2px);
+    }
+    .card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+    .card-title {
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .card-body {
+      font-size: 0.88rem;
+      color: #cbd5e1;
+      line-height: 1.65;
+    }
+    .card-body p { margin-bottom: 8px; }
+    .card-body ul { padding-left: 20px; margin-top: 6px; }
+    .card-body li { margin-bottom: 6px; }
+
+    /* Code Blocks */
+    pre {
+      background: var(--code-bg);
+      border: 1px solid #1e293b;
+      border-radius: 10px;
+      padding: 16px 20px;
+      overflow-x: auto;
+      font-family: var(--font-mono);
+      font-size: 0.83rem;
+      line-height: 1.55;
+      color: #e2e8f0;
+      margin: 14px 0 20px;
+    }
+    code {
+      font-family: var(--font-mono);
+      font-size: 0.88em;
+      background: rgba(255, 255, 255, 0.08);
+      padding: 2px 5px;
+      border-radius: 4px;
+      color: #38bdf8;
+    }
+    pre code {
+      background: transparent;
+      padding: 0;
+      color: inherit;
+    }
+
+    /* Syntax Highlighting */
+    .c-kw { color: #f43f5e; font-weight: 600; }
+    .c-fn { color: #38bdf8; }
+    .c-str { color: #34d399; }
+    .c-num { color: #fbbf24; }
+    .c-com { color: #64748b; font-style: italic; }
+    .c-type { color: #c084fc; font-weight: 600; }
+    .c-op { color: #94a3b8; }
+
+    /* Tables */
+    table.data-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 18px 0 24px;
+      font-size: 0.85rem;
+    }
+    table.data-table th, table.data-table td {
+      border: 1px solid var(--card-border);
+      padding: 12px 16px;
+      text-align: left;
+    }
+    table.data-table th {
+      background: #0f172a;
+      color: var(--accent);
+      font-weight: 600;
+      text-transform: uppercase;
+      font-size: 0.75rem;
+      letter-spacing: 0.05em;
+    }
+    table.data-table tr:nth-child(even) { background: rgba(255, 255, 255, 0.015); }
+    table.data-table tr:hover { background: rgba(56, 189, 248, 0.04); }
+
+    /* Badges & Tags */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .badge-blue { background: var(--accent-glow); color: var(--accent); border: 1px solid rgba(56, 189, 248, 0.3); }
+    .badge-emerald { background: var(--emerald-glow); color: var(--emerald); border: 1px solid rgba(16, 185, 129, 0.3); }
+    .badge-amber { background: var(--amber-glow); color: var(--amber); border: 1px solid rgba(245, 158, 11, 0.3); }
+    .badge-purple { background: var(--purple-glow); color: var(--purple); border: 1px solid rgba(168, 85, 247, 0.3); }
+    .badge-rose { background: var(--rose-glow); color: var(--rose); border: 1px solid rgba(244, 63, 94, 0.3); }
+
+    /* Interactive Tabs */
+    .tab-bar {
+      display: flex;
+      gap: 8px;
+      border-bottom: 1px solid var(--card-border);
+      margin-bottom: 20px;
+    }
+    .tab-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      padding: 10px 16px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      position: relative;
+      transition: color 0.15s;
+    }
+    .tab-btn:hover { color: var(--text); }
+    .tab-btn.active { color: var(--accent); }
+    .tab-btn.active::after {
+      content: "";
+      position: absolute;
+      bottom: -1px;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: var(--accent);
+    }
+    .tab-pane { display: none; }
+    .tab-pane.active { display: block; }
+
+    /* Callout Boxes */
+    .callout {
+      border-left: 4px solid var(--accent);
+      background: rgba(56, 189, 248, 0.06);
+      padding: 16px 20px;
+      border-radius: 0 8px 8px 0;
+      margin: 18px 0;
+      font-size: 0.88rem;
+      line-height: 1.6;
+    }
+    .callout-amber {
+      border-left-color: var(--amber);
+      background: rgba(245, 158, 11, 0.06);
+    }
+    .callout-emerald {
+      border-left-color: var(--emerald);
+      background: rgba(16, 185, 129, 0.06);
+    }
+    .callout-rose {
+      border-left-color: var(--rose);
+      background: rgba(244, 63, 94, 0.06);
+    }
+    .callout-title {
+      font-weight: 700;
+      margin-bottom: 4px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* Keyboard Shortcuts Footer */
+    .shortcuts-bar {
+      position: absolute;
+      bottom: 14px;
+      right: 28px;
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      background: rgba(15, 23, 42, 0.8);
+      padding: 6px 14px;
+      border-radius: 20px;
+      border: 1px solid var(--card-border);
+      backdrop-filter: blur(8px);
+      z-index: 10;
+    }
+    kbd {
+      background: #334155;
+      padding: 2px 6px;
+      border-radius: 4px;
+      color: #f1f5f9;
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      box-shadow: 0 1px 0 rgba(0,0,0,0.4);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Navigation Sidebar -->
+  <aside>
+    <div class="brand">
+      <div class="brand-title">
+        <span>⚡ Dev Pulse</span>
+        <span class="brand-badge">v21.1</span>
+      </div>
+      <p class="brand-sub">42 ft_transcendence Master Architecture & Evaluation Guide</p>
+    </div>
+
+    <div class="nav-search">
+      <input type="text" id="navFilter" placeholder="Filter slides (e.g. auth, voice, tasks)..." oninput="filterSlides()">
+    </div>
+
+    <ul class="nav-list" id="navList">
+      <li class="nav-item active" onclick="goToSlide(0)">
+        <span class="nav-num">01</span>
+        <span>Executive Overview & Vision</span>
+        <span class="nav-tag badge-blue">Intro</span>
+      </li>
+      <li class="nav-item" onclick="goToSlide(1)">
+        <span class="nav-num">02</span>
+        <span>42 Subject Compliance & Points</span>
+        <span class="nav-tag badge-emerald">15+ Pts</span>
+      </li>
+      <li class="nav-item" onclick="goToSlide(2)">
+        <span class="nav-num">03</span>
+        <span>Evaluation Live Code Defense</span>
+        <span class="nav-tag badge-rose">&lt;3 Min</span>
+      </li>
+      <li class="nav-item" onclick="goToSlide(3)">
+        <span class="nav-num">04</span>
+        <span>Monolith vs Microservices Reboot</span>
+        <span class="nav-tag badge-purple">Infra</span>
+      </li>
+      <li class="nav-item" onclick="goToSlide(4)">
+        <span class="nav-num">05</span>
+        <span>NestJS vs React & Hydration</span>
+        <span class="nav-tag badge-amber">SSR/DOM</span>
+      </li>
+      <li class="nav-item" onclick="goToSlide(5)">
+        <span class="nav-num">06</span>
+        <span>Mira's Auth & Social Engine</span>
+        <span class="nav-tag badge-blue">Security</span>
+      </li>
+      <li class="nav-item" onclick="goToSlide(6)">
+        <span class="nav-num">07</span>
+        <span>Prisma Database Schema</span>
+        <span class="nav-tag badge-purple">ORM</span>
+      </li>
+      <li class="nav-item" onclick="goToSlide(7)">
+        <span class="nav-num">08</span>
+        <span>Roy's 2D Office & Phaser Engine</span>
+        <span class="nav-tag badge-emerald">Phaser 3</span>
+      </li>
+      <li class="nav-item" onclick="goToSlide(8)">
+        <span class="nav-num">09</span>
+        <span>Zakaria's Real-Time Kanban</span>
+        <span class="nav-tag badge-amber">Jira</span>
+      </li>
+      <li class="nav-item" onclick="goToSlide(9)">
+        <span class="nav-num">10</span>
+        <span>Proximity Voice & 3D Spatial Audio</span>
+        <span class="nav-tag badge-rose">WebRTC</span>
+      </li>
+      <li class="nav-item" onclick="goToSlide(10)">
+        <span class="nav-num">11</span>
+        <span>Meeting Timetable & Room Colliders</span>
+        <span class="nav-tag badge-blue">Locks</span>
+      </li>
+      <li class="nav-item" onclick="goToSlide(11)">
+        <span class="nav-num">12</span>
+        <span>Office Chat & Speech Bubbles</span>
+        <span class="nav-tag badge-emerald">Sockets</span>
+      </li>
+      <li class="nav-item" onclick="goToSlide(12)">
+        <span class="nav-num">13</span>
+        <span>Interactive Code Inspector</span>
+        <span class="nav-tag badge-purple">Code</span>
+      </li>
+      <li class="nav-item" onclick="goToSlide(13)">
+        <span class="nav-num">14</span>
+        <span>Peer Evaluation Day Master Checklist</span>
+        <span class="nav-tag badge-emerald">Final</span>
+      </li>
+    </ul>
+  </aside>
+
+  <!-- Main Viewport -->
+  <main>
+    <div class="topbar">
+      <div class="slide-info">
+        <span class="slide-step" id="slideStep">SLIDE 01 / 14</span>
+        <span class="slide-breadcrumb" id="slideBreadcrumb">Executive Overview & Vision</span>
+      </div>
+      <div class="topbar-actions">
+        <button class="btn" onclick="prevSlide()">← Prev</button>
+        <button class="btn btn-primary" onclick="nextSlide()">Next →</button>
+        <button class="btn" onclick="toggleFullscreen()">⛶ Fullscreen</button>
+      </div>
+    </div>
+
+    <div class="viewport" id="viewport">
+
+      <!-- ============================================================== -->
+      <!-- SLIDE 1: Executive Overview & Vision -->
+      <!-- ============================================================== -->
+      <section class="slide active" data-title="Executive Overview & Vision">
+        <div class="eyebrow"><span class="eyebrow-dot"></span> 42 ft_transcendence v21.1 Core Concept</div>
+        <h1 class="title">DevPulse: Jira Meets the 2D Virtual Office</h1>
+        <p class="subtitle">
+          A high-performance collaborative workspace unifying professional software project management
+          with an interactive 2D spatial virtual office (Gather.town style). Exceeds the 42 Common Core final project
+          mandate with over 15 audited module points.
+        </p>
+
+        <div class="grid-3">
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">🏢 2D Virtual Floor</span>
+              <span class="badge badge-emerald">Phaser 3</span>
+            </div>
+            <div class="card-body">
+              Top-down 2D office canvas where players navigate with WASD or joystick. Walk near colleagues to hear their
+              spatial voice, enter meeting rooms to join isolated sessions, and sit at your own desk.
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">📋 Jira-Style Kanban</span>
+              <span class="badge badge-amber">WebSocket</span>
+            </div>
+            <div class="card-body">
+              Enterprise task management with sequential issue keys (e.g. <code>DP-42</code>), fractional card ranking,
+              HTML5 drag-and-drop, filter pills, and live desk paper stack representations reflecting pending workload.
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">🎙️ Spatial 3D Voice</span>
+              <span class="badge badge-rose">WebRTC</span>
+            </div>
+            <div class="card-body">
+              Peer-to-peer WebRTC mesh combined with the Web Audio API: HRTF directional panning rotated by your avatar's
+              facing direction, distance gain decay, and physical acoustic room isolation.
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top: 10px;">
+          <div class="card-header">
+            <span class="card-title">👥 Chapter II.1 — Required Team Roles & Distribution</span>
+            <span class="badge badge-blue">Mandatory 42 Requirement</span>
+          </div>
+          <div class="card-body">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Team Member</th>
+                  <th>Official 42 Role</th>
+                  <th>Primary Technical Ownership</th>
+                  <th>Core Git Directory Footprint</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><strong>Roy</strong></td>
+                  <td>Technical Lead / Architect</td>
+                  <td>Phaser 3 game engine, 20Hz movement sync, onboarding wizard, live layout editor, wings generator</td>
+                  <td><code>apps/web/game</code>, <code>apps/api/src/office</code></td>
+                </tr>
+                <tr>
+                  <td><strong>Mira</strong></td>
+                  <td>Project Manager / Scrum Master</td>
+                  <td>Authentication (JWT, 2FA, OAuth, Sessions), User Profile, Avatar Uploads, Friends & Invitations</td>
+                  <td><code>apps/api/src/auth</code>, <code>apps/web/features/auth</code>, <code>users/</code></td>
+                </tr>
+                <tr>
+                  <td><strong>Zakaria</strong></td>
+                  <td>Product Owner / Senior Fullstack</td>
+                  <td>Kanban task management backend & UI, WebRTC proximity voice, 3D spatial acoustics, meeting room bookings</td>
+                  <td><code>apps/api/src/tasks</code>, <code>apps/api/src/voice</code>, <code>apps/api/src/meetings</code></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================================================== -->
+      <!-- SLIDE 2: 42 Subject Compliance & Points -->
+      <!-- ============================================================== -->
+      <section class="slide" data-title="42 Subject Compliance & Points">
+        <div class="eyebrow"><span class="eyebrow-dot"></span> Module Scorecard</div>
+        <h1 class="title">14 Mandatory Points + 5 Bonus Safety Buffer</h1>
+        <p class="subtitle">
+          The 42 subject mandates a minimum of 14 points across chosen modules. Incomplete modules award 0 points.
+          DevPulse implements 15 primary points plus 3 bonus buffer points to guarantee success during evaluation.
+        </p>
+
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Category</th>
+              <th>Module Title</th>
+              <th>Type</th>
+              <th>Pts</th>
+              <th>How DevPulse Fulfills the Requirement</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Web</strong></td>
+              <td>Use a framework for both frontend and backend</td>
+              <td><span class="badge badge-blue">Major</span></td>
+              <td>2</td>
+              <td>Next.js 16 (React 19) for frontend; NestJS 11 for modular monolith backend.</td>
+            </tr>
+            <tr>
+              <td><strong>Web</strong></td>
+              <td>Implement real-time features using WebSockets</td>
+              <td><span class="badge badge-blue">Major</span></td>
+              <td>2</td>
+              <td>Socket.io namespaces: <code>/office</code> (moves, voice, tasks), <code>/session</code> (remote eviction).</td>
+            </tr>
+            <tr>
+              <td><strong>Web</strong></td>
+              <td>Allow users to interact with other users</td>
+              <td><span class="badge badge-blue">Major</span></td>
+              <td>2</td>
+              <td>Office-wide and room-scoped live chat with speech bubbles, status bubbles, and desk name plates.</td>
+            </tr>
+            <tr>
+              <td><strong>User Mgmt</strong></td>
+              <td>Standard user management and authentication</td>
+              <td><span class="badge badge-blue">Major</span></td>
+              <td>2</td>
+              <td>Salted scrypt hashing, JWT + rotating refresh tokens, 19-char procedural avatar recipes, public profile pages.</td>
+            </tr>
+            <tr>
+              <td><strong>User Mgmt</strong></td>
+              <td>An organization system (Workspaces)</td>
+              <td><span class="badge badge-blue">Major</span></td>
+              <td>2</td>
+              <td>Multi-tenant Workspaces, 7-day tokenized email invitations, member role hierarchy, desk assignments.</td>
+            </tr>
+            <tr>
+              <td><strong>Choice / Game</strong></td>
+              <td>Module of choice: 2D Virtual Office & Spatial Audio</td>
+              <td><span class="badge badge-blue">Major</span></td>
+              <td>2</td>
+              <td>Full 2D interactive office, WebRTC proximity mesh, meeting rooms, dynamic office expansions.</td>
+            </tr>
+            <tr>
+              <td><strong>Web</strong></td>
+              <td>Use an ORM for the database</td>
+              <td><span class="badge badge-emerald">Minor</span></td>
+              <td>1</td>
+              <td>Prisma ORM 6 with PostgreSQL 16 Alpine, transactions, and PostgreSQL advisory locks.</td>
+            </tr>
+            <tr>
+              <td><strong>Web</strong></td>
+              <td>Real-time collaborative features</td>
+              <td><span class="badge badge-emerald">Minor</span></td>
+              <td>1</td>
+              <td>Live synchronized Jira Kanban board (fractional ranking) & live multi-user office layout editor.</td>
+            </tr>
+            <tr>
+              <td><strong>User Mgmt</strong></td>
+              <td>Implement remote authentication with OAuth 2.0</td>
+              <td><span class="badge badge-emerald">Minor</span></td>
+              <td>1</td>
+              <td>Triple OAuth integration: Google, GitHub, and 42 School Intranet with PKCE S256 verification.</td>
+            </tr>
+            <tr style="background: rgba(56, 189, 248, 0.08); font-weight: 700;">
+              <td colspan="3">CORE MODULES TOTAL</td>
+              <td>15</td>
+              <td>Exceeds the 14-point mandatory threshold</td>
+            </tr>
+            <tr>
+              <td><strong>User Mgmt</strong></td>
+              <td>Two-Factor Authentication (2FA)</td>
+              <td><span class="badge badge-emerald">Minor (Bonus)</span></td>
+              <td>1</td>
+              <td>RFC 6238 TOTP, AES-256-GCM encrypted secrets at rest, 10 backup codes, enforced on password AND OAuth.</td>
+            </tr>
+            <tr>
+              <td><strong>User Mgmt</strong></td>
+              <td>Advanced permissions system (RBAC)</td>
+              <td><span class="badge badge-blue">Major (Bonus)</span></td>
+              <td>2</td>
+              <td>Granular role management: <code>OWNER</code>, <code>ADMIN</code>, <code>MEMBER</code> with route-level enforcement.</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="grid-2">
+          <div class="callout callout-emerald">
+            <div class="callout-title">✓ Mandatory General Requirements Satisfied</div>
+            <ul>
+              <li><strong>Single-Command Execution:</strong> <code>make</code> builds and boots Nginx, Web, API, and DB automatically.</li>
+              <li><strong>Mandatory HTTPS:</strong> Nginx terminates TLS on <code>:8443</code> with auto-generated SAN certificates.</li>
+              <li><strong>Google Chrome Compatibility:</strong> Full WebGL, Web Audio, and WebRTC compatibility.</li>
+              <li><strong>Zero Console Warnings/Errors:</strong> Handled via <code>FormError</code> HTTP 200 architecture.</li>
+            </ul>
+          </div>
+          <div class="callout callout-amber">
+            <div class="callout-title">⚖ Mandatory Legal & Concurrency Rules</div>
+            <ul>
+              <li><strong>Authentic Privacy & Terms Pages:</strong> Real legal text at <code>/privacy</code> and <code>/terms</code> (not placeholder text).</li>
+              <li><strong>Multi-User Concurrency:</strong> Database advisory locks (<code>pg_advisory_xact_lock</code>) eliminate race conditions.</li>
+              <li><strong>Environment Security:</strong> <code>.env</code> ignored by git; <code>.env.example</code> documented fully.</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================================================== -->
+      <!-- SLIDE 3: Evaluation Live Code Defense -->
+      <!-- ============================================================== -->
+      <section class="slide" data-title="Evaluation Live Code Defense">
+        <div class="eyebrow"><span class="eyebrow-dot"></span> Peer Evaluation Strategy</div>
+        <h1 class="title">The 42 "Live Code Modification" Challenge</h1>
+        <p class="subtitle">
+          Chapter VIII of the 42 subject specifies: <em>"During the evaluation, a brief modification of the project may
+          occasionally be requested... feasible within a few minutes."</em> Here is how DevPulse dominates this test.
+        </p>
+
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title" style="color: var(--rose);">❌ Why Microservices Fail the Live Test</span>
+            </div>
+            <div class="card-body">
+              In an 11-container microservice setup with shared Turborepo npm packages:
+              <ul>
+                <li>Adding a simple field requires updating <code>@devpulse/shared-types</code>, building packages, and linking symlinks.</li>
+                <li>Updating NATS broker DTOs across 3 separate microservices.</li>
+                <li>Running manual database migrations across individual databases.</li>
+                <li>Rebuilding Docker images takes <strong>30–45 minutes</strong>, leading to immediate evaluation failure.</li>
+              </ul>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title" style="color: var(--emerald);">✅ DevPulse Modular Monolith: &lt; 180 Seconds</span>
+            </div>
+            <div class="card-body">
+              With our single NestJS backend and Next.js frontend with hot-reload volumes (<code>make dev</code>):
+              <ul>
+                <li><strong>Single Schema:</strong> Edit <code>apps/api/prisma/schema.prisma</code> (10s).</li>
+                <li><strong>Apply DB:</strong> Run <code>make db</code> (15s).</li>
+                <li><strong>Validation:</strong> Add decorator to DTO in <code>apps/api/src/</code> (20s).</li>
+                <li><strong>UI:</strong> Expose input in React component (40s).</li>
+                <li><strong>Done:</strong> Browser updates live via Fast Refresh in under 3 minutes total!</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">🧪 Rehearsal: "Add a 'phone' field to User Settings"</span>
+            <span class="badge badge-purple">Step-by-Step Live Walkthrough</span>
+          </div>
+          <div class="card-body">
+            <pre><code><span class="c-com">// 1. apps/api/prisma/schema.prisma</span>
+model UserSettings {
+  userId        String    @id
+  <span class="c-str">phone         String?</span>   <span class="c-com">// <-- ADD THIS LINE</span>
+  voiceMode     VoiceMode @default(OPEN)
+}
+
+<span class="c-com">// 2. In terminal:</span>
+$ make db                 <span class="c-com">// Pushes schema to Postgres in 5 seconds</span>
+
+<span class="c-com">// 3. apps/api/src/settings/dto.ts</span>
+export class UpdateSettingsDto {
+  <span class="c-fn">@IsOptional()</span>
+  <span class="c-fn">@IsString()</span>
+  <span class="c-str">phone?: string;</span>         <span class="c-com">// <-- ADD VALIDATION</span>
+}
+
+<span class="c-com">// 4. apps/web/features/settings/AccountCard.tsx</span>
+<span class="c-kw">&lt;TextField</span> <span class="c-type">label</span>=<span class="c-str">"Phone"</span> <span class="c-type">value</span>={settings.phone} <span class="c-type">onChange</span>={...} <span class="c-kw">/&gt;</span></code></pre>
+            <p style="font-size: 0.85rem; color: var(--emerald); font-weight: 600;">
+              ✨ Demonstrates 100% genuine architectural mastery to evaluators without hesitation or rebuild delays.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================================================== -->
+      <!-- SLIDE 4: Monolith vs Microservices Reboot -->
+      <!-- ============================================================== -->
+      <section class="slide" data-title="Monolith vs Microservices Reboot">
+        <div class="eyebrow"><span class="eyebrow-dot"></span> Architectural Evolution</div>
+        <h1 class="title">Rebooting from 11 Containers to 4 Lean Services</h1>
+        <p class="subtitle">
+          The early repository history (on <code>main</code>) suffered from premature scaling and architectural over-engineering.
+          The reboot consolidated the entire infrastructure into a robust Modular Monolith running cleanly on any laptop.
+        </p>
+
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title" style="color: var(--rose);">The Deprecated 11-Container Architecture</span>
+            </div>
+            <div class="card-body">
+              <table class="data-table" style="margin: 0;">
+                <thead>
+                  <tr><th>Container</th><th>Old Purpose</th><th>Issue</th></tr>
+                </thead>
+                <tbody>
+                  <tr><td><code>api-gateway</code></td><td>Reverse proxy</td><td>Duplicate routing layer</td></tr>
+                  <tr><td><code>auth-service</code></td><td>Microservice auth</td><td>NATS message overhead</td></tr>
+                  <tr><td><code>workspace-service</code></td><td>Offices</td><td>Distributed transaction splits</td></tr>
+                  <tr><td><code>task-service</code></td><td>Kanban issues</td><td>Sync issues with workspace</td></tr>
+                  <tr><td><code>nats</code></td><td>Message broker</td><td>Deadlock on queue failure</td></tr>
+                  <tr><td><code>redis</code></td><td>Session store</td><td>Redundant memory layer</td></tr>
+                  <tr><td><code>mailpit</code></td><td>Dev email catcher</td><td>Extra memory consumption</td></tr>
+                  <tr><td><code>coturn</code></td><td>TURN media relay</td><td>Port conflicts on campus LAN</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title" style="color: var(--emerald);">The Production 4-Container Modular Monolith</span>
+            </div>
+            <div class="card-body">
+              <div class="callout callout-emerald" style="margin-top: 0;">
+                <strong>1. <code>proxy</code> (Nginx 1.25 Alpine):</strong>
+                Single ingress terminating HTTPS on port <code>8443</code>. Routes <code>/api</code> and <code>/socket.io</code> to NestJS, and <code>/</code> to Next.js. Eliminates CORS entirely.
+              </div>
+              <div class="callout callout-emerald">
+                <strong>2. <code>web</code> (Next.js 16 + React 19):</strong>
+                Client-side Phaser 3 engine, App Router layouts, Zod client forms, Web Audio spatial engine.
+              </div>
+              <div class="callout callout-emerald">
+                <strong>3. <code>api</code> (NestJS 11):</strong>
+                Modular Monolith containing all business logic, Socket.IO gateways, scrypt cryptography, and Prisma ORM.
+              </div>
+              <div class="callout callout-emerald">
+                <strong>4. <code>db</code> (PostgreSQL 16 Alpine):</strong>
+                Single persistent relational database with transactional advisory locks.
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <pre><code><span class="c-com"># Nginx Dynamic Resolver prevents stale IPs upon service rebuilds:</span>
+<span class="c-kw">resolver</span> 127.0.0.11 valid=10s ipv6=off;
+<span class="c-kw">set</span> $api http://api:4000;
+<span class="c-kw">set</span> $web http://web:3000;
+
+<span class="c-kw">location</span> /api/       { <span class="c-kw">proxy_pass</span> $api; }
+<span class="c-kw">location</span> /socket.io/ { <span class="c-kw">proxy_pass</span> $api; <span class="c-kw">proxy_read_timeout</span> 1h; }
+<span class="c-kw">location</span> /           { <span class="c-kw">proxy_pass</span> $web; }</code></pre>
+      </section>
+
+      <!-- ============================================================== -->
+      <!-- SLIDE 5: NestJS vs React & Hydration -->
+      <!-- ============================================================== -->
+      <section class="slide" data-title="NestJS vs React & Hydration">
+        <div class="eyebrow"><span class="eyebrow-dot"></span> Framework Runtime Comparison</div>
+        <h1 class="title">NestJS Backend vs React Frontend & Hydration Mechanics</h1>
+        <p class="subtitle">
+          Evaluators rigorously test candidates on the operational boundaries between server and client.
+          Here is how NestJS (Inversion of Control) and React 19 (Fiber reconciler) differ and how hydration is safeguarded.
+        </p>
+
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">⚙️ NestJS 11 (Backend Engine)</span>
+              <span class="badge badge-purple">IoC / DI</span>
+            </div>
+            <div class="card-body">
+              <ul>
+                <li><strong>Inversion of Control (IoC):</strong> Services are decorated with <code>@Injectable()</code>. The NestJS DI container automatically resolves and instantiates dependencies as singletons.</li>
+                <li><strong>Request Pipeline:</strong> Inbound HTTP $\to$ Global Middleware $\to$ Guards (<code>AuthGuard</code>) $\to$ Interceptors $\to$ Validation Pipes (<code>ValidationPipe</code>) $\to$ Controller $\to$ Service.</li>
+                <li><strong>Concurrency:</strong> Executes on Node's single-threaded libuv event loop. CPU-heavy scrypt crypto is offloaded to the internal worker thread pool.</li>
+              </ul>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">⚛️ React 19 & Next.js 16 (Frontend)</span>
+              <span class="badge badge-blue">Virtual DOM</span>
+            </div>
+            <div class="card-body">
+              <ul>
+                <li><strong>Component Tree:</strong> Unidirectional state flow. UI updates trigger Fiber reconciliation and incremental diffing.</li>
+                <li><strong>Server Components (RSC):</strong> Render to static HTML on the server with zero client bundle footprint.</li>
+                <li><strong>Client Components (<code>'use client'</code>):</strong> Hydrate in the browser to enable hooks, DOM event listeners, Web Audio contexts, and canvas mounting.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">🌊 Hydration in Detail & Why Phaser 3 CANNOT Run on Node.js</span>
+            <span class="badge badge-rose">Zero Hydration Warnings</span>
+          </div>
+          <div class="card-body">
+            <p>
+              <strong>What Hydration Is:</strong> Next.js renders JSX components to a plain HTML string on the server.
+              The browser receives this HTML and paints it immediately (First Contentful Paint). Next, the client JavaScript
+              bundle downloads, walks the existing DOM tree, and binds event listeners (<code>onClick</code>, <code>onChange</code>).
+              The server-rendered HTML string and initial client virtual DOM must match <em>identically</em>, or a hydration mismatch occurs.
+            </p>
+            <p style="margin-top: 10px;">
+              <strong>The Phaser 3 Problem:</strong> Phaser is an arcade canvas engine. At import time, it accesses browser-only globals:
+              <code>window</code>, <code>document</code>, <code>HTMLCanvasElement</code>, <code>WebGLRenderingContext</code>. If imported on the server,
+              Node.js throws a fatal error: <code>ReferenceError: window is not defined</code>.
+            </p>
+            <p style="margin-top: 10px;">
+              <strong>DevPulse Solution:</strong> In <code>apps/web/features/office/OfficeView.tsx</code>, Phaser is dynamically imported
+              strictly inside a client-side <code>useEffect</code> hook:
+            </p>
+            <pre><code><span class="c-com">// apps/web/features/office/OfficeView.tsx: Dynamic client-only import</span>
+<span class="c-fn">useEffect</span>(() => {
+  <span class="c-kw">let</span> cancelled = <span class="c-kw">false</span>;
+  (async () => {
+    <span class="c-com">// window and WebGL exist ONLY here in the browser:</span>
+    <span class="c-kw">const</span> [{ createGame }] = <span class="c-kw">await</span> Promise.all([
+      <span class="c-fn">import</span>(<span class="c-str">'@/game/createGame'</span>),
+      document.fonts.ready,
+    ]);
+    <span class="c-kw">if</span> (cancelled || !containerRef.current) <span class="c-kw">return</span>;
+    controllerRef.current = <span class="c-fn">createGame</span>(containerRef.current, { ...options });
+  })();
+  <span class="c-kw">return</span> () => { cancelled = <span class="c-kw">true</span>; controllerRef.current?.destroy(); };
+}, []);</code></pre>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================================================== -->
+      <!-- SLIDE 6: Mira's Auth & Social Engine -->
+      <!-- ============================================================== -->
+      <section class="slide" data-title="Mira's Auth & Social Engine">
+        <div class="eyebrow"><span class="eyebrow-dot"></span> Security Architecture</div>
+        <h1 class="title">Mira's Authentication, 2FA & Social Engine</h1>
+        <p class="subtitle">
+          Originally prototyped as a standalone Better-Auth module on <code>origin/transcn-changes</code>, then re-engineered
+          into an enterprise-grade stateless JWT + rotating refresh token system with universal 2FA and remote session eviction.
+        </p>
+
+        <div class="grid-3">
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">🔑 Scrypt Password Hashing</span>
+              <span class="badge badge-emerald">Memory-Hard</span>
+            </div>
+            <div class="card-body">
+              Unicode NFKC normalized passwords hashed using Node's <code>crypto.scrypt</code>:
+              $$N = 32768, \quad r = 8, \quad p = 1$$
+              16-byte random salt, 64-byte derived key, 64 MB memory limit. Verified via constant-time <code>timingSafeEqual</code>.
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">🔄 Dual Token Rotation</span>
+              <span class="badge badge-blue">Anti-Theft</span>
+            </div>
+            <div class="card-body">
+              15-minute JWT <code>access_token</code> (signature verified without DB lookup) + 30-day random <code>refresh_token</code> (SHA-256 in DB).
+              Rotated on every use. Presenting a reused token past the 30s grace window revokes the entire <code>familyId</code> device family.
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">🛡️ Universal 2FA (TOTP)</span>
+              <span class="badge badge-purple">RFC 6238</span>
+            </div>
+            <div class="card-body">
+              TOTP secrets encrypted at rest via <strong>AES-256-GCM</strong> with HKDF key derivation.
+              Enforced on email/password AND OAuth logins. Anti-replay monotonic step tracking + 10 hashed backup codes.
+            </div>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">🌐 Triple OAuth 2.0 with PKCE</span>
+              <span class="badge badge-blue">Google · GitHub · 42</span>
+            </div>
+            <div class="card-body">
+              Integrates Google, GitHub, and 42 Intranet. Generates cryptographically secure <code>state</code> and PKCE <code>code_verifier</code> (SHA-256 challenge S256).
+              Prevents authorization code injection attacks.
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">📱 Single Device Lock & Eviction</span>
+              <span class="badge badge-rose">SessionGateway</span>
+            </div>
+            <div class="card-body">
+              Users can only be active on one device at a time. New logins generate a 15-minute takeover link with cookie binding hashes.
+              Upon confirmation, <code>SessionGateway</code> emits <code>session:ended</code> over WebSockets, instantly kicking stale tabs.
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================================================== -->
+      <!-- SLIDE 7: Prisma Database Schema -->
+      <!-- ============================================================== -->
+      <section class="slide" data-title="Prisma Database Schema">
+        <div class="eyebrow"><span class="eyebrow-dot"></span> Data Persistence</div>
+        <h1 class="title">Prisma 6 Database Schema & Relational Integrity</h1>
+        <p class="subtitle">
+          The database schema (<code>apps/api/prisma/schema.prisma</code>) defines 13 strongly-typed models partitioned
+          across Core, Mira, Roy, and Zakaria functional modules with cascade rules and PostgreSQL advisory locks.
+        </p>
+
+        <div class="grid-3">
+          <div class="card">
+            <div class="card-header"><span class="card-title">CORE & Identity</span></div>
+            <div class="card-body">
+              <ul>
+                <li><strong><code>User</code>:</strong> Unique email, display name, avatar URL, nullable scrypt hash, email verification timestamp.</li>
+                <li><strong><code>Workspace</code>:</strong> Name, templateId, JSON layout structure, optimistic locking <code>layoutVersion</code>.</li>
+                <li><strong><code>WorkspaceMember</code>:</strong> 1:1 user-to-workspace mapping, role (<code>OWNER</code>, <code>ADMIN</code>, <code>MEMBER</code>), 19-char character recipe, desk ID, status bubble.</li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header"><span class="card-title">Security & Sessions (Mira)</span></div>
+            <div class="card-body">
+              <ul>
+                <li><strong><code>RefreshToken</code>:</strong> SHA-256 hash, family ID, device user agent, IP, replaced-by ID, revocation timestamp.</li>
+                <li><strong><code>OAuthAccount</code>:</strong> Provider, provider user ID, user foreign key. Unique composite key.</li>
+                <li><strong><code>TwoFactor</code>:</strong> AES-256-GCM secret, enabled timestamp, SHA-256 backup codes array, last monotonic step.</li>
+                <li><strong><code>Invitation</code>:</strong> Token SHA-256 hash, 7-day expiration, invited role, workspace foreign key.</li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header"><span class="card-title">Office & Tasks (Roy / Zakaria)</span></div>
+            <div class="card-body">
+              <ul>
+                <li><strong><code>Task</code>:</strong> Per-workspace sequential number, type (<code>TASK</code>, <code>BUG</code>, <code>STORY</code>), status, priority, fractional <code>rank</code> float, assignee.</li>
+                <li><strong><code>RoomBooking</code>:</strong> Room ID, title, 15-min start/end timestamps, attendee IDs array.</li>
+                <li><strong><code>ChatMessage</code>:</strong> Workspace ID, channel (<code>"office"</code> or room ID), text, booking ID.</li>
+                <li><strong><code>OfficeWing</code>:</strong> Loft extension records: side (<code>LEFT</code>, <code>RIGHT</code>, <code>BOTTOM</code>), seed, coordinates, desk count.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <pre><code><span class="c-com">// apps/api/prisma/schema.prisma: Relational integrity and index constraints</span>
+model WorkspaceMember {
+  id          String    @id @default(cuid())
+  userId      String    @unique               <span class="c-com">// One office per person</span>
+  workspaceId String
+  role        Role      @default(MEMBER)
+  character   String    @default("maya")      <span class="c-com">// 19-char base-36 DNA recipe</span>
+  deskId      String?                         <span class="c-com">// Layout furniture ID</span>
+  status      String?                         <span class="c-com">// Status bubble text</span>
+
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, deskId])             <span class="c-com">// Prevents desk double-booking</span>
+  @@index([workspaceId])
+}</code></pre>
+      </section>
+
+      <!-- ============================================================== -->
+      <!-- SLIDE 8: Roy's 2D Office & Phaser Engine -->
+      <!-- ============================================================== -->
+      <section class="slide" data-title="Roy's 2D Office & Phaser Engine">
+        <div class="eyebrow"><span class="eyebrow-dot"></span> Game Engine Core</div>
+        <h1 class="title">Roy's 2D Virtual Office: Phaser 3, Movement & Procedural Art</h1>
+        <p class="subtitle">
+          The 2D virtual office is rendered in WebGL with static scenery texture baking, an 18-attribute DNA character
+          recipe generator, speed-clamped movement synchronization, sitting physics, and live in-game layout editing.
+        </p>
+
+        <div class="grid-3">
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">🎨 Static Texture Baking</span>
+              <span class="badge badge-emerald">60 FPS</span>
+            </div>
+            <div class="card-body">
+              Static tiles (floors, solid walls, room borders) are baked once at startup into 512px <code>RenderTexture</code> chunks at <code>depth = 0</code>.
+              Eliminates hundreds of discrete graphics draw calls every frame.
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">🧬 19-Char DNA Recipe</span>
+              <span class="badge badge-purple">recipe.ts</span>
+            </div>
+            <div class="card-body">
+              Characters and desks are procedurally generated from a 19-character code: <code>"1"</code> + 18 base-36 digits (build, skin, hair, outfit, vibe).
+              Desks decorate themselves dynamically based on the owner's vibe (props, plants, monitors).
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">🪑 Sitting Mechanics</span>
+              <span class="badge badge-blue">Interactions</span>
+            </div>
+            <div class="card-body">
+              Dwelling on a free seat for 500 ms snaps the avatar to seat coordinates, clears physics velocity, disables body collision, and faces the chair's orientation.
+              Holding movement for 500 ms dismounts to a free tile.
+            </div>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">⏱️ 20Hz Throttled Movement & Speed Clamping</span>
+            </div>
+            <div class="card-body">
+              Packets transmit over Socket.io as <code>[x, y, dir, moving, seated]</code> flagged <strong><code>volatile</code></strong> (stale packets are dropped).
+              The backend enforces speed clamping:
+              $$\text{maxDistance} = 1.6 \times \text{WALK\_SPEED} (170\text{ px/s}) \times \Delta t + \text{TILE} (32\text{ px})$$
+              Prevents speed-hacking while allowing teleportation at entrance spawns. Flood budget limits users to 40 moves/s.
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">📐 100ms Linear Interpolation Buffer</span>
+            </div>
+            <div class="card-body">
+              Remote players are rendered 100 ms in the past using a 30-snapshot ring buffer:
+              $$k = \frac{t_{\text{render}} - t_A}{t_B - t_A}, \quad x = x_A + (x_B - x_A) \times k$$
+              Positional jumps exceeding 192 px flush the buffer and teleport immediately. Depth is dynamically sorted by feet coordinates:
+              $$\text{depth} = 10 + \frac{y}{100000}$$
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================================================== -->
+      <!-- SLIDE 9: Zakaria's Real-Time Kanban -->
+      <!-- ============================================================== -->
+      <section class="slide" data-title="Zakaria's Real-Time Kanban">
+        <div class="eyebrow"><span class="eyebrow-dot"></span> Collaborative Project Management</div>
+        <h1 class="title">Zakaria's Real-Time Jira Kanban Board</h1>
+        <p class="subtitle">
+          A high-performance project board featuring Jira-style issue keys (<code>DP-101</code>), atomic sequential numbering,
+          an $O(1)$ fractional ranking drag-and-drop engine, and live desk paper stack rendering.
+        </p>
+
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">🔢 Fractional Ranking Algorithm (O(1) Writes)</span>
+              <span class="badge badge-emerald">rules.ts</span>
+            </div>
+            <div class="card-body">
+              Standard Kanban boards update every item's index in a column on move ($O(N)$ writes). DevPulse implements fractional indexing, requiring only an $O(1)$ write on the moved card:
+              <pre><code>export function rankBetween(before: number | null, after: number | null): number {
+  if (before === null && after === null) return 1;
+  if (before === null) return after! - 1;
+  if (after === null) return before! + 1;
+  return (before + after) / 2;
+}</code></pre>
+              If floating-point distance drops below <code>1e-6</code> (<code>needsRebalance</code>), the column rebalances sequentially with integers ($1, 2, 3\dots$).
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">🔒 PostgreSQL Advisory Locks on Issue Numbers</span>
+              <span class="badge badge-blue">tasks.service.ts</span>
+            </div>
+            <div class="card-body">
+              Sequential numbering per workspace (<code>PREFIX-1</code>, <code>PREFIX-2</code>) is protected against concurrent creation race conditions using transactional advisory locks:
+              <pre><code>await tx.$executeRaw`
+  SELECT pg_advisory_xact_lock(hashtext(${workspaceId}))
+`;
+const numAgg = await tx.task.aggregate({
+  where: { workspaceId },
+  _max: { number: true },
+});
+const number = (numAgg._max.number ?? 0) + 1;</code></pre>
+              Guarantees gapless, conflict-free issue keys under heavy concurrent multi-user load.
+            </div>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">📄 Dynamic Desk Paper Stacks</span>
+            </div>
+            <div class="card-body">
+              Open tasks assigned to a member (status $\neq$ <code>DONE</code>) are dynamically aggregated. Phaser draws paper sheets on the member's desk sprite:
+              <ul>
+                <li>1 sheet per open task up to 8 sheets, with random rotation jitter.</li>
+                <li>When tasks exceed 8, Phaser renders an animated metal binder clip holding the stack!</li>
+              </ul>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">⚡ Interactive In-Game Triggers</span>
+            </div>
+            <div class="card-body">
+              The board can be opened by:
+              <ul>
+                <li>Pressing <strong>E</strong> at the wall-mounted Kanban whiteboard (furniture <code>board</code>).</li>
+                <li>Pressing <strong>E</strong> at your personal desk (opens pre-filtered to "Only My Issues").</li>
+                <li>Clicking the HUD "Board" button or pressing the configurable keybind (default <code>B</code>).</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================================================== -->
+      <!-- SLIDE 10: Proximity Voice & 3D Spatial Audio -->
+      <!-- ============================================================== -->
+      <section class="slide" data-title="Proximity Voice & 3D Spatial Audio">
+        <div class="eyebrow"><span class="eyebrow-dot"></span> Real-Time Audio Engineering</div>
+        <h1 class="title">WebRTC Proximity Voice & 3D Spatial Audio</h1>
+        <p class="subtitle">
+          Peer-to-peer audio mesh utilizing the Web Audio API for HRTF directional panning, orientation-based sound rotation,
+          distance gain attenuation curves, and server-gated acoustic room isolation.
+        </p>
+
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">🎧 Web Audio API HRTF 3D Panner</span>
+              <span class="badge badge-rose">spatial.ts</span>
+            </div>
+            <div class="card-body">
+              Every peer audio stream connects to a <code>PannerNode</code> configured with <code>panningModel: 'HRTF'</code> and <code>rolloffFactor: 0</code>:
+              <ul>
+                <li>Audio coordinates are transformed by the listener's avatar facing direction (up, down, left, right).</li>
+                <li>Speakers standing to your character's right pan exclusively to your right earphone.</li>
+                <li>Audio parameters smoothly interpolate over 80 ms via <code>setTargetAtTime(val, t, 0.08)</code> to prevent audio pops.</li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">📉 Mathematical Distance Gain Curves</span>
+              <span class="badge badge-emerald">Web Audio</span>
+            </div>
+            <div class="card-body">
+              Volume is regulated by a chained <code>GainNode</code>:
+              <p><strong>Open Office (Cosine Falloff):</strong> Full volume within 1 tile (32 px); smooth cosine decay to silence at 4 tiles (128 px):</p>
+              $$\text{gain} = 0.5 \times \left(1 + \cos\left(\pi \cdot \frac{\text{dist} - 1}{3}\right)\right)$$
+              <p style="margin-top: 8px;"><strong>Meeting Rooms:</strong> All occupants hear each other across the entire room with a 30% floor at the farthest wall.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">🚪 Server-Side Acoustic Room Isolation (`talk-rule.ts`)</span>
+            <span class="badge badge-blue">Security Rule</span>
+          </div>
+          <div class="card-body">
+            <pre><code><span class="c-com">// apps/api/src/voice/talk-rule.ts: Physical acoustic separation</span>
+<span class="c-kw">export function</span> <span class="c-fn">withinEarshot</span>(a: Spot | <span class="c-kw">null</span>, b: Spot | <span class="c-kw">null</span>): <span class="c-type">boolean</span> {
+  <span class="c-kw">if</span> (!a || !b) <span class="c-kw">return false</span>;
+
+  <span class="c-com">// Acoustic isolation: People in different rooms cannot hear each other</span>
+  <span class="c-kw">if</span> ((a.room?.id ?? <span class="c-kw">null</span>) !== (b.room?.id ?? <span class="c-kw">null</span>)) <span class="c-kw">return false</span>;
+
+  <span class="c-com">// Meeting room: Whole room is audible to occupants</span>
+  <span class="c-kw">if</span> (a.room?.kind === <span class="c-str">'meeting'</span>) <span class="c-kw">return true</span>;
+
+  <span class="c-com">// Open space: Max distance is 4 tiles (128 px)</span>
+  <span class="c-kw">return</span> Math.<span class="c-fn">hypot</span>(a.x - b.x, a.y - b.y) <= EARSHOT_PX;
+}</code></pre>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================================================== -->
+      <!-- SLIDE 11: Meeting Timetable & Room Colliders -->
+      <!-- ============================================================== -->
+      <section class="slide" data-title="Meeting Timetable & Room Colliders">
+        <div class="eyebrow"><span class="eyebrow-dot"></span> Physical Space Enforcement</div>
+        <h1 class="title">Meeting Room Timetable & Physical Room Colliders</h1>
+        <p class="subtitle">
+          Meeting rooms are protected by a scheduling timetable with advisory locks. When a meeting is in session,
+          non-attendees are physically barred by arcade physics colliders and ejected from the room.
+        </p>
+
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">📅 Timetable Scheduling Rules</span>
+              <span class="badge badge-blue">booking-rules.ts</span>
+            </div>
+            <div class="card-body">
+              <ul>
+                <li>Bookings snap to 15-minute slot intervals (:00, :15, :30, :45).</li>
+                <li>Duration: minimum 15 minutes, maximum 4 hours (240 mins).</li>
+                <li>Advance booking: up to 30 days ahead; maximum 30 attendees.</li>
+                <li>Double-booking race conditions are eliminated using PostgreSQL transaction advisory locks:
+                  <code>pg_advisory_xact_lock(hashtext('booking:<workspaceId>:<roomId>'))</code>.
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">🚧 Physical Arcade Physics Barricade</span>
+              <span class="badge badge-rose">OfficeScene.ts</span>
+            </div>
+            <div class="card-body">
+              <ul>
+                <li>When a booking begins, Phaser checks if the local user is an attendee.</li>
+                <li>If not invited, an invisible Arcade physics collider activates across the door opening, making the room physically impassable.</li>
+                <li>If an unauthorized avatar is already standing inside when the meeting starts, they are automatically ejected to the office entrance spawn!</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <div class="callout callout-emerald">
+          <div class="callout-title">🔒 Multi-Layered Meeting Security</div>
+          Room privacy is enforced across all 3 layers:
+          <strong>1. Physical Layer:</strong> Phaser colliders prevent walking into the room.
+          <strong>2. Audio Layer:</strong> Server's <code>bookingAllows()</code> blocks WebRTC signaling to non-attendees.
+          <strong>3. Chat Layer:</strong> Chat messages are filtered by <code>bookingId</code> so meeting history remains strictly private to attendees.
+        </div>
+      </section>
+
+      <!-- ============================================================== -->
+      <!-- SLIDE 12: Office Chat & Speech Bubbles -->
+      <!-- ============================================================== -->
+      <section class="slide" data-title="Office Chat & Speech Bubbles">
+        <div class="eyebrow"><span class="eyebrow-dot"></span> Real-Time Messaging</div>
+        <h1 class="title">Office & Room Chat with In-Game Speech Bubbles</h1>
+        <p class="subtitle">
+          Dual-channel real-time messaging supporting office-wide chatter, room-scoped discussions,
+          and floating cartoon speech bubbles rendered directly above character avatars.
+        </p>
+
+        <div class="grid-3">
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">🏢 Office Channel</span>
+              <span class="badge badge-blue">Broadcast</span>
+            </div>
+            <div class="card-body">
+              Broadcasts to all connected members of the workspace. Persisted in PostgreSQL <code>ChatMessage</code> table with 50-message paginated scrollback.
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">🚪 Room Channels</span>
+              <span class="badge badge-emerald">Scoped</span>
+            </div>
+            <div class="card-body">
+              Scoped strictly to players currently inside a specific meeting room or chill lounge. Entering a room automatically opens its channel tab; exiting closes it.
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">💬 Speech Bubbles</span>
+              <span class="badge badge-purple">Avatar.ts</span>
+            </div>
+            <div class="card-body">
+              Messages trigger <code>Avatar.say(text)</code>. Renders a wrapped speech bubble above the character that follows movement, displays for $4.5\text{s} + 40\text{ms/char}$, and fades out smoothly.
+            </div>
+          </div>
+        </div>
+
+        <pre><code><span class="c-com">// apps/api/src/chat/chat.service.ts: Strict message validation & anti-spam</span>
+<span class="c-kw">export function</span> <span class="c-fn">validateMessage</span>(text: string): string {
+  <span class="c-kw">const</span> trimmed = text.<span class="c-fn">trim</span>();
+  <span class="c-kw">if</span> (trimmed.length < 1) <span class="c-kw">throw new</span> <span class="c-type">FormError</span>(<span class="c-str">'EMPTY_MESSAGE'</span>, <span class="c-str">'Message cannot be empty.'</span>);
+  <span class="c-kw">if</span> (trimmed.length > 500) <span class="c-kw">throw new</span> <span class="c-type">FormError</span>(<span class="c-str">'MESSAGE_TOO_LONG'</span>, <span class="c-str">'Message max length is 500 characters.'</span>);
+  <span class="c-kw">return</span> trimmed;
+}
+<span class="c-com">// Rate limiting: Max 5 messages per 5 seconds per person (TOO_FAST)</span></code></pre>
+      </section>
+
+      <!-- ============================================================== -->
+      <!-- SLIDE 13: Interactive Code Inspector -->
+      <!-- ============================================================== -->
+      <section class="slide" data-title="Interactive Code Inspector">
+        <div class="eyebrow"><span class="eyebrow-dot"></span> Line-by-Line Technical Reference</div>
+        <h1 class="title">Interactive Codebase Inspector</h1>
+        <p class="subtitle">
+          Direct excerpts from critical subsystems in the repository demonstrating architectural patterns, cryptographic
+          primitives, and game loop protocols.
+        </p>
+
+        <div class="tab-bar">
+          <button class="tab-btn active" onclick="switchTab('tab-scrypt')">Scrypt Password</button>
+          <button class="tab-btn" onclick="switchTab('tab-tokens')">Token Rotation</button>
+          <button class="tab-btn" onclick="switchTab('tab-kanban')">Fractional Ranking</button>
+          <button class="tab-btn" onclick="switchTab('tab-spatial')">Spatial Audio Panner</button>
+          <button class="tab-btn" onclick="switchTab('tab-speed')">Speed Clamping</button>
+        </div>
+
+        <div id="tab-scrypt" class="tab-pane active">
+          <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 8px;">
+            File: <code>apps/api/src/auth/crypto/password.ts</code> — Memory-hard salted password hashing
+          </p>
+          <pre><code><span class="c-kw">const</span> N = 32768, R = 8, P = 1, KEY_LENGTH = 64;
+<span class="c-kw">const</span> MAX_MEMORY = 128 * N * R * 2; <span class="c-com">// 64 MB</span>
+
+<span class="c-kw">export async function</span> <span class="c-fn">hashPassword</span>(password: string): Promise&lt;string&gt; {
+  <span class="c-kw">const</span> salt = <span class="c-fn">randomBytes</span>(16);
+  <span class="c-kw">const</span> normalized = password.<span class="c-fn">normalize</span>(<span class="c-str">'NFKC'</span>);
+  <span class="c-kw">const</span> hash = <span class="c-kw">await</span> <span class="c-fn">scryptAsync</span>(normalized, salt, KEY_LENGTH, {
+    cost: N, blockSize: R, parallelization: P, maxmem: MAX_MEMORY,
+  });
+  <span class="c-kw">return</span> [<span class="c-str">'scrypt'</span>, N, R, P, salt.<span class="c-fn">toString</span>(<span class="c-str">'base64'</span>), hash.<span class="c-fn">toString</span>(<span class="c-str">'base64'</span>)].<span class="c-fn">join</span>(<span class="c-str">'$'</span>);
+}</code></pre>
+        </div>
+
+        <div id="tab-tokens" class="tab-pane">
+          <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 8px;">
+            File: <code>apps/api/src/auth/tokens.service.ts</code> — Atomic refresh token rotation & reuse theft detection
+          </p>
+          <pre><code><span class="c-com">// Grace window: 30 seconds for concurrent tab refreshes</span>
+<span class="c-kw">if</span> (row.revokedAt) {
+  <span class="c-kw">const</span> elapsed = Date.<span class="c-fn">now</span>() - row.revokedAt.<span class="c-fn">getTime</span>();
+  <span class="c-kw">if</span> (elapsed &lt; REUSE_GRACE_MS) <span class="c-kw">throw new</span> <span class="c-type">UnauthorizedException</span>(<span class="c-str">'REFRESH_TOKEN_REUSED'</span>);
+
+  <span class="c-com">// Past 30s = Token Theft Detected! Revoke entire device family:</span>
+  <span class="c-kw">await this</span>.<span class="c-fn">revokeSession</span>(row.userId, row.familyId, <span class="c-str">'security_alert'</span>);
+  <span class="c-kw">throw new</span> <span class="c-type">UnauthorizedException</span>(<span class="c-str">'SECURITY_ALERT'</span>);
+}</code></pre>
+        </div>
+
+        <div id="tab-kanban" class="tab-pane">
+          <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 8px;">
+            File: <code>apps/api/src/tasks/rules.ts</code> — Fractional ranking calculation
+          </p>
+          <pre><code><span class="c-kw">export const</span> RANK_GAP_MIN = 1e-6;
+
+<span class="c-kw">export function</span> <span class="c-fn">rankBetween</span>(before: number | <span class="c-kw">null</span>, after: number | <span class="c-kw">null</span>): number {
+  <span class="c-kw">if</span> (before === <span class="c-kw">null</span> && after === <span class="c-kw">null</span>) <span class="c-kw">return</span> 1;
+  <span class="c-kw">if</span> (before === <span class="c-kw">null</span>) <span class="c-kw">return</span> after! - 1;
+  <span class="c-kw">if</span> (after === <span class="c-kw">null</span>) <span class="c-kw">return</span> before! + 1;
+  <span class="c-kw">return</span> (before + after) / 2;
+}
+
+<span class="c-kw">export function</span> <span class="c-fn">needsRebalance</span>(a: number, b: number): boolean {
+  <span class="c-kw">return</span> Math.<span class="c-fn">abs</span>(a - b) &lt; RANK_GAP_MIN;
+}</code></pre>
+        </div>
+
+        <div id="tab-spatial" class="tab-pane">
+          <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 8px;">
+            File: <code>apps/web/features/voice/spatial.ts</code> — Web Audio HRTF directional offset transformation
+          </p>
+          <pre><code><span class="c-kw">export function</span> <span class="c-fn">listenerRelativeOffset</span>(dx: number, dy: number, dir: Direction): [number, number] {
+  <span class="c-kw">switch</span> (dir) {
+    <span class="c-kw">case</span> <span class="c-str">'right'</span>: <span class="c-kw">return</span> [dy, -dx];
+    <span class="c-kw">case</span> <span class="c-str">'left'</span>:  <span class="c-kw">return</span> [-dy, dx];
+    <span class="c-kw">case</span> <span class="c-str">'down'</span>:  <span class="c-kw">return</span> [-dx, -dy];
+    <span class="c-kw">case</span> <span class="c-str">'up'</span>:
+    <span class="c-kw">default</span>:       <span class="c-kw">return</span> [dx, dy];
+  }
+}</code></pre>
+        </div>
+
+        <div id="tab-speed" class="tab-pane">
+          <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 8px;">
+            File: <code>apps/api/src/office/rules.ts</code> — Server-side speed-hacking prevention and position clamping
+          </p>
+          <pre><code><span class="c-kw">const</span> WALK_SPEED = 170; <span class="c-com">// px per second</span>
+<span class="c-kw">const</span> TILE = 32;
+
+<span class="c-kw">const</span> max = 1.6 * WALK_SPEED * seconds + TILE;
+<span class="c-kw">if</span> (distance &gt; max) {
+  <span class="c-kw">const</span> k = max / distance;
+  <span class="c-kw">return</span> {
+    x: Math.<span class="c-fn">round</span>(from.x + dx * k),
+    y: Math.<span class="c-fn">round</span>(from.y + dy * k),
+  };
+}</code></pre>
+        </div>
+      </section>
+
+      <!-- ============================================================== -->
+      <!-- SLIDE 14: Peer Evaluation Day Master Checklist -->
+      <!-- ============================================================== -->
+      <section class="slide" data-title="Peer Evaluation Day Master Checklist">
+        <div class="eyebrow"><span class="eyebrow-dot"></span> Peer Evaluation Playbook</div>
+        <h1 class="title">Evaluation Day Master Defense Checklist</h1>
+        <p class="subtitle">
+          Follow this exact step-by-step sequence during your 42 peer evaluation to guarantee a 100% flawless score.
+        </p>
+
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">📋 Evaluation Walkthrough Script</span>
+              <span class="badge badge-emerald">Sequence</span>
+            </div>
+            <div class="card-body">
+              <ol style="padding-left: 20px; line-height: 1.8;">
+                <li><strong>Clone & Launch:</strong> Run <code>make</code> on a clean machine. Show all 4 containers boot healthy in &lt; 20 seconds.</li>
+                <li><strong>HTTPS Check:</strong> Open <code>https://localhost:8443</code>. Demonstrate zero CORS errors and valid SSL termination.</li>
+                <li><strong>Console Audit:</strong> Open Google Chrome DevTools. Prove zero red console errors.</li>
+                <li><strong>Multi-User Demonstration:</strong> Open 2 browser windows (1 standard, 1 incognito). Show live avatar movement sync and seated snapping.</li>
+                <li><strong>Proximity Voice:</strong> Walk avatars close together; hear spatial audio pan based on avatar orientation. Walk into a meeting room to show sound enclosure.</li>
+                <li><strong>Kanban Drag & Drop:</strong> Create task <code>DP-1</code>, drag from To Do $\to$ In Progress; show live card move on the second browser.</li>
+                <li><strong>Security & 2FA:</strong> Demonstrate TOTP QR code scan and device eviction via session takeover.</li>
+              </ol>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">🛡️ Answers to Common Evaluator Traps</span>
+              <span class="badge badge-rose">Defense</span>
+            </div>
+            <div class="card-body">
+              <p><strong>Q: "Why didn't you use microservices?"</strong><br>
+              <em>A: "We prioritized engineering pragmatism. Microservices add network latency, distributed transaction failures, and container overhead. Our modular monolith preserves strict domain separation while booting in seconds and avoiding memory exhaustion."</em></p>
+              <p style="margin-top: 10px;"><strong>Q: "Where are your Privacy Policy and Terms?"</strong><br>
+              <em>A: "Linked in the footer at <code>/privacy</code> and <code>/terms</code> with genuine GDPR disclosures and cookie audits."</em></p>
+              <p style="margin-top: 10px;"><strong>Q: "Can I try making a live code change?"</strong><br>
+              <em>A: "Yes! Let's add a field right now in <code>schema.prisma</code>, run <code>make db</code>, and show it working in under 3 minutes."</em></p>
+            </div>
+          </div>
+        </div>
+
+        <div class="callout callout-emerald" style="text-align: center; font-size: 1.05rem; font-weight: 700;">
+          🎉 You are 100% prepared to pass ft_transcendence with full honors!
+        </div>
+      </section>
+
+    </div>
+
+    <!-- Keyboard Shortcuts Indicator -->
+    <div class="shortcuts-bar">
+      <span>Navigate: <kbd>←</kbd> <kbd>→</kbd> or <kbd>Space</kbd></span>
+      <span>Fullscreen: <kbd>F</kbd></span>
+    </div>
+  </main>
+
+  <script>
+    const slides = document.querySelectorAll('.slide');
+    const navItems = document.querySelectorAll('.nav-item');
+    const slideStep = document.getElementById('slideStep');
+    const slideBreadcrumb = document.getElementById('slideBreadcrumb');
+    const viewport = document.getElementById('viewport');
+    let currentIndex = 0;
+
+    function updateSlide() {
+      slides.forEach((s, idx) => {
+        s.classList.toggle('active', idx === currentIndex);
+      });
+      navItems.forEach((n, idx) => {
+        n.classList.toggle('active', idx === currentIndex);
+      });
+
+      const currentSlide = slides[currentIndex];
+      const title = currentSlide.getAttribute('data-title') || 'Overview';
+      slideStep.textContent = `SLIDE ${String(currentIndex + 1).padStart(2, '0')} / ${String(slides.length).padStart(2, '0')}`;
+      slideBreadcrumb.textContent = title;
+      viewport.scrollTop = 0;
+    }
+
+    function goToSlide(index) {
+      if (index >= 0 && index < slides.length) {
+        currentIndex = index;
+        updateSlide();
+      }
+    }
+
+    function nextSlide() {
+      if (currentIndex < slides.length - 1) {
+        currentIndex++;
+        updateSlide();
+      }
+    }
+
+    function prevSlide() {
+      if (currentIndex > 0) {
+        currentIndex--;
+        updateSlide();
+      }
+    }
+
+    function toggleFullscreen() {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(() => {});
+      } else {
+        document.exitFullscreen().catch(() => {});
+      }
+    }
+
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+      document.querySelectorAll('.tab-pane').forEach(pane => pane.classList.remove('active'));
+      event.target.classList.add('active');
+      const targetPane = document.getElementById(tabId);
+      if (targetPane) targetPane.classList.add('active');
+    }
+
+    function filterSlides() {
+      const q = document.getElementById('navFilter').value.toLowerCase();
+      navItems.forEach(item => {
+        const text = item.textContent.toLowerCase();
+        item.style.display = text.includes(q) ? 'flex' : 'none';
+      });
+    }
+
+    document.addEventListener('keydown', (e) => {
+      if (e.target.tagName === 'INPUT') return;
+      if (e.key === 'ArrowRight' || e.key === 'Space') {
+        e.preventDefault();
+        nextSlide();
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        prevSlide();
+      } else if (e.key === 'f' || e.key === 'F') {
+        toggleFullscreen();
+      }
+    });
+  </script>
+</body>
+</html>
