@@ -49,3 +49,11 @@ export type Random = ReturnType<typeof seededRandom>;
 export function pick<T>(random: Random, items: readonly T[]): T {
   return items[Math.floor(random() * items.length)];
 }
+
+/** Picks a value with a probability proportional to its weight. */
+export function weighted<T>(random: Random, entries: readonly (readonly [T, number])[]): T {
+  const total = entries.reduce((sum, [, w]) => sum + w, 0);
+  let roll = random() * total;
+  for (const [value, w] of entries) if ((roll -= w) < 0) return value;
+  return entries[entries.length - 1][0];
+}

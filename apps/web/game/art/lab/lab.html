@@ -1,0 +1,270 @@
+<title>Dev Pulse Art Lab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gabarito:wght@500;700;800&family=Atkinson+Hyperlegible:wght@400;700&family=JetBrains+Mono:wght@500;700&display=swap">
+<!--
+  The art lab. Build it from the repo root:
+    npx esbuild apps/web/game/art/lab/entry.ts --bundle --minify --outfile=lab.js
+  then paste lab.js into the <script id="lab"> tag below (or serve both files).
+-->
+<style>
+  /* Layout: a workbench page. The live office is the diorama on top; studio, lineup and palette are the trays under it. */
+  :root {
+    --bg: #eef0ec;
+    --panel: #f8f9f6;
+    --ink: #1c2420;
+    --muted: #59645e;
+    --line: #d4dad5;
+    --hover: #e3e9e4;
+    --accent: #13805a;
+    --accent-soft: #d5efe3;
+    --stage: #dcd6cc;
+    --display: "Gabarito", "Trebuchet MS", system-ui, sans-serif;
+    --body: "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+    --radius: 14px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #121715; --panel: #19201d; --ink: #e5ebe7; --muted: #99a59f; --line: #2a3430;
+      --hover: #222b27; --accent: #3fd39b; --accent-soft: #173a2d; --stage: #0d1110; color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #121715; --panel: #19201d; --ink: #e5ebe7; --muted: #99a59f; --line: #2a3430;
+    --hover: #222b27; --accent: #3fd39b; --accent-soft: #173a2d; --stage: #0d1110; color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+  body { background: var(--bg); color: var(--ink); font: 16px/1.55 var(--body); }
+  .page { max-width: 1180px; margin: 0 auto; padding-inline: clamp(16px, 4vw, 40px); padding-block: 28px 64px; display: grid; gap: 56px; }
+  h1, h2, h3 { font-family: var(--display); line-height: 1.08; text-wrap: balance; margin: 0; }
+  h1 { font-size: clamp(2.1rem, 5vw, 3.4rem); font-weight: 800; letter-spacing: -0.02em; }
+  h2 { font-size: clamp(1.5rem, 3vw, 2rem); font-weight: 700; letter-spacing: -0.01em; }
+  h3 { font-size: 1.05rem; font-weight: 700; }
+  p { margin: 0; max-width: 66ch; }
+  .muted { color: var(--muted); }
+  .eyebrow { font: 700 0.72rem/1 var(--mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); }
+  .section-head { display: grid; gap: 10px; }
+  button, select, input { font: inherit; color: inherit; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* Hero + office */
+  header { display: grid; gap: 14px; }
+  header p { font-size: 1.08rem; }
+  .stage { background: var(--stage); border-radius: 18px; padding: clamp(8px, 1.5vw, 14px); display: grid; gap: 12px; }
+  #office { width: 100%; display: block; border-radius: 10px; touch-action: manipulation; }
+  .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; padding: 4px 6px 2px; }
+  .clock { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  #clock { font: 700 1.7rem/1 var(--mono); font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+  #sky { width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--line); flex: none; }
+  #phase { font-size: 0.85rem; color: var(--muted); min-width: 7.5em; }
+  .scrub { flex: 1 1 260px; display: grid; gap: 4px; min-width: 0; }
+  .scrub input { width: 100%; accent-color: var(--accent); }
+  .ticks { display: flex; justify-content: space-between; font: 500 0.7rem/1 var(--mono); color: var(--muted); }
+  .quick { display: flex; flex-wrap: wrap; gap: 6px; }
+  .btn { border: 1px solid var(--line); background: var(--panel); border-radius: 999px; padding: 6px 14px; cursor: pointer; font-size: 0.88rem; }
+  .btn:hover { background: var(--hover); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--panel); font-weight: 700; }
+  .btn.primary:hover { filter: brightness(1.08); }
+  .small { font-size: 0.82rem; padding: 4px 10px; }
+  select { border: 1px solid var(--line); background: var(--panel); border-radius: 999px; padding: 6px 12px; }
+  .check { display: inline-flex; align-items: center; gap: 6px; font-size: 0.88rem; cursor: pointer; }
+  .check input { accent-color: var(--accent); }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 0.82rem; color: var(--muted); padding: 0 6px 4px; }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: 1px; }
+
+  /* Studio */
+  .studio { display: grid; grid-template-columns: minmax(260px, 340px) minmax(0, 1fr); gap: 24px; align-items: start; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; display: grid; gap: 12px; min-width: 0; }
+  #turntable { width: 100%; height: 300px; display: block; border-radius: 10px; background: radial-gradient(ellipse at 50% 85%, var(--hover), transparent 70%); }
+  #dirs { width: 100%; height: 86px; display: block; }
+  #desk { width: 100%; height: 230px; display: block; border-radius: 10px; }
+  .dna { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  #dna { font: 700 0.98rem/1.2 var(--mono); letter-spacing: 0.04em; background: var(--accent-soft); color: var(--ink); padding: 6px 10px; border-radius: 8px; overflow-wrap: anywhere; user-select: all; }
+  #copy-note, #paste-note { font-size: 0.8rem; color: var(--muted); }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  label.inline { display: grid; gap: 4px; font-size: 0.82rem; color: var(--muted); }
+  #paste { width: 100%; border: 1px solid var(--line); background: var(--bg); border-radius: 8px; padding: 7px 10px; font-family: var(--mono); font-size: 0.88rem; }
+  #wear { width: 100%; accent-color: var(--accent); }
+  #source { font-size: 0.82rem; color: var(--muted); }
+  #parts { display: grid; gap: 14px; }
+  .group { border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 16px 16px; margin: 0; display: grid; gap: 12px; background: var(--panel); min-width: 0; }
+  .group legend { font: 700 0.95rem var(--display); padding: 0 6px; }
+  .field { display: grid; grid-template-columns: 7.5rem minmax(0, 1fr); gap: 10px; align-items: start; }
+  .field-name { font-size: 0.82rem; color: var(--muted); padding-top: 5px; text-transform: capitalize; }
+  .options { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { border: 1px solid var(--line); background: var(--bg); border-radius: 999px; padding: 3px 11px; font-size: 0.84rem; cursor: pointer; }
+  .chip:hover:not(:disabled) { background: var(--hover); }
+  .chip.on { background: var(--ink); color: var(--panel); border-color: var(--ink); }
+  .chip:disabled { opacity: 0.4; cursor: not-allowed; }
+  .swatch { width: 26px; height: 26px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; background: linear-gradient(135deg, var(--c) 55%, var(--d) 56%); box-shadow: inset 0 0 0 1px rgba(0,0,0,0.12); }
+  .swatch.on { border-color: var(--ink); box-shadow: 0 0 0 2px var(--panel) inset; }
+
+  /* Lineup */
+  .toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  #lineup { width: 100%; display: block; cursor: pointer; }
+  .stats { display: flex; flex-wrap: wrap; gap: 8px 28px; font-size: 0.9rem; color: var(--muted); }
+  .stats b { font: 700 1.25rem var(--mono); color: var(--ink); font-variant-numeric: tabular-nums; margin-right: 6px; }
+
+  /* Palette */
+  #ramps { display: grid; gap: 14px; }
+  .ramp-row { display: grid; grid-template-columns: 6rem minmax(0, 1fr); gap: 12px; align-items: center; }
+  .ramp-title { font-size: 0.85rem; color: var(--muted); }
+  .ramp-list { display: flex; flex-wrap: wrap; gap: 5px; }
+  .ramp { display: grid; grid-template-rows: repeat(5, 9px); width: 26px; border-radius: 6px; overflow: hidden; box-shadow: 0 0 0 1px var(--line); }
+  .compare { display: grid; grid-template-columns: 9rem minmax(0, 1fr); gap: 12px; align-items: stretch; }
+  .compare-labels { display: grid; grid-template-rows: 1fr 1fr; font-size: 0.85rem; }
+  .compare-labels span { display: flex; align-items: center; }
+  #compare { width: 100%; height: 260px; display: block; border-radius: 10px; }
+  .rules { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+  .rules .card p { font-size: 0.93rem; }
+  code { font-family: var(--mono); font-size: 0.86em; background: var(--hover); padding: 1px 5px; border-radius: 5px; }
+  .files { font: 500 0.85rem/1.8 var(--mono); margin: 0; padding: 0; list-style: none; columns: 2 260px; }
+  .files span { color: var(--muted); font-family: var(--body); }
+
+  @media (max-width: 760px) {
+    .studio { grid-template-columns: minmax(0, 1fr); }
+    .field { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+    .compare { grid-template-columns: minmax(0, 1fr); }
+    .compare-labels { grid-template-rows: none; grid-auto-flow: column; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+</style>
+
+<main class="page">
+  <header>
+    <span class="eyebrow">Dev Pulse · procedural art</span>
+    <h1>Art Lab</h1>
+    <p class="muted">Every character, desk and colour below is generated by code from a short recipe, using the game's own floor, wall and furniture drawing. Watch a day at the office, then open anyone in the studio and change them.</p>
+  </header>
+
+  <section class="stage" aria-label="A day at the office">
+    <canvas id="office" role="img" aria-label="Live view of the office: people working, meeting and taking breaks while the light changes through the day"></canvas>
+    <div class="controls">
+      <div class="clock"><span id="sky" aria-hidden="true"></span><span id="clock">10:30</span><span id="phase">Late morning</span></div>
+      <div class="scrub">
+        <label for="hour" class="muted" style="font-size:.78rem">Time of day</label>
+        <input id="hour" type="range" min="0" max="23.99" step="0.05" value="10.5">
+        <div class="ticks" aria-hidden="true"><span>00</span><span>06</span><span>12</span><span>18</span><span>24</span></div>
+      </div>
+      <div class="quick" aria-label="Jump to">
+        <button class="btn small" type="button" data-hour="8.6">08:36</button>
+        <button class="btn small" type="button" data-hour="12.5">12:30</button>
+        <button class="btn small" type="button" data-hour="18.8">18:48</button>
+        <button class="btn small" type="button" data-hour="22.3">22:18</button>
+      </div>
+      <div class="row">
+        <button class="btn primary" id="play" type="button" aria-pressed="true">Pause</button>
+        <label class="sr" for="speed" hidden>Speed</label>
+        <select id="speed" aria-label="Speed">
+          <option value="0.08">Slow day</option>
+          <option value="0.25" selected>One hour in 4 s</option>
+          <option value="1">One hour per second</option>
+        </select>
+        <select id="template" aria-label="Office"></select>
+        <label class="check"><input type="checkbox" id="radius" checked> Voice range</label>
+      </div>
+    </div>
+    <div class="legend">
+      <span><i class="dot" style="background:#34d399"></i>In a call: near someone, or in a meeting room. Rings show who's talking</span>
+      <span><i class="dot" style="background:#fbbf24"></i>Focusing at their desk: muted, so neighbours don't hear them</span>
+      <span><i class="dot" style="background:#a1a1aa"></i>Walking or on a break</span>
+      <span>Click anyone to open them in the studio. "You" sits at desk 1.</span>
+    </div>
+  </section>
+
+  <section id="studio" class="section-head" aria-labelledby="studio-title">
+    <span class="eyebrow">Character studio</span>
+    <h2 id="studio-title">One recipe, every view</h2>
+    <p class="muted">A character is 18 choices. The code below is what the game would store in <code>WorkspaceMember.character</code>, next to the old names like <code>maya</code>.</p>
+  </section>
+  <div class="studio">
+    <div class="card">
+      <canvas id="turntable" role="img" aria-label="The studio character, turning and walking"></canvas>
+      <canvas id="dirs" role="img" aria-label="The studio character facing down, right, up and left"></canvas>
+      <div class="dna"><span id="dna">1</span><button class="btn small" id="copy" type="button">Copy code</button><span id="copy-note" aria-live="polite"></span></div>
+      <span id="source"></span>
+      <div class="row">
+        <button class="btn primary" id="randomize" type="button">Random</button>
+        <button class="btn" id="mutate" type="button">Change a little</button>
+      </div>
+      <label class="inline" for="paste">Paste a code or a name (maya, sam, noor…)
+        <input id="paste" type="text" autocomplete="off" spellcheck="false" placeholder="1a03k…">
+      </label>
+      <span id="paste-note" aria-live="polite"></span>
+      <div class="row">
+        <label class="inline" for="mood">Mood
+          <select id="mood"><option value="neutral">Neutral</option><option value="happy">Happy</option><option value="focus">Focused</option><option value="sleepy">Sleepy</option></select>
+        </label>
+      </div>
+      <div class="row">
+        <label class="check"><input type="checkbox" id="t-walk"> Walk</label>
+        <label class="check"><input type="checkbox" id="t-headset"> In a call</label>
+        <label class="check"><input type="checkbox" id="t-talking"> Talking</label>
+        <label class="check"><input type="checkbox" id="t-mug"> Coffee</label>
+      </div>
+      <h3>Their desk</h3>
+      <canvas id="desk" role="img" aria-label="The desk this character would decorate"></canvas>
+      <label class="inline" for="wear">Time at the desk: morning → end of day
+        <input id="wear" type="range" min="0" max="1" step="0.01" value="0.4">
+      </label>
+    </div>
+    <div id="parts"></div>
+  </div>
+
+  <section class="section-head" aria-labelledby="lineup-title">
+    <span class="eyebrow">Lineup</span>
+    <h2 id="lineup-title">The oatmeal test</h2>
+    <p class="muted">Kate Compton's warning: 10,000 different bowls of oatmeal still look like oatmeal. Variety has to land on what you notice at 30 pixels, which is hair shape, the top's colour and the accessories. If any two people in this grid read as the same person, the generator needs work.</p>
+  </section>
+  <div class="card">
+    <div class="toolbar">
+      <button class="btn primary" id="shuffle" type="button">Shuffle</button>
+      <button class="btn" id="variations" type="button">Variations of the studio character</button>
+      <button class="btn" id="breed" type="button">Children with…</button>
+      <span id="lineup-note" class="muted" aria-live="polite"></span>
+    </div>
+    <canvas id="lineup" role="img" aria-label="A grid of generated characters"></canvas>
+    <div class="stats"><span><b id="fields">18</b>choices per character</span><span><b id="combos">1.9 trillion</b>possible recipes</span><span><b>3</b>harmony rules on every random pick</span></div>
+  </div>
+
+  <section class="section-head" aria-labelledby="palette-title">
+    <span class="eyebrow">Palette</span>
+    <h2 id="palette-title">Colours that belong together</h2>
+    <p class="muted">Every material is a ramp of five tones built in OKLCH, where equal lightness looks equally light. Shadows turn cooler and highlights warmer instead of just darker and lighter, so shading glows rather than going muddy.</p>
+  </section>
+  <div class="card">
+    <div id="ramps"></div>
+  </div>
+  <div class="card compare">
+    <div class="compare-labels"><span>Today: RGB darkening</span><span><b>New: hue-shifted ramps</b></span></div>
+    <canvas id="compare" role="img" aria-label="The same characters shaded the old way and the new way"></canvas>
+  </div>
+
+  <section class="section-head" aria-labelledby="rules-title">
+    <span class="eyebrow">How it holds together</span>
+    <h2 id="rules-title">Rules the generator follows</h2>
+  </section>
+  <div class="rules">
+    <div class="card"><h3>Hair stands out from skin</h3><p>Hair and skin differ by at least 0.12 in lightness, or the head reads as one blob at game size.</p></div>
+    <div class="card"><h3>Outfits split in two</h3><p>Top and bottom differ by 0.15 in lightness, and stripes, logos and collars by 0.2 from the top, so details stay visible.</p></div>
+    <div class="card"><h3>One light, top left</h3><p>Every shape is its shadow tone with the base tone nudged up and left. People, desks and props are lit the same way.</p></div>
+    <div class="card"><h3>Hats respect silhouettes</h3><p>An afro, a mohawk or a bun never gets a hat. The hairstyle is the most recognisable shape at 30 pixels.</p></div>
+    <div class="card"><h3>Desks follow their owner</h3><p>Each desk has five anchor slots. The owner's desk vibe picks the props and their outfit colours the mug, pot and headphones. Free desks stay bare and dark.</p></div>
+    <div class="card"><h3>Headsets mean something</h3><p>Headphones move from the desk to the head when someone joins a call, so the picture shows who can hear you.</p></div>
+  </div>
+  <div class="card">
+    <h3>In the repo, under <code>apps/web/game/art/</code></h3>
+    <ul class="files">
+      <li>color.ts <span>OKLCH, hue-shifted ramps</span></li>
+      <li>palette.ts <span>every material</span></li>
+      <li>recipe.ts <span>choices, codes, rules</span></li>
+      <li>character.ts <span>layered character</span></li>
+      <li>desk.ts <span>anchors, vibes, clutter</span></li>
+      <li>pen.ts <span>Phaser, canvas, SVG</span></li>
+      <li>lab/ <span>this page</span></li>
+    </ul>
+  </div>
+</main>
+<script id="lab">/*LAB_SCRIPT*/</script>

@@ -8,6 +8,8 @@ export type WorkspaceEvent =
   | { type: 'member-removed'; workspaceId: string; userId: string }
   | { type: 'member-updated'; workspaceId: string; userId: string; character?: string; role?: string; status?: string | null }
   | { type: 'desks'; workspaceId: string; desks: DeskOwner[] }
+  /** Bookings were removed (e.g. rooms gone after a template switch): clients reload them. */
+  | { type: 'bookings'; workspaceId: string }
   | { type: 'deleted'; workspaceId: string };
 
 /** Changes the live office must know about (see OfficeGateway). */
