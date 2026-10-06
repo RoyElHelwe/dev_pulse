@@ -9,8 +9,8 @@ import { io } from 'socket.io-client';
  * It connects on the next tick: a component mounted and unmounted at once
  * (React dev mode) never opens a socket.
  */
-export function openSocket(namespace: string) {
-  const socket = io(namespace, { transports: ['websocket'], autoConnect: false });
+export function openSocket(namespace: string, auth?: (send: (data: Record<string, unknown>) => void) => void) {
+  const socket = io(namespace, { transports: ['websocket'], autoConnect: false, ...(auth && { auth }) });
   let closed = false;
   const timer = setTimeout(() => socket.connect(), 0);
   return {
