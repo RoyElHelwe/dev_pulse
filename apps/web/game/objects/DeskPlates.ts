@@ -9,6 +9,8 @@ export interface DeskOwner {
   deskId: string;
   userId: string;
   name: string;
+  /** Their character: the desk decorates itself for them. */
+  character?: string;
 }
 
 /** Name plates on the front edge of each owned desk (yours in green). */

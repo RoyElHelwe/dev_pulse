@@ -43,6 +43,9 @@ export function connectOffice(controller: () => OfficeController | null, handler
   const connection = openSocket('/office');
   const { socket } = connection;
   const people = new Map<string, Presence>();
+  // Everyone's latest state, so a game that finishes loading after the first
+  // `office:state` still starts with everybody (players who stand still send nothing more).
+  const known = new Map<string, PlayerState>();
   const publish = () => handlers.onPresence([...people.values()]);
   let retries = 0;
   let zone: string | null = null;
@@ -69,20 +72,28 @@ export function connectOffice(controller: () => OfficeController | null, handler
   window.addEventListener('online', online);
   socket.on('office:state', ({ players }: { players: PlayerState[] }) => {
     people.clear();
-    players.forEach((p) => people.set(p.id, presenceOf(p)));
+    known.clear();
+    players.forEach((p) => {
+      people.set(p.id, presenceOf(p));
+      known.set(p.id, p);
+    });
     publish();
     controller()?.setPlayers(players);
   });
   socket.on('office:joined', (p: PlayerState) => {
     people.set(p.id, presenceOf(p));
+    known.set(p.id, p);
     publish();
     controller()?.upsertPlayer(p);
   });
   socket.on('office:moved', ([id, x, y, dir, moving]: [string, number, number, number, number]) => {
+    const p = known.get(id);
+    if (p) Object.assign(p, { x, y, dir, moving: moving === 1 });
     controller()?.movePlayer(id, x, y, dir, moving === 1);
   });
   socket.on('office:left', ({ id }: { id: string }) => {
     people.delete(id);
+    known.delete(id);
     publish();
     controller()?.removePlayer(id);
   });
@@ -93,6 +104,9 @@ export function connectOffice(controller: () => OfficeController | null, handler
       return;
     }
     const person = people.get(id);
+    const state = known.get(id);
+    if (state && character) state.character = character;
+    if (state && status !== undefined) state.status = status;
     if (character) {
       if (person) person.character = character;
       controller()?.setPlayerCharacter(id, character);
@@ -105,6 +119,8 @@ export function connectOffice(controller: () => OfficeController | null, handler
   });
   socket.on('office:zone', ([id, z]: [string, string | null]) => {
     const person = people.get(id);
+    const state = known.get(id);
+    if (state) state.zone = z;
     if (person) person.zone = z;
     publish();
     controller()?.setPlayerZone(id, z);
@@ -127,6 +143,10 @@ export function connectOffice(controller: () => OfficeController | null, handler
   });
 
   return {
+    /** The live connection, for the other office features (voice, chat, meetings). */
+    socket,
+    /** Everyone else, as last heard: the game starts from this list. */
+    players: () => [...known.values()].map((p) => ({ ...p })),
     /** Called by the game ~20 times a second while walking. */
     sendMove(x: number, y: number, dir: number, moving: boolean) {
       if (socket.connected) socket.volatile.emit('move', [x, y, dir, moving ? 1 : 0]);

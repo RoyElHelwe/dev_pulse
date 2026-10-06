@@ -1,4 +1,7 @@
 import type * as Phaser from 'phaser';
+import { drawDesk } from '../art/desk';
+import { phaserPen } from '../art/pen';
+import { recipeOf } from '../art/recipe';
 import { TILE } from '../constants';
 import { itemBounds } from '../layout/derive';
 import type { Furniture } from '../layout/types';
@@ -14,9 +17,27 @@ const PAD = 4;
 /** Kinds whose drawing has random details (monitors, leaves, books...). */
 const VARIES = new Set(['desk', 'plant', 'bookshelf', 'meetingTable']);
 
-export function furnitureTextureKey(item: Furniture) {
+/** A desk looks a bit lived-in: some notes and papers, not the end-of-day mess. */
+const DESK_WEAR = 0.35;
+const OWNERS = 'deskOwners';
+
+/**
+ * Who sits at each desk (desk id → their character): desks decorate
+ * themselves for their owner (game/art/desk.ts). Kept in the game registry so
+ * the office and the editor draw the same desks.
+ */
+export function setDeskOwners(scene: Phaser.Scene, owners: Map<string, string>) {
+  scene.registry.set(OWNERS, owners);
+}
+
+function deskOwner(scene: Phaser.Scene, item: Furniture) {
+  if (item.kind !== 'desk') return undefined;
+  return (scene.registry.get(OWNERS) as Map<string, string> | undefined)?.get(item.id);
+}
+
+export function furnitureTextureKey(item: Furniture, owner?: string) {
   const seed = VARIES.has(item.kind) ? item.id : '';
-  return `furniture:${item.kind}:${item.w}:${item.h}:${item.color ?? ''}:${seed}`;
+  return `furniture:${item.kind}:${item.w}:${item.h}:${item.color ?? ''}:${seed}:${owner ?? ''}`;
 }
 
 /** Texture pixels per world pixel: sharp at the default zoom on retina screens. */
@@ -25,12 +46,14 @@ export function textureScale(dpr: number) {
 }
 
 export function ensureFurnitureTexture(scene: Phaser.Scene, item: Furniture, scale: number) {
-  const key = furnitureTextureKey(item);
+  const owner = deskOwner(scene, item);
+  const key = furnitureTextureKey(item, owner);
   if (scene.textures.exists(key)) return key;
   const w = item.w * TILE;
   const h = item.h * TILE;
   const g = scene.make.graphics({}, false);
-  FURNITURE[item.kind].draw(g, w, h, seededRandom(item.id), item.color);
+  if (item.kind === 'desk') drawDesk(phaserPen(g), w, h, { seed: item.id, owner: owner ? recipeOf(owner) : null, wear: DESK_WEAR });
+  else FURNITURE[item.kind].draw(g, w, h, seededRandom(item.id), item.color);
   const texture = scene.textures.addDynamicTexture(key, Math.ceil((w + PAD * 2) * scale), Math.ceil((h + PAD * 2) * scale))!;
   g.setScale(scale).setPosition((w / 2 + PAD) * scale, (h / 2 + PAD) * scale);
   texture.draw(g);

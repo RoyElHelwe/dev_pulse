@@ -11,6 +11,8 @@ export interface DeskOwner {
   deskId: string;
   userId: string;
   name: string;
+  /** Their character: desks decorate themselves for their owner. */
+  character: string;
 }
 
 /**
@@ -33,7 +35,7 @@ export class DesksService {
       where: { workspaceId, deskId: { not: null } },
       include: { user: { select: { displayName: true } } },
     });
-    return members.map((m) => ({ deskId: m.deskId!, userId: m.userId, name: m.user.displayName }));
+    return members.map((m) => ({ deskId: m.deskId!, userId: m.userId, name: m.user.displayName, character: m.character }));
   }
 
   /** Gives every member a desk that exists (call after joins, removals and layout changes). */

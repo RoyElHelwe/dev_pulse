@@ -9,10 +9,9 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { TextField } from '@/components/ui/TextField';
 import { useAuth } from '@/features/auth/AuthProvider';
-import { CharacterPreview } from '@/features/workspace/CharacterPreview';
+import { CharacterGrid } from '@/features/workspace/CharacterGrid';
 import { LayoutPreview } from '@/features/workspace/LayoutPreview';
 import type { OfficeLayout } from '@/game/layout/types';
-import { LOOK_KEYS, type LookKey } from '@/game/objects/looks';
 import { api, ApiError } from '@/lib/api';
 import { cn } from '@/lib/cn';
 
@@ -27,13 +26,15 @@ interface Template {
   layout: OfficeLayout;
 }
 
+const GENERATED = 'generated';
 const STEPS = ['Name', 'Team', 'Office', 'You'] as const;
+// Picking a range makes the office for its biggest team; the exact number makes it fit.
 const TEAM_SIZES = [
-  { label: 'Just me', size: 1 },
-  { label: '2–8', size: 6 },
-  { label: '9–24', size: 16 },
-  { label: '25–48', size: 36 },
-  { label: '49–100', size: 72 },
+  { label: 'Just me', min: 1, max: 1 },
+  { label: '2–8', min: 2, max: 8 },
+  { label: '9–24', min: 9, max: 24 },
+  { label: '25–48', min: 25, max: 48 },
+  { label: '49–100', min: 49, max: 100 },
 ];
 const NOTICES: Record<string, string> = {
   removed: 'You were removed from your office. Create a new one or wait for an invitation.',
@@ -56,22 +57,35 @@ export function OnboardingWizard() {
   const [name, setName] = useState('');
   const [nameError, setNameError] = useState('');
   const [teamSize, setTeamSize] = useState<number | null>(null);
+  const [exactSize, setExactSize] = useState('');
   const [templates, setTemplates] = useState<Template[]>([]);
   const [templateId, setTemplateId] = useState<string | null>(null);
-  const [character, setCharacter] = useState<LookKey>('maya');
+  const [character, setCharacter] = useState('maya');
   const [error, setError] = useState('');
   const [creating, setCreating] = useState(false);
 
+  // The previews, with the generated office made for this team (its look comes from the name).
+  const previewQuery =
+    step >= 1 && teamSize !== null
+      ? `team=${teamSize}&seed=${encodeURIComponent(name.trim())}`
+      : null;
   useEffect(() => {
-    api<Template[]>('/office/templates').then(setTemplates, () =>
-      setError('Could not load the office templates.'),
+    if (!previewQuery) return;
+    let live = true;
+    api<Template[]>(`/office/templates?${previewQuery}`).then(
+      (list) => live && setTemplates(list),
+      () => live && setError('Could not load the office templates.'),
     );
-  }, []);
+    return () => {
+      live = false;
+    };
+  }, [previewQuery]);
 
-  // The template that fits the team best.
+  // The office made for the team, else the template that fits it best.
   const recommended = useMemo(() => {
     if (teamSize === null) return null;
     return (
+      templates.find((t) => t.id === GENERATED) ??
       templates.find(
         (t) => teamSize >= t.minTeam && teamSize <= t.maxTeam && teamSize <= t.maxTeam / 1.5,
       ) ??
@@ -79,6 +93,11 @@ export function OnboardingWizard() {
       templates[templates.length - 1]
     );
   }, [teamSize, templates]);
+
+  function pickTeamSize(size: number) {
+    setTeamSize(size);
+    setTemplateId(null);
+  }
 
   function next() {
     setError('');
@@ -88,7 +107,7 @@ export function OnboardingWizard() {
       setNameError('');
     }
     if (step === 1 && teamSize === null) return setError('Pick the size of your team.');
-    if (step === 1 && !templateId) setTemplateId(recommended?.id ?? null);
+    if (step === 1 && !templateId) setTemplateId(recommended?.id ?? GENERATED);
     if (step === 2 && !templateId) return setError('Pick an office.');
     setStep(step + 1);
   }
@@ -97,7 +116,14 @@ export function OnboardingWizard() {
     setCreating(true);
     setError('');
     try {
-      await api('/workspace', { body: { name: name.trim(), templateId, character } });
+      await api('/workspace', {
+        body: {
+          name: name.trim(),
+          templateId,
+          character,
+          ...(templateId === GENERATED && { teamSize }),
+        },
+      });
       await reloadUser();
       router.replace('/office');
     } catch (err) {
@@ -213,35 +239,48 @@ export function OnboardingWizard() {
               role="radiogroup"
               aria-label="Team size"
             >
-              {TEAM_SIZES.map((t) => (
-                <button
-                  key={t.label}
-                  type="button"
-                  role="radio"
-                  aria-checked={teamSize === t.size}
-                  onClick={() => {
-                    setTeamSize(t.size);
-                    setTemplateId(null);
-                  }}
-                  className={cn(
-                    'rounded-2xl px-4 py-5 text-center ring-1 transition',
-                    teamSize === t.size
-                      ? 'bg-zinc-900 text-white ring-zinc-900'
-                      : 'bg-white ring-zinc-200 hover:ring-zinc-400',
-                  )}
-                >
-                  <span className="block text-lg font-semibold">{t.label}</span>
-                  <span
+              {TEAM_SIZES.map((t) => {
+                const picked = teamSize !== null && teamSize >= t.min && teamSize <= t.max;
+                return (
+                  <button
+                    key={t.label}
+                    type="button"
+                    role="radio"
+                    aria-checked={picked}
+                    onClick={() => {
+                      setExactSize('');
+                      pickTeamSize(t.max);
+                    }}
                     className={cn(
-                      'text-xs',
-                      teamSize === t.size ? 'text-zinc-300' : 'text-zinc-500',
+                      'rounded-2xl px-4 py-5 text-center ring-1 transition',
+                      picked
+                        ? 'bg-zinc-900 text-white ring-zinc-900'
+                        : 'bg-white ring-zinc-200 hover:ring-zinc-400',
                     )}
                   >
-                    {t.size === 1 ? 'person' : 'people'}
-                  </span>
-                </button>
-              ))}
+                    <span className="block text-lg font-semibold">{t.label}</span>
+                    <span className={cn('text-xs', picked ? 'text-zinc-300' : 'text-zinc-500')}>
+                      {t.max === 1 ? 'person' : 'people'}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
+            <TextField
+              label="Or exactly"
+              type="number"
+              min={1}
+              max={100}
+              inputMode="numeric"
+              className="mt-4 w-40"
+              value={exactSize}
+              onChange={(e) => {
+                setExactSize(e.target.value);
+                const size = Math.round(Number(e.target.value));
+                if (size >= 1 && size <= 100) pickTeamSize(size);
+              }}
+              hint="people, up to 100"
+            />
           </>
         )}
 
@@ -270,12 +309,15 @@ export function OnboardingWizard() {
                       {t.name}
                       {recommended?.id === t.id && (
                         <Badge tone="success">
-                          <Sparkles className="size-3" /> Best fit
+                          <Sparkles className="size-3" />{' '}
+                          {t.id === GENERATED ? 'Recommended' : 'Best fit'}
                         </Badge>
                       )}
                     </span>
                     <span className="text-sm text-zinc-600">{t.description}</span>
                     <span className="mt-auto pt-2 text-xs text-zinc-500">
+                      {t.id === GENERATED &&
+                        `For ${teamSize === 1 ? 'you' : `${teamSize} people`} · `}
                       {t.desks} desks · {t.meetingRooms} meeting room{t.meetingRooms > 1 ? 's' : ''}
                     </span>
                   </div>
@@ -289,30 +331,14 @@ export function OnboardingWizard() {
           <>
             <h1 className="text-2xl font-semibold tracking-tight">Choose your character</h1>
             <p className="mt-1 text-zinc-600">This is how your team sees you in the office.</p>
-            <div
-              className="mt-6 grid grid-cols-4 gap-3 sm:grid-cols-8"
-              role="radiogroup"
-              aria-label="Character"
-            >
-              {LOOK_KEYS.map((key) => (
-                <button
-                  key={key}
-                  type="button"
-                  role="radio"
-                  aria-checked={character === key}
-                  aria-label={key}
-                  onClick={() => setCharacter(key)}
-                  className={cn(
-                    'rounded-2xl bg-zinc-50 p-2 ring-2 transition',
-                    character === key
-                      ? 'bg-emerald-50 ring-emerald-500'
-                      : 'ring-transparent hover:ring-zinc-300',
-                  )}
-                >
-                  <CharacterPreview character={key} className="mx-auto h-20" />
-                </button>
-              ))}
-            </div>
+            <CharacterGrid
+              value={character}
+              onPick={setCharacter}
+              fresh={8}
+              className="mt-6 gap-3 sm:grid-cols-8"
+              tileClassName="rounded-2xl p-2"
+              previewClassName="h-20"
+            />
           </>
         )}
 

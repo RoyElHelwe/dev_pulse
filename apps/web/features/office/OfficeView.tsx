@@ -1,8 +1,12 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { Socket } from 'socket.io-client';
 import { useAuth } from '@/features/auth/AuthProvider';
+import { ChatPanel } from '@/features/chat/ChatPanel';
+import { MeetingsPanel } from '@/features/meetings/MeetingsPanel';
+import { VoiceControls } from '@/features/voice/VoiceControls';
 import type { MyWorkspace } from '@/features/workspace/types';
 import type { OfficeController } from '@/game/createGame';
 import { LayoutEditor } from '@/game/editor/LayoutEditor';
@@ -28,6 +32,7 @@ export function OfficeView() {
   const [people, setPeople] = useState<Presence[]>([]);
   const [toast, setToast] = useState('');
   const [online, setOnline] = useState(true);
+  const [socket, setSocket] = useState<Socket | null>(null);
   const { status, user, reloadUser } = useAuth();
   const router = useRouter();
   // Set while leaving with a message, so the plain "no office" redirect doesn't win.
@@ -100,6 +105,7 @@ export function OfficeView() {
       onConnection: setOnline,
       onRemoved: (reason) => void leave(reason),
     });
+    setSocket(connection.socket);
 
     (async () => {
       // Phaser touches `window`, so it is loaded only here, in the browser.
@@ -107,6 +113,7 @@ export function OfficeView() {
       if (cancelled || !containerRef.current) return;
       game = createGame(containerRef.current, {
         layout: workspace.layout,
+        players: connection.players(),
         myId,
         character: workspace.character,
         name,
@@ -122,6 +129,7 @@ export function OfficeView() {
 
     return () => {
       cancelled = true;
+      setSocket(null);
       connection.disconnect();
       game?.destroy();
       controllerRef.current = null;
@@ -186,7 +194,10 @@ export function OfficeView() {
     if (!editing) return;
     if (!window.confirm('Put back the original furniture and room names? You can still undo, or close without saving.')) return;
     const latest = await api<MyWorkspace>('/workspace').catch(() => null);
-    const templates = await api<{ id: string; layout: OfficeLayout }[]>('/office/templates').catch(() => []);
+    // A generated office is built again from the same team size and seed.
+    const source = latest?.layout.generated;
+    const query = source ? `?team=${source.teamSize}&seed=${encodeURIComponent(source.seed)}` : '';
+    const templates = await api<{ id: string; layout: OfficeLayout }[]>(`/office/templates${query}`).catch(() => []);
     const template = templates.find((t) => t.id === latest?.templateId);
     if (template) editing.editor.reset(template.layout);
   }, [editing]);
@@ -226,6 +237,20 @@ export function OfficeView() {
     return () => clearTimeout(timer);
   }, [toast]);
 
+  const isEditing = !!editing;
+  const features = useMemo(
+    () => ({
+      socket,
+      controller: ready ? controllerRef.current : null,
+      workspace: workspace!,
+      people,
+      myId: myId!,
+      onToast: setToast,
+      editing: isEditing,
+    }),
+    [socket, ready, workspace, people, myId, isEditing],
+  );
+
   return (
     <div className="relative h-dvh w-full overflow-hidden bg-[#e4e0da]">
       <div ref={containerRef} className="absolute inset-0" />
@@ -240,6 +265,14 @@ export function OfficeView() {
         editing={!!editing}
         onEdit={startEditing}
       />
+      {/* Kept mounted while editing, so calls and chat carry on (they hide their UI). */}
+      {workspace && myId && (
+        <>
+          <VoiceControls {...features} />
+          <ChatPanel {...features} />
+          <MeetingsPanel {...features} />
+        </>
+      )}
       {editing && (
         <EditorPanel
           editor={editing.editor}

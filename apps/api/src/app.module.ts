@@ -4,11 +4,15 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AuthModule } from './auth/auth.module';
 import { OriginMiddleware } from './common/origin.middleware';
 import { ConfigModule } from './config/config.module';
+import { ChatModule } from './chat/chat.module';
 import { HealthModule } from './health/health.module';
 import { InvitationsModule } from './invitations/invitations.module';
 import { OfficeModule } from './office/office.module';
 import { MailModule } from './mail/mail.module';
+import { MeetingsModule } from './meetings/meetings.module';
 import { PrismaModule } from './prisma/prisma.module';
+import { SettingsModule } from './settings/settings.module';
+import { VoiceModule } from './voice/voice.module';
 import { WorkspaceModule } from './workspace/workspace.module';
 
 @Module({
@@ -22,11 +26,11 @@ import { WorkspaceModule } from './workspace/workspace.module';
     WorkspaceModule,
     InvitationsModule,
     OfficeModule,
+    MeetingsModule,
+    VoiceModule,
+    ChatModule,
+    SettingsModule,
     HealthModule,
-    // Feature modules get added here, one per folder:
-    // UsersModule, InvitationsModule              (Mira)
-    // WorkspacesModule, OfficeModule              (Roy)
-    // TasksModule, VoiceModule, MeetingsModule    (Zakaria)
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })

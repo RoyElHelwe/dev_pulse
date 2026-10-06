@@ -68,4 +68,6 @@ export interface OfficeLayout {
   walls: Wall[];
   furniture: Furniture[];
   spawn: { x: number; y: number };
+  /** Generated offices: what to build the same office again from (reset in the editor). */
+  generated?: { teamSize: number; seed: string };
 }

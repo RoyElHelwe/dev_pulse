@@ -60,14 +60,27 @@ leave the office at once with a message.
 ## 4. The office
 
 The layout is JSON on the workspace (`OfficeLayout`: rooms, walls, furniture, spawn).
-Four templates in `apps/api/src/office/templates`:
+Five templates in `apps/api/src/office/templates`:
 
 | Template | Desks | Size (tiles) | For |
 | --- | --- | --- | --- |
+| Made for your team (`generated`) | team + 25% (at least 4) | 32 × 27 → 88 × 64 | 1–100, recommended |
 | Loft | 8 | 32 × 28 | up to 8 people |
 | Studio | 24 | 46 × 34 | 6–24 |
 | Campus | 48 | 60 × 42 | 20–48 |
 | Headquarters | 100 | 76 × 57 | 40–100 |
+
+The generated office (`generated.ts`) is built for the team size in three steps: a north
+band of meeting rooms (one per ~10 people, up to 4, one bigger than the others) and a
+kitchen + lounge filling the rest (a second chill corner when it's long), an open space
+with desk clusters of 4 in a centred grid, and the entrance with waiting areas on the south
+wall. The office name is the seed: it picks room names, carpet colours, sofas, plants and
+which side the meeting rooms are on, so the wizard's preview is the office you get. The seed
+is kept in `layout.generated`, so rebuilding it later keeps its look even after a rename.
+`generated.spec.ts` builds every size from 1 to 100 with several seeds and checks
+`validateLayout` finds nothing. The API takes `teamSize` (1–100) with `templateId:
+'generated'` (`POST /api/workspace`; `PUT /api/workspace/template`, where it defaults to the
+number of members), and `GET /api/office/templates?team=12&seed=<name>` previews it.
 
 The owner can move everyone to another template later (Team page → Office layout), or back
 to the original furniture of the current one. It's refused when the team doesn't fit
@@ -82,7 +95,11 @@ furniture when the office is edited.
   membership checked) and sends who is there.
 - While walking, positions go out ~20 times a second as tiny arrays `[x, y, dir, moving]`,
   sent **volatile** (a late position is dropped, never queued) and never back to your own
-  tabs. The server clamps positions to the office and drops floods (> 40/s).
+  tabs. The server clamps positions to the office, drops floods (> 40/s) and ignores jumps
+  faster than walking (1.6 × walking speed + 1 tile of slack; the first position after a
+  connect and the entrance, within 3 tiles of the spawn, are always accepted). Walls aren't
+  checked by the server: its positions are the client's, speed-limited so nobody can jump
+  into a room; booked rooms are protected by the attendee check.
 - Other people are drawn 100 ms in the past and interpolated between positions, so they
   move smoothly even when packets arrive unevenly; a big jump (reconnect) teleports.
 - Locally ~1 ms per move through the server.
@@ -96,7 +113,7 @@ furniture when the office is edited.
 | **Nearby** | Another person within 3 tiles **in the same room** (walls, even glass, separate people) → `player:near`, then `player:distance` up to 5×/s, `player:far` past 3.5 tiles. The people list tags them "Nearby". | `game/systems/Proximity.ts` |
 | **Your desk** | Each member gets a free desk on joining (joining order), with their name on it (yours in green). Desks follow the office: after an edit people keep their desk if it still exists. Owners and admins move people from the Team page (swaps with whoever sat there). | `workspace/desks.service.ts`, `game/objects/DeskPlates.ts` |
 | **E to use** | At a desk or in front of a screen, a hint appears ("Your desk", "Mira’s desk", "Desk 4 · free"); **E** (or tapping the hint) emits `object:interact`. | `game/systems/Interactions.ts` |
-| **Who is where** | The game reports its zone; the server shares it (`office:zone`). The people list shows "Atlas · Meeting room", "At Mira’s desk"; meeting rooms with people inside show "In use · 2". | `office.gateway.ts`, `game/objects/RoomBadges.ts` |
+| **Who is where** | The game reports its zone; the server shares it (`office:zone`), for display only (access uses positions). The people list shows "Atlas · Meeting room", "At Mira’s desk"; meeting rooms with people inside show "In use · 2". | `office.gateway.ts`, `game/objects/RoomBadges.ts` |
 | **Status** | A short status in a bubble over the avatar ("Focusing", "On break ☕" or your own text), set from your chip (bottom left), stored on the membership. | `CharacterSwitcher.tsx` |
 | **Map** | Floor plan in the corner with everyone, and the part of the office on screen. | `Minimap.tsx` |
 | **Phones and tablets** | A joystick (bottom right) instead of the keyboard; the hints say "Tap". | `Joystick.tsx` |
@@ -115,6 +132,59 @@ officeEvents.on('object:interact', (e) => e.type === 'desk' && e.ownerId === me.
 
 Every `on` returns its own "off", handy in `useEffect`. The status bubble is
 `PATCH /api/workspace/me { status }` (e.g. the current task); it reaches everyone live.
+
+### Characters and desks are generated (`apps/web/game/art/`)
+
+A character is a **recipe**: 18 choices (build, height, skin, hairstyle and colour, beard,
+glasses, top, colours, pattern, bottom, shoes, hat, desk vibe). `WorkspaceMember.character`
+holds one of the 8 named presets (`maya`, `sam`…) or the recipe as a 19-character code
+(`1` + one base-36 digit per choice). The pickers offer the presets plus freshly generated
+characters ("New faces"); the API checks codes with `IsCharacter()`
+(`apps/api/src/workspace/characters.ts`, keep `DNA_SIZES` in sync with `recipe.ts`).
+
+| File | What |
+| --- | --- |
+| `color.ts`, `palette.ts` | Every colour, as OKLCH ramps (shadows cooler, highlights warmer) |
+| `recipe.ts` | Choices, codes, presets, random characters with contrast rules, mutate / breed |
+| `character.ts` | Draws a character in layers, 4 directions, moods, headset, mug |
+| `desk.ts` | A desk decorated for its owner: anchor slots, props by vibe, their colours; free desks stay bare |
+| `pen.ts` | One drawing interface for Phaser, canvas and SVG (the React previews use the same code) |
+| `lab/` | The art lab page: a simulated day at the office, a character studio, a lineup |
+
+- The status sets the face: "Focusing" → focused, "On break ☕" → smiling with a mug.
+- `Avatar.setInCall(inCall, talking)` puts the headset on (Z3/Z4: call it when a call starts and ends).
+- Each avatar frame is drawn once into a texture shared by everyone with the same recipe
+  (Phaser redraws Graphics shapes every frame). Desks are re-drawn when their owner changes.
+
+### Chat
+
+**Code:** `apps/api/src/chat`, `apps/web/features/chat`
+
+A chat button bottom left (above your chip) with an unread count opens the panel. Two tabs:
+**Office** (everyone in the office) and, while you stand in a meeting room or lounge, that
+room (only the people in it right now). Leaving the room closes its tab; entering one loads
+its history again. Enter sends, Shift+Enter is a new line, Esc gives the keys back to the
+game (walking keys are ignored while you type).
+
+| Rule (checked by the server) | |
+| --- | --- |
+| Text | trimmed, 1–500 characters |
+| Rate | 5 messages per 5 seconds per person (`TOO_FAST`) |
+| Room channel | the room the server places you in (`OfficeGateway.locate`): its copy of the positions clients report, speed-limited so nobody can jump into a room (`NOT_IN_ROOM`) |
+| Booked room | while a booking runs, only its attendees read and write (`NOT_ATTENDEE`); a meeting's messages stay with it (not shown before or after, nor its earlier chatter during it) |
+
+- Socket `/office`: the client sends `chat:send { channel, text }` and gets an ack
+  `{ ok: true, message }` or `{ ok: false, error: { code, message } }` (shown under the input;
+  `SERVER_ERROR` when the database fails, so the ack always comes).
+  Everyone allowed receives `chat:message { id, channel, userId, name, text, createdAt }`:
+  the office channel goes to the whole office, a room channel only to the people in that room.
+- `GET /api/workspace/chat?channel=office|<room id>&before=<createdAt>&beforeId=<id>` →
+  `{ messages, more }`, the last 50, oldest first; same room and booking rules. To load older
+  ones, send the oldest shown message's `createdAt` and `id` (the id keeps messages of the same
+  millisecond from being skipped).
+- Messages are stored in `ChatMessage` (channel `office` or a layout room id), with the
+  booking running in the room when sent (`bookingId`); a room shows only those of the
+  booking running now (or of no booking when it's free).
 
 ## 6. The office editor
 
@@ -156,13 +226,13 @@ you see is exactly what everyone gets.
 | Method | Path | Who | What |
 | --- | --- | --- | --- |
 | GET | `/api/office/templates` | signed in | templates (name, team size, layout for the preview) |
-| POST | `/api/workspace` | no office yet | `{ name, templateId, character }` → you are the owner |
+| POST | `/api/workspace` | no office yet | `{ name, templateId, character, teamSize? }` (teamSize for `generated`) → you are the owner |
 | GET | `/api/workspace` | member | office, layout, version, your role and character |
 | PATCH | `/api/workspace` | owner, admin | `{ name }` |
 | POST | `/api/workspace/delete` | owner | `{ confirmName }` |
 | PATCH | `/api/workspace/me` | member | `{ character?, status? }` (empty status = none) |
 | PUT | `/api/workspace/layout` | owner, admin | `{ version, furniture, rooms: [{ id, name }] }` |
-| PUT | `/api/workspace/template` | owner | `{ templateId, version }` |
+| PUT | `/api/workspace/template` | owner | `{ templateId, version, teamSize? }` (generated: defaults to the member count) |
 | GET | `/api/workspace/members` | member | with their `deskId` |
 | PATCH / DELETE | `/api/workspace/members/:userId` | owner (or yourself to leave) | `{ role }` |
 | PUT | `/api/workspace/members/:userId/desk` | owner, admin | `{ deskId }` (null = no desk) |
@@ -198,3 +268,45 @@ pnpm serve &        # same-origin proxy on :8080, like nginx
 pnpm test
 # or against Docker: E2E_BASE_URL=https://localhost:8443 pnpm test (after `make`)
 ```
+
+## 9. Meeting rooms
+
+**Code:** `apps/api/src/meetings`, `apps/web/features/meetings`
+
+**Rooms** (top right) opens a day timetable: one column per meeting room, 08:00–20:00 in
+30-minute rows, today with previous / next day, in your own time zone. Bookings show their
+title, time and people (yours in green). Click a free slot, or drag over several, to book:
+title, room, start / end (15-minute steps) and who is invited. Click a booking for its
+details; its creator, or an owner / admin, can cancel it.
+
+| Rule (checked by the API) | |
+| --- | --- |
+| Room | a meeting room of the current layout |
+| Time | start before end, 15-minute steps, 4 hours at most, not in the past (the slot running now is fine), up to 30 days ahead |
+| People | members of the office, 30 at most; the creator is always one of them |
+| No double booking | refused with "Atlas is booked 14:00–15:00 by Mira". Race-free: each booking takes a Postgres advisory lock for its room (`pg_advisory_xact_lock`) inside the transaction that checks and inserts |
+
+**During a meeting only its people get in.**
+
+- The game makes the room solid for everyone else (a collider over the whole room closes
+  its doors). Someone already inside when it starts is sent back to the entrance with
+  "Atlas is booked until 15:00". The badge over the door says "Booked · until 15:00".
+- The server can't move people, so audio and chat check too: they ask
+  `MeetingsService.activeBooking(workspaceId, roomId)` (cached a few seconds per room, cleared
+  when a booking is made or cancelled) and refuse non-attendees.
+- Once two people are connected, audio is peer to peer: the server only gates who may start
+  a call (`rtc:signal` reaches only the tab that joined voice), and each client hangs up when
+  the other leaves range or a booking excludes them.
+- Moving the office to another template deletes running and future bookings of rooms the new
+  layout doesn't have.
+- People in a meeting get a toast when it starts.
+
+| Method | Path | Who | What |
+| --- | --- | --- | --- |
+| GET | `/api/workspace/bookings?from&to` | member | bookings of every meeting room (default today → +7 days, 62 days at most) |
+| POST | `/api/workspace/bookings` | member | `{ roomId, title, startsAt, endsAt, attendeeIds, timeZone? }` (`timeZone` only words the errors) |
+| DELETE | `/api/workspace/bookings/:id` | creator, owner, admin | cancel (not once it's over) |
+
+Every change sends `office:bookings` on the `/office` socket; clients reload the list, and
+re-check every minute which rooms are closed to them (`controller.setLockedRooms`).
+Rules and their tests: `meetings/booking-rules.ts`.

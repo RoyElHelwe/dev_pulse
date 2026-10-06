@@ -18,8 +18,11 @@ next. Details live in **[PLAN.md](PLAN.md)** (who does what), **[AUTH.md](AUTH.m
 | Invitations (M4), members and roles (M5) | ✅ | OFFICE.md |
 | Privacy Policy, Terms of Service (F1) | ✅ | |
 | Browser tests in CI (`e2e/`) | ✅ | OFFICE.md §8 |
-| Tasks, voice, meeting room (Zakaria) | not started, **unblocked** | §5 |
-| Profile, friends (Mira M3, M7), chat + chill room (H1, H2) | not started | PLAN.md |
+| Generated offices sized to the team, characters and desks from recipes | ✅ | OFFICE.md §4–5 |
+| Proximity voice (3D audio, meeting rooms keep their sound in), mute, deafen, push to talk | ✅ | OFFICE.md |
+| Meeting room bookings (timetable, enforced), office and room chat | ✅ | OFFICE.md §9 |
+| Tasks: backend and Kanban (Zakaria Z1, Z2, Z5) | not started, **unblocked** | §5 |
+| Profile, friends (Mira M3, M7), chill room extras (H1) | not started | PLAN.md |
 
 ## 2. Run it
 
@@ -85,10 +88,10 @@ support for the others and the final polish:
 - Start now, nothing blocks it: **Z1 Task backend** (`TasksModule` in `apps/api/src/tasks`,
   use `MembershipService.require(user.id)` to get the workspace, never a workspace id from
   the client) and **Z2 Kanban** panel over the office with live updates on `/tasks`.
-- **Z3 Voice**: build the WebRTC part with a test "call user X" button first, then plug it
-  into `player:near` / `player:far` / `player:distance` (ready, see OFFICE.md §5).
-- **Z4 Meeting room**: `zone:enter` with `type: 'meeting'`; the "In use" badge and the people
-  list already show who's inside.
+- **Z3/Z4 voice and meeting rooms are built** (`features/voice`, `apps/api/src/voice`): peer to
+  peer audio placed around you, meeting rooms as one call, bookings in `features/meetings`.
+  Without a TURN server, people behind strict NATs can't connect (add one in the ICE servers
+  of `VoiceManager.ts` for production).
 - **Z5 Desk ↔ tasks**: `object:interact` with `type: 'desk'` and `ownerId === me` opens my
   tasks. Today it shows a placeholder message (in `OfficeView.tsx`, remove it then). The
   current task can go in the status bubble: `PATCH /api/workspace/me { status }`.
