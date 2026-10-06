@@ -23,7 +23,7 @@ export function placementProblem(item: Furniture, layout: OfficeLayout, others: 
   if (b.x < 0.1 || b.y < 0.1 || b.x + b.w > layout.width - 0.1 || b.y + b.h > layout.height - 0.1) return 'outside';
   if (!FURNITURE[item.kind].solid) return null;
   const px = { x: b.x * TILE + 2, y: b.y * TILE + 2, w: b.w * TILE - 4, h: b.h * TILE - 4 };
-  if (layout.walls.some((w) => overlaps(px, wallCollider(w)))) return 'wall';
+  if (item.kind !== 'board' && layout.walls.some((w) => overlaps(px, wallCollider(w)))) return 'wall';
   const hit = others.some((o) => o.id !== item.id && FURNITURE[o.kind].solid && overlaps(b, itemBounds(o), 0.1));
   return hit ? 'overlap' : null;
 }

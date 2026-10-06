@@ -1,13 +1,15 @@
+import { randomBytes } from 'crypto';
 import { Injectable } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import { FormError } from '../common/form-error';
 import { validateLayout } from '../office/layout/validate';
 import type { OfficeLayout } from '../office/layout/types';
 import { numberedDesks } from '../office/layout/geometry';
+import { addWing, WingError, type WingResult } from '../office/layout/wings';
 import { findTemplate } from '../office/templates';
 import { PrismaService } from '../prisma/prisma.service';
 import { DesksService } from './desks.service';
-import type { CreateWorkspaceDto, SwitchTemplateDto, UpdateLayoutDto, UpdateMeDto } from './dto';
+import type { CreateWorkspaceDto, SwitchTemplateDto, UpdateLayoutDto, UpdateMeDto, WingDto } from './dto';
 import { CAN_MANAGE, MembershipService } from './membership.service';
 import { WorkspaceEvents } from './workspace-events';
 
@@ -48,6 +50,11 @@ export class WorkspaceService {
     }
     const { workspace } = member;
     const memberCount = await this.prisma.workspaceMember.count({ where: { workspaceId: workspace.id } });
+    const wings = await this.prisma.officeWing.findMany({
+      where: { workspaceId: workspace.id },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true, side: true, x: true, y: true, w: true, h: true, deskCount: true },
+    });
     return {
       id: workspace.id,
       name: workspace.name,
@@ -60,6 +67,8 @@ export class WorkspaceService {
       deskId: member.deskId,
       desks: await this.desks.list(workspace.id),
       memberCount,
+      wings,
+      canExpand: CAN_MANAGE.includes(member.role) && workspace.templateId === 'loft',
     };
   }
 
@@ -109,6 +118,7 @@ export class WorkspaceService {
         data: { templateId: template.id, layout: layout as unknown as Prisma.InputJsonValue, layoutVersion: { increment: 1 } },
       });
       if (count !== 1) throw new FormError('LAYOUT_CHANGED', 'The office was changed meanwhile. Reload the page and try again.');
+      await tx.officeWing.deleteMany({ where: { workspaceId: current.id } });
       // Running and future bookings of rooms the new office doesn't have would lock rooms that don't exist.
       const gone = await tx.roomBooking.deleteMany({
         where: { workspaceId: current.id, endsAt: { gt: new Date() }, roomId: { notIn: meetingRooms } },
@@ -182,6 +192,73 @@ export class WorkspaceService {
     this.events.emit({ type: 'layout', workspaceId: current.id, layout, version, by: userId });
     await this.desks.sync(current.id);
     return { layout, version };
+  }
+
+  /** Expand the Loft office with a new wing. */
+  async addWing(userId: string, dto: WingDto) {
+    const member = await this.membership.require(userId, CAN_MANAGE);
+    const current = member.workspace;
+    if (current.templateId !== 'loft') {
+      throw new FormError('WINGS_UNSUPPORTED', 'Only the Loft office can be expanded.');
+    }
+    if (dto.version !== current.layoutVersion) {
+      throw new FormError('LAYOUT_CHANGED', 'The office was changed meanwhile. Reload the page and try again.');
+    }
+    const existing = await this.prisma.officeWing.findMany({ where: { workspaceId: current.id } });
+    const seed = randomBytes(4).toString('hex');
+    const index = existing.length + 1;
+
+    let result: WingResult;
+    try {
+      result = addWing(current.layout as unknown as OfficeLayout, dto.side, seed, index);
+    } catch (err) {
+      const e = err as any;
+      if (e instanceof WingError || e?.code === 'NO_DOOR' || e?.code === 'WING_INVALID') {
+        throw new FormError(e.code, e.message, 'side');
+      }
+      throw err;
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      const { count } = await tx.workspace.updateMany({
+        where: { id: current.id, layoutVersion: current.layoutVersion },
+        data: {
+          layout: result.layout as unknown as Prisma.InputJsonValue,
+          layoutVersion: { increment: 1 },
+        },
+      });
+      if (count !== 1) {
+        throw new FormError('LAYOUT_CHANGED', 'The office was changed meanwhile. Reload the page and try again.');
+      }
+      if (result.shift.x !== 0 || result.shift.y !== 0) {
+        await tx.officeWing.updateMany({
+          where: { workspaceId: current.id },
+          data: {
+            x: { increment: result.shift.x },
+            y: { increment: result.shift.y },
+          },
+        });
+      }
+      await tx.officeWing.create({
+        data: {
+          workspaceId: current.id,
+          side: dto.side,
+          seed,
+          ...result.wing,
+        },
+      });
+    });
+
+    const version = current.layoutVersion + 1;
+    this.events.emit({
+      type: 'layout',
+      workspaceId: current.id,
+      layout: result.layout,
+      version,
+      by: userId,
+    });
+    await this.desks.sync(current.id);
+    return this.mine(userId);
   }
 }
 

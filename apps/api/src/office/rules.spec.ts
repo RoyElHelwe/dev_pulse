@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { TILE } from './layout/geometry';
-import { Budget, limitMove, WALK_SPEED, ZONE_ID } from './rules';
+import { Budget, claimOffice, limitMove, WALK_SPEED, ZONE_ID } from './rules';
 
 describe('Budget', () => {
   it('allows `perSecond` messages, then again the next second', () => {
@@ -47,5 +47,53 @@ describe('limitMove', () => {
     const door = { x: spawn.x + TILE, y: spawn.y - TILE };
     expect(walked(door, 10)).toEqual(door);
     expect(walked({ x: spawn.x + 4 * TILE, y: spawn.y }, 10).x).toBeLessThan(spawn.x + 4 * TILE);
+  });
+});
+
+describe('claimOffice', () => {
+  it('allows connection when no open tabs', () => {
+    expect(claimOffice([], 'A', false)).toEqual({
+      refuse: false,
+      drop: [],
+      notify: [],
+    });
+  });
+
+  it('refuses another tab without takeover', () => {
+    expect(claimOffice([{ id: 's1', tabId: 'A' }], 'B', false)).toEqual({
+      refuse: true,
+      drop: [],
+      notify: [],
+    });
+  });
+
+  it('drops and notifies old tab when takeover is true', () => {
+    const s1 = { id: 's1', tabId: 'A' };
+    expect(claimOffice([s1], 'B', true)).toEqual({
+      refuse: false,
+      drop: [s1],
+      notify: [s1],
+    });
+  });
+
+  it('allows same tab reconnect without takeover and drops stale socket', () => {
+    const s1 = { id: 's1', tabId: 'A' };
+    expect(claimOffice([s1], 'A', false)).toEqual({
+      refuse: false,
+      drop: [s1],
+      notify: [],
+    });
+  });
+
+  it('refuses when other tabs exist even if same tab id is present without takeover', () => {
+    const open = [
+      { id: 's1', tabId: 'A' },
+      { id: 's2', tabId: 'B' },
+    ];
+    expect(claimOffice(open, 'A', false)).toEqual({
+      refuse: true,
+      drop: [],
+      notify: [],
+    });
   });
 });

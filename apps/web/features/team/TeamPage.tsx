@@ -86,7 +86,10 @@ export function TeamPage() {
         <OfficeCard
           workspace={workspace}
           isOwner={owner}
-          onRenamed={load}
+          onRenamed={(ws) => {
+            if (ws) setWorkspace(ws);
+            void load();
+          }}
           onDeleted={async () => {
             await reloadUser();
             router.replace('/onboarding?notice=deleted');
@@ -322,7 +325,7 @@ function OfficeCard({
 }: {
   workspace: MyWorkspace;
   isOwner: boolean;
-  onRenamed: () => void;
+  onRenamed: (workspace?: MyWorkspace) => void;
   onDeleted: () => void;
 }) {
   const [name, setName] = useState(workspace.name);
@@ -357,6 +360,8 @@ function OfficeCard({
       {nameResult && (
         <p className={`mt-2 text-sm ${nameResult.tone === 'success' ? 'text-emerald-700' : 'text-rose-700'}`}>{nameResult.text}</p>
       )}
+
+      {workspace.canExpand && <ExpandOfficeCard workspace={workspace} onExpanded={onRenamed} />}
 
       {isOwner && <TemplateSwitcher workspace={workspace} onSwitched={onRenamed} />}
 
@@ -514,6 +519,140 @@ function TemplateSwitcher({ workspace, onSwitched }: { workspace: MyWorkspace; o
             </Button>
           </>
         )}
+      </div>
+    </div>
+  );
+}
+
+type WingSide = 'LEFT' | 'RIGHT' | 'BOTTOM';
+
+function ExpandOfficeCard({
+  workspace,
+  onExpanded,
+}: {
+  workspace: MyWorkspace;
+  onExpanded: (workspace?: MyWorkspace) => void;
+}) {
+  const [busySide, setBusySide] = useState<WingSide | null>(null);
+  const [result, setResult] = useState<{ tone: 'success' | 'error'; text: string } | null>(null);
+
+  const totalDesks = workspace.layout.furniture.filter((f) => f.kind === 'desk').length;
+  const takenDesks = workspace.desks?.length ?? 0;
+  const freeDesks = totalDesks - takenDesks;
+  const wingsCount = workspace.wings?.length ?? 0;
+
+  async function expand(side: WingSide) {
+    setBusySide(side);
+    setResult(null);
+    try {
+      const updated = await api<MyWorkspace>('/workspace/wings', {
+        method: 'POST',
+        body: { side, version: workspace.layoutVersion },
+      });
+      const sideName = side === 'LEFT' ? 'left' : side === 'RIGHT' ? 'right' : 'bottom';
+      setResult({ tone: 'success', text: `Added ${sideName} wing.` });
+      onExpanded(updated);
+    } catch (err) {
+      setResult({ tone: 'error', text: message(err) });
+    } finally {
+      setBusySide(null);
+    }
+  }
+
+  return (
+    <div
+      className={cn(
+        'mt-8 rounded-2xl p-4 transition',
+        freeDesks === 0
+          ? 'bg-amber-50/40 ring-2 ring-amber-400'
+          : 'bg-zinc-50/50 ring-1 ring-zinc-200',
+      )}
+    >
+      <h3 className="font-semibold">Expand office</h3>
+      <p className="mt-1 text-sm text-zinc-600">
+        Your office grows with your team: add a generated wing with ~8 more desks and a meeting room or lounge.
+      </p>
+      <p className="mt-2 text-sm text-zinc-600">
+        <span className="font-medium text-zinc-900">{freeDesks} of {totalDesks} desks free</span>
+        {wingsCount > 0 && <span> · {wingsCount} {wingsCount === 1 ? 'wing' : 'wings'} added</span>}
+      </p>
+      {freeDesks === 0 && (
+        <p className="mt-2 text-sm font-medium text-amber-800">
+          No free desk left: expand the office so new people can join.
+        </p>
+      )}
+      {result && (
+        <p className={`mt-3 text-sm ${result.tone === 'success' ? 'text-emerald-700' : 'text-rose-700'}`}>
+          {result.text}
+        </p>
+      )}
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <Button
+          variant="secondary"
+          disabled={busySide !== null}
+          loading={busySide === 'LEFT'}
+          onClick={() => expand('LEFT')}
+        >
+          {busySide !== 'LEFT' && (
+            <svg
+              className="size-4 shrink-0"
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M12 8H4m0 0 3-3m-3 3 3 3" />
+            </svg>
+          )}
+          Left
+        </Button>
+        <Button
+          variant="secondary"
+          disabled={busySide !== null}
+          loading={busySide === 'RIGHT'}
+          onClick={() => expand('RIGHT')}
+        >
+          {busySide !== 'RIGHT' && (
+            <svg
+              className="size-4 shrink-0"
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M4 8h8m0 0-3-3m3 3-3 3" />
+            </svg>
+          )}
+          Right
+        </Button>
+        <Button
+          variant="secondary"
+          disabled={busySide !== null}
+          loading={busySide === 'BOTTOM'}
+          onClick={() => expand('BOTTOM')}
+        >
+          {busySide !== 'BOTTOM' && (
+            <svg
+              className="size-4 shrink-0"
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M8 4v8m0 0-3-3m3 3 3-3" />
+            </svg>
+          )}
+          Bottom
+        </Button>
       </div>
     </div>
   );

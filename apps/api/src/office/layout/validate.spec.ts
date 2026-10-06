@@ -43,4 +43,13 @@ describe('validateLayout', () => {
   it('rejects a blocked entrance', () => {
     expect(codes(withFurniture([{ id: 'f', kind: 'fridge', x: 23, y: 31.5, w: 1.5, h: 1.3 }]))).toContain('SPAWN_BLOCKED');
   });
+
+  it('allows a board overlapping a wall but rejects two overlapping boards', () => {
+    const base = { ...studio(), furniture: studio().furniture.filter((f) => f.kind !== 'board') };
+    const board1: Furniture = { id: 'board-1', kind: 'board', x: 32, y: 12, w: 3, h: 0.5 };
+    expect(codes(withFurniture([board1], base))).toEqual([]);
+
+    const board2: Furniture = { id: 'board-2', kind: 'board', x: 33, y: 12, w: 3, h: 0.5 };
+    expect(codes(withFurniture([board1, board2], base))).toContain('OVERLAP');
+  });
 });

@@ -16,6 +16,7 @@ export function studio() {
   b.add({ kind: 'plant', x: 45.0, y: 11.0, w: 1, h: 1 });
 
   for (const oy of [15.5, 23]) for (const ox of [5, 20, 35]) b.deskCluster(ox, oy);
+  b.add({ kind: 'board', x: 32, y: 12.75, w: 3, h: 0.5 });
   b.add({ kind: 'plant', x: 15.5, y: 21.75, w: 1.2, h: 1.2 });
   b.add({ kind: 'plant', x: 30.5, y: 21.75, w: 1.2, h: 1.2 });
   b.add({ kind: 'plant', x: 1.0, y: 13.9, w: 1, h: 1 });

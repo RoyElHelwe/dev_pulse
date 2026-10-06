@@ -33,6 +33,7 @@ export const FURNITURE_KINDS = [
   'divider',
   'meetingTable',
   'tv',
+  'board',
   'sofa',
   'armchair',
   'coffeeTable',

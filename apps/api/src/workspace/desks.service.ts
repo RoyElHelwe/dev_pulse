@@ -94,6 +94,38 @@ export class DesksService {
     await this.publish(me.workspaceId);
   }
 
+  /** A member picks their own desk. */
+  async move(userId: string, deskId: string): Promise<void> {
+    const member = await this.membership.require(userId);
+    const layout = member.workspace.layout as unknown as OfficeLayout;
+    if (!numberedDesks(layout).some((d) => d.desk.id === deskId)) {
+      throw new FormError('NO_SUCH_DESK', 'This desk no longer exists.', 'deskId');
+    }
+    if (member.deskId === deskId) return;
+
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        const sitter = await tx.workspaceMember.findFirst({
+          where: { workspaceId: member.workspaceId, deskId },
+        });
+        if (sitter && sitter.userId !== userId) {
+          throw new FormError('DESK_TAKEN', 'Someone already sits at this desk.', 'deskId');
+        }
+        await tx.workspaceMember.update({
+          where: { userId },
+          data: { deskId },
+        });
+      });
+    } catch (error) {
+      if ((error as { code?: string })?.code === 'P2002') {
+        throw new FormError('DESK_TAKEN', 'Someone already sits at this desk.', 'deskId');
+      }
+      throw error;
+    }
+
+    await this.publish(member.workspaceId);
+  }
+
   private async publish(workspaceId: string) {
     this.events.emit({ type: 'desks', workspaceId, desks: await this.list(workspaceId) });
   }

@@ -16,6 +16,7 @@ export function campus() {
   b.add({ kind: 'plant', x: 59.0, y: 11.0, w: 1, h: 1 });
 
   for (const oy of [15.5, 23, 30.5]) for (const ox of [5, 19, 33, 47]) b.deskCluster(ox, oy);
+  b.add({ kind: 'board', x: 42.5, y: 12.75, w: 3, h: 0.5 });
   for (const y of [21.75, 29.25]) for (const x of [15.5, 29.5, 43.5]) b.add({ kind: 'plant', x, y, w: 1.2, h: 1.2 });
   b.add({ kind: 'plant', x: 1.0, y: 13.9, w: 1, h: 1 });
   b.add({ kind: 'plant', x: 59.0, y: 13.9, w: 1, h: 1 });

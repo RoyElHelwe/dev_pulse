@@ -3,6 +3,16 @@ import type { OfficeLayout } from '@/game/layout/types';
 
 export type Role = 'OWNER' | 'ADMIN' | 'MEMBER';
 
+export interface OfficeWingInfo {
+  id: string;
+  side: 'LEFT' | 'RIGHT' | 'BOTTOM';
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  deskCount: number;
+}
+
 /** GET /api/workspace: everything the office page needs. */
 export interface MyWorkspace {
   id: string;
@@ -16,6 +26,8 @@ export interface MyWorkspace {
   deskId: string | null;
   desks: DeskOwner[];
   memberCount: number;
+  wings: OfficeWingInfo[];
+  canExpand: boolean;
 }
 
 /** Owners and admins invite people and edit the office. */

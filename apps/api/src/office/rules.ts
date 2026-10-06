@@ -46,3 +46,24 @@ export function limitMove(from: Point, to: Point, elapsedMs: number, spawn: Poin
   const k = max / distance;
   return { x: Math.round(from.x + (to.x - from.x) * k), y: Math.round(from.y + (to.y - from.y) * k) };
 }
+
+/** A live connection of someone already in the office: its id and the browser tab it belongs to. */
+export interface OpenTab {
+  id: string;
+  tabId: string;
+}
+
+/**
+ * One office tab at a time. A new connection of a user who already has the office open:
+ * - same tab (it reconnected after a network loss): quietly takes over, nobody is told;
+ * - another tab, asked to take over ("Use here"): the old tabs are told and dropped;
+ * - another tab, not asked: refused (it shows "open in another tab").
+ */
+export function claimOffice(open: OpenTab[], tabId: string, takeover: boolean): { refuse: boolean; drop: OpenTab[]; notify: OpenTab[] } {
+  const others = open.filter((t) => t.tabId !== tabId);
+  if (others.length > 0 && !takeover) return { refuse: true, drop: [], notify: [] };
+  return { refuse: false, drop: open, notify: others };
+}
+
+/** The tab id a client sends in the handshake (random, per page load). */
+export const TAB_ID = /^[\w-]{8,64}$/;

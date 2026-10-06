@@ -20,6 +20,7 @@ export const CATALOG: CatalogItem[] = [
   { kind: 'chair', label: 'Office chair', w: 0.85, h: 0.85, group: 'Work' },
   { kind: 'divider', label: 'Divider', w: 3, h: 0.14, group: 'Work' },
   { kind: 'bookshelf', label: 'Bookshelf', w: 4, h: 0.8, group: 'Work' },
+  { kind: 'board', label: 'Kanban board', w: 3, h: 0.5, group: 'Work' },
   { kind: 'meetingTable', label: 'Meeting table', w: 5, h: 2.4, group: 'Meetings' },
   { kind: 'tv', label: 'Screen', w: 3, h: 0.28, group: 'Meetings' },
   { kind: 'sofa', label: 'Sofa', w: 4.5, h: 1.5, group: 'Lounge', colors: FABRIC },
