@@ -65,9 +65,14 @@ export class AuthService {
     return this.startSession(publicUser, client, trustedDevice);
   }
 
-  /** Dev switcher only (DEV_LOGIN): signs in as this user, skipping password and 2FA. */
+  /**
+   * Dev switcher only (DEV_LOGIN): signs in as this user, skipping password and 2FA,
+   * and takes the account over from any other device instead of asking first.
+   */
   async devSignIn(userId: string, client: ClientInfo): Promise<SignInResult> {
-    return this.openSession(await this.me(userId), client);
+    const user = await this.me(userId);
+    await this.tokens.revokeAllSessions(user.id, undefined, 'signed_in_elsewhere');
+    return { status: 'signed-in', user, tokens: await this.tokens.createSession(user.id, client) };
   }
 
   /** Second step: the code from the authenticator app (or a backup code). */
