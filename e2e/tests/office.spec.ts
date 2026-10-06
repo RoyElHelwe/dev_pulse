@@ -1,5 +1,5 @@
 import { expect, type Page, test } from '@playwright/test';
-import { connectedCalls, inOffice, invite, openPage, peopleList, register, workspace } from './helpers';
+import { closeContexts, connectedCalls, inOffice, invite, openPage, peopleList, register, workspace } from './helpers';
 import { walkTo } from './nav';
 
 // One story, in order, with the same people (sign-ups are rate limited):
@@ -20,6 +20,8 @@ test.beforeAll(async ({ browser }) => {
   problems.push(a.problems, b.problems);
 });
 
+test.afterAll(closeContexts);
+
 let reported = 0;
 test.afterEach(({}, info) => {
   const all = problems.flat();
@@ -32,9 +34,8 @@ test('the organiser creates an office from a template', async () => {
   await org.getByRole('button', { name: /Create an office/ }).click();
   await org.getByLabel('Office name').fill('E2E HQ');
   await org.getByRole('button', { name: 'Continue' }).click();
-  await org.getByRole('radio', { name: /2–8/ }).click();
-  await org.getByRole('button', { name: 'Continue' }).click();
-  await expect(org.getByRole('radio', { name: /Headquarters/ })).toBeVisible();
+  // No team-size question any more: the Loft is preselected and is what the story uses.
+  await expect(org.getByRole('radio', { name: /Loft/ })).toHaveAttribute('aria-checked', 'true');
   await org.getByRole('button', { name: 'Continue' }).click();
   await org.getByRole('button', { name: 'Create the office' }).click();
   await inOffice(org);
@@ -98,9 +99,13 @@ test('a meeting room is booked once per time slot', async () => {
 });
 
 test('a status shows to everyone', async () => {
-  await org.getByRole('button', { name: /Change/ }).click();
+  // Status lives in the top-right user menu now.
+  await org.getByRole('button', { name: 'Roy', exact: true }).click();
+  await org.getByRole('menuitem', { name: /Status/ }).click();
   await org.getByRole('button', { name: 'Focusing' }).click();
+  await expect(org.getByRole('button', { name: 'Focusing' })).toHaveAttribute('aria-pressed', 'true');
   await org.keyboard.press('Escape');
+  await expect(org.getByRole('menu')).toBeHidden();
   await org.locator('canvas').click({ position: { x: 600, y: 400 } });
   await expect.poll(() => peopleList(staff)).toContain('Focusing');
 });
@@ -110,8 +115,15 @@ test('at your desk, E opens it and others see where you are', async () => {
   const desk = w.layout.furniture.find((f) => f.id === w.deskId)!;
   const seatY = desk.y + Math.cos(((desk.rotation ?? 0) * Math.PI) / 180) * (desk.h / 2 + 0.45);
   await walkTo(org, w.layout, desk.x, seatY);
-  await org.keyboard.press('e');
-  await expect(org.getByRole('status').filter({ hasText: 'Your desk' })).toBeVisible();
+  // The player may still be sitting down or standing up: press E until the desk answers.
+  await expect(async () => {
+    await org.keyboard.press('e');
+    // E at your own desk opens the task board, filtered to your issues.
+    await expect(org.getByRole('region', { name: 'Task board' })).toBeVisible({ timeout: 2_000 });
+  }).toPass({ timeout: 30_000 });
+  await expect(org.getByRole('button', { name: 'Only my issues' })).toHaveAttribute('aria-pressed', 'true');
+  await org.keyboard.press('Escape');
+  await expect(org.getByRole('button', { name: /^Board/ })).toHaveAttribute('aria-expanded', 'false');
   await expect.poll(() => peopleList(staff)).toContain('At Roy’s desk');
 });
 

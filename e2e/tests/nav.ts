@@ -7,39 +7,59 @@ import type { Layout } from './helpers';
 
 const SOLID = new Set([
   'desk', 'divider', 'meetingTable', 'sofa', 'armchair', 'coffeeTable',
-  'plant', 'bookshelf', 'counter', 'fridge', 'barTable', 'beanbag',
+  'plant', 'bookshelf', 'counter', 'fridge', 'barTable', 'beanbag', 'board',
 ]);
 const WALL = { solid: { t: 10, face: 34 }, glass: { t: 6, face: 18 } };
 const TILE = 32;
 const STEP = 0.25;
+const INFLATE = 5;
 
 type Rect = { x: number; y: number; w: number; h: number };
 
-function obstacles(layout: Layout): Rect[] {
-  const rects: Rect[] = [];
+function obstacles(layout: Layout, tx?: number, ty?: number, extra: Rect[] = []): Rect[] {
+  const rects: Rect[] = [...extra];
   for (const f of layout.furniture) {
-    if (!SOLID.has(f.kind)) continue;
+    const isGoal = tx !== undefined && ty !== undefined && Math.hypot(f.x - tx, f.y - ty) < 0.8;
+    if (isGoal) continue;
+    const isSolid = SOLID.has(f.kind);
+    const isSeat = f.kind === 'chair' || f.kind === 'stool' || f.kind === 'armchair';
+    if (!isSolid && !isSeat) continue;
     const turned = f.rotation === 90 || f.rotation === 270;
     const w = turned ? f.h : f.w;
     const h = turned ? f.w : f.h;
-    rects.push({ x: (f.x - w / 2) * TILE + 2, y: (f.y - h / 2) * TILE + 2, w: w * TILE - 4, h: h * TILE - 4 });
+    rects.push({
+      x: (f.x - w / 2) * TILE - INFLATE,
+      y: (f.y - h / 2) * TILE - INFLATE,
+      w: w * TILE + INFLATE * 2,
+      h: h * TILE + INFLATE * 2,
+    });
   }
   for (const wall of layout.walls) {
     const { t, face } = WALL[wall.kind];
     if (wall.y1 === wall.y2) {
       const x = Math.min(wall.x1, wall.x2) * TILE;
-      rects.push({ x, y: wall.y1 * TILE - t / 2, w: Math.abs(wall.x2 - wall.x1) * TILE, h: t + (wall.face === false ? 0 : face) });
+      rects.push({
+        x: x - INFLATE,
+        y: wall.y1 * TILE - t / 2 - INFLATE,
+        w: Math.abs(wall.x2 - wall.x1) * TILE + INFLATE * 2,
+        h: t + (wall.face === false ? 0 : face) + INFLATE * 2,
+      });
     } else {
-      rects.push({ x: wall.x1 * TILE - t / 2, y: Math.min(wall.y1, wall.y2) * TILE, w: t, h: Math.abs(wall.y2 - wall.y1) * TILE });
+      rects.push({
+        x: wall.x1 * TILE - t / 2 - INFLATE,
+        y: Math.min(wall.y1, wall.y2) * TILE - t / 2 - INFLATE,
+        w: t + INFLATE * 2,
+        h: Math.abs(wall.y2 - wall.y1) * TILE + t + INFLATE * 2,
+      });
     }
   }
   return rects;
 }
 
-function planner(layout: Layout) {
-  const rects = obstacles(layout);
+function planner(layout: Layout, tx?: number, ty?: number, extra: Rect[] = []) {
+  const rects = obstacles(layout, tx, ty, extra);
   const free = (x: number, y: number) => {
-    const b = { x: x * TILE - 11, y: y * TILE - 12, w: 22, h: 13 }; // the body, plus a little margin
+    const b = { x: x * TILE - 8, y: y * TILE - 9, w: 16, h: 9 };
     if (b.x < 0 || b.y < 0 || b.x + b.w > layout.width * TILE || b.y + b.h > layout.height * TILE) return false;
     return !rects.some((o) => b.x < o.x + o.w && o.x < b.x + b.w && b.y < o.y + o.h && o.y < b.y + b.h);
   };
@@ -61,8 +81,8 @@ function planner(layout: Layout) {
     // Standing a bit too close to something: start from the nearest free cell.
     if (!free(sx * STEP, sy * STEP)) {
       let nd = Infinity;
-      for (let dy = -4; dy <= 4; dy++) {
-        for (let dx = -4; dx <= 4; dx++) {
+      for (let dy = -6; dy <= 6; dy++) {
+        for (let dx = -6; dx <= 6; dx++) {
           if (free((sx + dx) * STEP, (sy + dy) * STEP) && Math.hypot(dx, dy) < nd) {
             nd = Math.hypot(dx, dy);
             [sx, sy] = [sx + dx, sy + dy];
@@ -110,30 +130,135 @@ export async function position(page: Page) {
   return { x: Number(cx), y: Number(cy) + 0.4 };
 }
 
-async function along(page: Page, target: { x: number; y: number }, axis: 'x' | 'y') {
+function isNearSeat(layout: Layout, at: { x: number; y: number }): boolean {
+  return layout.furniture.some(
+    (f) => (f.kind === 'chair' || f.kind === 'stool' || f.kind === 'armchair') && Math.hypot(f.x - at.x, f.y - at.y) < 0.6,
+  );
+}
+
+async function along(
+  page: Page,
+  layout: Layout,
+  target: { x: number; y: number },
+  axis: 'x' | 'y',
+  isFinal = false,
+): Promise<'reached' | 'blocked'> {
+  let prevPos = { x: Infinity, y: Infinity };
+  let stuckCount = 0;
+  let noProgressCount = 0;
+  let standingAttempts = 0;
+
   for (let i = 0; i < 40; i++) {
     const at = await position(page);
     const d = axis === 'x' ? target.x - at.x : target.y - at.y;
-    if (Math.abs(d) < 0.15) return;
+    const threshold = isFinal ? 0.2 : 0.15;
+    if (Math.abs(d) <= threshold) return 'reached';
+
+    const moved = Math.hypot(at.x - prevPos.x, at.y - prevPos.y);
+    if (moved < 0.02) {
+      stuckCount++;
+      noProgressCount++;
+    } else {
+      stuckCount = 0;
+      noProgressCount = 0;
+      standingAttempts = 0;
+    }
+    prevPos = at;
+
+    const seated = isNearSeat(layout, at);
+    const unwedge = stuckCount >= 2;
+    if (unwedge) {
+      if (seated) standingAttempts++;
+      stuckCount = 0;
+    } else if (noProgressCount >= 4) {
+      return 'blocked';
+    }
+
     const key = axis === 'x' ? (d < 0 ? 'ArrowLeft' : 'ArrowRight') : d < 0 ? 'ArrowUp' : 'ArrowDown';
+    const dist = Math.abs(d);
+    let pressTime: number;
+    if (unwedge) {
+      pressTime = seated ? 550 : 350;
+    } else {
+      pressTime = Math.max(50, Math.min(250, Math.round(dist * 200)));
+    }
+
     await page.keyboard.down(key);
-    await page.waitForTimeout(Math.max(25, Math.min(500, Math.abs(d) * 150)));
+    await page.waitForTimeout(pressTime);
     await page.keyboard.up(key);
-    await page.waitForTimeout(170);
+    await page.waitForTimeout(160);
   }
+
+  const endAt = await position(page);
+  const finalDist = Math.abs(axis === 'x' ? target.x - endAt.x : target.y - endAt.y);
+  return finalDist <= (isFinal ? 0.35 : 0.3) ? 'reached' : 'blocked';
 }
 
 /** Walks to (tx, ty), or the closest free spot. Returns where the player ended. */
 export async function walkTo(page: Page, layout: Layout, tx: number, ty: number) {
-  const path = planner(layout);
-  for (let attempt = 0; attempt < 3; attempt++) {
+  const startMs = Date.now();
+  const extraObstacles: Rect[] = [];
+  const isSeatTarget = layout.furniture.some(
+    (f) => (f.kind === 'chair' || f.kind === 'stool' || f.kind === 'armchair') && Math.hypot(f.x - tx, f.y - ty) < 0.8,
+  );
+
+  for (let attempt = 0; attempt < 6; attempt++) {
+    if (Date.now() - startMs > 90_000) {
+      throw new Error(`walkTo timed out after 90s trying to reach (${tx}, ${ty})`);
+    }
+
     const at = await position(page);
+    if (Math.hypot(at.x - tx, at.y - ty) < 0.5) {
+      if (isSeatTarget) await page.waitForTimeout(550);
+      return position(page);
+    }
+
+    const path = planner(layout, tx, ty, extraObstacles);
     const route = path(at.x, at.y, tx, ty);
-    if (!route) throw new Error(`No path from ${at.x},${at.y} to ${tx},${ty}`);
-    for (const point of route) await along(page, point, point.axis);
+    if (!route) {
+      if (extraObstacles.length > 0) {
+        extraObstacles.pop();
+        continue;
+      }
+      throw new Error(`No path from ${at.x},${at.y} to ${tx},${ty}`);
+    }
+
+    let blocked = false;
+    for (let i = 0; i < route.length; i++) {
+      if (Date.now() - startMs > 90_000) {
+        throw new Error(`walkTo timed out after 90s trying to reach (${tx}, ${ty})`);
+      }
+      const isFinal = i === route.length - 1;
+      const res = await along(page, layout, route[i], route[i].axis, isFinal);
+      if (res === 'blocked') {
+        const cur = await position(page);
+        const dx = route[i].axis === 'x' ? Math.sign(route[i].x - cur.x) : 0;
+        const dy = route[i].axis === 'y' ? Math.sign(route[i].y - cur.y) : 0;
+        const bx = cur.x + dx * 0.6;
+        const by = cur.y + dy * 0.6;
+        if (Math.hypot(bx - tx, by - ty) > 1.2) {
+          extraObstacles.push({
+            x: (bx - 0.4) * TILE,
+            y: (by - 0.4) * TILE,
+            w: 0.8 * TILE,
+            h: 0.8 * TILE,
+          });
+        }
+        blocked = true;
+        break;
+      }
+    }
+
+    if (blocked) {
+      continue;
+    }
+
+    if (isSeatTarget) await page.waitForTimeout(550);
     const end = await position(page);
-    const last = route[route.length - 1] ?? at;
-    if (Math.hypot(end.x - last.x, end.y - last.y) < 0.4) return end;
+    if (Math.hypot(end.x - tx, end.y - ty) < 0.6) return end;
   }
-  return position(page);
+
+  const finalPos = await position(page);
+  if (Math.hypot(finalPos.x - tx, finalPos.y - ty) < 0.6) return finalPos;
+  throw new Error(`walkTo failed to reach (${tx}, ${ty}) after 6 attempts; ended at (${finalPos.x}, ${finalPos.y})`);
 }

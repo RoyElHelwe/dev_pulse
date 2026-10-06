@@ -1,4 +1,4 @@
-import { type Browser, type BrowserContextOptions, expect, type Page } from '@playwright/test';
+import { type Browser, type BrowserContext, type BrowserContextOptions, expect, type Page } from '@playwright/test';
 
 export interface Layout {
   width: number;
@@ -18,8 +18,16 @@ export interface Workspace {
 }
 
 /** A browser page that remembers its console errors (the app must keep the console clean). */
+const openContexts: BrowserContext[] = [];
+
+/** Closes every page opened with openPage (call from afterAll, so the next spec starts on an idle machine). */
+export async function closeContexts() {
+  await Promise.all(openContexts.splice(0).map((c) => c.close().catch(() => undefined)));
+}
+
 export async function openPage(browser: Browser, name: string, options: BrowserContextOptions = {}) {
   const context = await browser.newContext({ permissions: ['microphone'], ...options });
+  openContexts.push(context);
   const page = await context.newPage();
   // Keep the voice connections, so tests can check that a call really connected.
   await page.addInitScript(() => {
@@ -46,7 +54,11 @@ export async function openPage(browser: Browser, name: string, options: BrowserC
 }
 
 export async function register(page: Page, name: string, email: string) {
+  // With DEV_LOGIN on, /register first shows the identity switcher; settle the /auth/dev check, then use the real form.
+  const devCheck = page.waitForResponse((r) => r.url().includes('/auth/dev'), { timeout: 10_000 }).catch(() => undefined);
   await page.goto('/register');
+  const enabled = await (await devCheck)?.json().then((s: { enabled?: boolean }) => !!s.enabled).catch(() => false);
+  if (enabled) await page.getByRole('button', { name: 'Use the real sign-in' }).click();
   await page.getByLabel('Your name').fill(name);
   await page.getByLabel('Email').fill(email);
   await page.getByLabel('Password', { exact: true }).fill('supersecret1');

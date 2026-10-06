@@ -41,6 +41,8 @@ sign up ──► /onboarding                     (email) "Roy invited you to De
 | Invite admins, change roles, remove people | ✔ | | |
 | Rename the office | ✔ | ✔ | |
 | Move the office to another template, delete it | ✔ | | |
+| Expand the office with wings (Loft) | ✔ | ✔ | |
+| Move to another desk | ✔ | ✔ | ✔ |
 | Leave the office | (delete it instead) | ✔ | ✔ |
 
 Every rule is checked by the API (`MembershipService.require(userId, roles)`); the buttons
@@ -89,6 +91,19 @@ to the original furniture of the current one. It's refused when the team doesn't
 Zones (desks, meeting rooms, lounges) are derived from the layout, so they follow the
 furniture when the office is edited.
 
+### Expanding the office (wings)
+
+Loft only. When a team outgrows the initial 8 desks, owners and admins can expand the office by adding generated wings (`POST /api/workspace/wings`).
+
+- **Rules**: Caller must be `OWNER` or `ADMIN`. The side must be `LEFT`, `RIGHT`, or `BOTTOM`.
+- **Generation**: The new wing attaches to the current outer edge of the office, adding ~8 desks plus a generated meeting room or lounge from a seed. A door is automatically cut in the shared wall.
+- **Transformations**:
+  - `LEFT`: Translates existing office content and furniture so IDs stay; previously recorded wing x/y coordinates shift accordingly.
+  - `BOTTOM`: Moves spawn/entrance to the new outer wall.
+- **Validation & State**: The resulting layout is validated (`validateLayout`). Bumps `layoutVersion` and emits live `office:layout` and `office:desks` socket events.
+- **Storage**: Recorded in the `OfficeWing` table (`workspaceId`, `side`, `seed`, `x`, `y`, `w`, `h`, `deskCount`). Switching template deletes wings.
+- **Code**: Lives in `apps/api/src/office/layout/wings.ts`. Web mirrors nothing, layout is data.
+
 ### Live presence without lag
 
 - The `/office` socket joins your office on connect (cookie auth, live session and
@@ -102,9 +117,30 @@ furniture when the office is edited.
   into a room; booked rooms are protected by the attendee check.
 - Other people are drawn 100 ms in the past and interpolated between positions, so they
   move smoothly even when packets arrive unevenly; a big jump (reconnect) teleports.
+- The move packet is `[x, y, dir, moving, seated]` (the 4-item form is still accepted); the
+  server relays `office:moved` as `[id, x, y, dir, moving, seated]`. `seated` is just relayed.
+- Depth: furniture, people and desk plates are y-sorted together by their bottom edge/feet
+  (`DEPTH.sorted` in `OfficeScene`), so people hide behind what they stand behind. Seated
+  people draw just above their chair.
+- Sitting: stand on a free chair/stool (or against an armchair) for ~0.5 s and you snap to the
+  seat, facing the way the chair faces (stool: keep facing); hold a movement key ~0.5 s to
+  stand up and step off. A seat with someone seated on it is not free. `controller.snapshot()`
+  gives `dir` and `seated` for you and for everyone else.
 - Locally ~1 ms per move through the server.
 - Sockets connect straight over WebSocket (no HTTP long-polling first). If the connection
   drops, a "Reconnecting…" banner shows and everything resyncs when it's back.
+
+### One office tab at a time
+
+The `/office` handshake sends auth `{ tabId, takeover }` (`tabId` is random per page load).
+The server (`OfficeGateway` + `claimOffice` in `office/rules.ts`) refuses a connection while
+the same user has another tab's socket live with `connect_error` `ALREADY_OPEN` (also `office:busy`
+event if two race). `takeover: true` (set only by the "Use here" button) emits `office:replaced`
+to the old tabs and disconnects them without the avatar leaving; same tabId reconnecting
+(network loss) silently replaces its stale socket. A replaced tab doesn't auto-reconnect;
+takeover flag is reset after each connect so a tab that was offline can't steal the office back.
+Web: `features/office/connection.ts`, `tabLockStore.ts` (store), `tabLockStore.tsx` (overlay rendered in
+`OfficeView`). Works across browsers/devices of the same account.
 
 ## 5. Life in the office
 
@@ -112,9 +148,10 @@ furniture when the office is edited.
 | --- | --- | --- |
 | **Nearby** | Another person within 3 tiles **in the same room** (walls, even glass, separate people) → `player:near`, then `player:distance` up to 5×/s, `player:far` past 3.5 tiles. The people list tags them "Nearby". | `game/systems/Proximity.ts` |
 | **Your desk** | Each member gets a free desk on joining (joining order), with their name on it (yours in green). Desks follow the office: after an edit people keep their desk if it still exists. Owners and admins move people from the Team page (swaps with whoever sat there). | `workspace/desks.service.ts`, `game/objects/DeskPlates.ts` |
+| **Moving desks** | Any member can move to another free desk (`PUT /api/workspace/me/desk`). Desk art follows the owner. Refused if taken (`DESK_TAKEN`). Emits `office:desks`. | `workspace/desks.service.ts` |
 | **E to use** | At a desk or in front of a screen, a hint appears ("Your desk", "Mira’s desk", "Desk 4 · free"); **E** (or tapping the hint) emits `object:interact`. | `game/systems/Interactions.ts` |
 | **Who is where** | The game reports its zone; the server shares it (`office:zone`), for display only (access uses positions). The people list shows "Atlas · Meeting room", "At Mira’s desk"; meeting rooms with people inside show "In use · 2". | `office.gateway.ts`, `game/objects/RoomBadges.ts` |
-| **Status** | A short status in a bubble over the avatar ("Focusing", "On break ☕" or your own text), set from your chip (bottom left), stored on the membership. | `CharacterSwitcher.tsx` |
+| **Status** | A short status in a bubble over the avatar ("Focusing", "On break ☕" or your own text), set from the user menu (top right → Status), stored on the membership. | `UserMenu.tsx`, `StatusSection.tsx` |
 | **Map** | Floor plan in the corner with everyone, and the part of the office on screen. | `Minimap.tsx` |
 | **Phones and tablets** | A joystick (bottom right) instead of the keyboard; the hints say "Tap". | `Joystick.tsx` |
 
@@ -133,6 +170,25 @@ officeEvents.on('object:interact', (e) => e.type === 'desk' && e.ownerId === me.
 Every `on` returns its own "off", handy in `useEffect`. The status bubble is
 `PATCH /api/workspace/me { status }` (e.g. the current task); it reaches everyone live.
 
+### Moving to another desk
+
+Any member can move to an unoccupied desk (`PUT /api/workspace/me/desk` body `{ deskId }`).
+- Refused with `DESK_TAKEN` if another member already sits there (`NO_SUCH_DESK` if not in layout).
+- Desk art follows the owner to the new desk.
+- Emits the `office:desks` socket event so everyone sees updated desk plates and props live.
+- UI: E at a free desk (hint "Move to Desk N") opens `MoveDeskPrompt` ("Move here" / Cancel; E again confirms,
+  Esc or walking away cancels). E at an occupied desk only shows a toast with the owner's name.
+
+### Chat bubbles and paper stacks
+
+- **Chat bubbles**: every `chat:message` that `ChatPanel` accepts (office, or the room you're in; panel open or
+  not, your own too) calls `controller.showChat(userId, text)` → `Avatar.say()`: a `SpeechBubble` (wrapped, max
+  80 chars) above the status bubble, shown 4.5 s + 40 ms per character, then fades. A newer message replaces it.
+  It is an Avatar child, so it follows the person and is cleaned up with it.
+- **Paper stacks**: `OfficeView` feeds `useOpenTaskCounts()` to `controller.setTaskCounts(Map<userId, n>)`; the
+  scene maps it to desk ids (`setDeskPapers`) and redraws changed desks (`drawDesk` option `papers`: one sheet per
+  task up to 8, a clip beyond; none at 0). The texture key includes the count (capped at 9).
+
 ### Characters and desks are generated (`apps/web/game/art/`)
 
 A character is a **recipe**: 18 choices (build, height, skin, hairstyle and colour, beard,
@@ -141,6 +197,13 @@ holds one of the 8 named presets (`maya`, `sam`…) or the recipe as a 19-charac
 (`1` + one base-36 digit per choice). The pickers offer the presets plus freshly generated
 characters ("New faces"); the API checks codes with `IsCharacter()`
 (`apps/api/src/workspace/characters.ts`, keep `DNA_SIZES` in sync with `recipe.ts`).
+
+**Character studio** (`features/workspace/CharacterStudio.tsx`, controlled: `value` / `onChange(code)`):
+4-direction preview, desk preview, Random / "Change a little", the 8 presets, and part pickers
+(Body, Hair & face, Outfit, Extras). It saves the 19-character code and is used in onboarding,
+the invitation page and the office "You" chip (Edit → Customise character, a dialog with Save).
+Onboarding has no headcount question: Loft is preselected ("grows with your team"); the generated
+office offers Small (~8) / Medium (~24) / Large (~48).
 
 | File | What |
 | --- | --- |
@@ -186,6 +249,35 @@ game (walking keys are ignored while you type).
   booking running in the room when sent (`bookingId`); a room shows only those of the
   booking running now (or of no booking when it's free).
 
+### Task board and the Esc key (`features/tasks/`, `lib/escape.ts`)
+- **Board**: Jira-style global Kanban (columns To do / In progress / In review / Done, cards with key, type,
+  priority, assignee face, due date). Filters: search, assignee avatars (multi-select, "Unassigned"), "Only my
+  issues". Cards drag between/within columns (native HTML5 DnD, rank = midpoint of the neighbours, optimistic
+  with rollback; no touch drag: change the status in the card dialog). Click a card = edit dialog (delete only
+  for the reporter or OWNER/ADMIN, same rule as the API). Live through `task:*` on `/office`.
+- **Opening**: E at a wall `board` (furniture kind, `Interactions` target type `kanban`), E at *your* desk
+  (opens filtered to you), or the HUD "Board" button (offices without a wall board). It is a normal-flow block
+  at the top of `OfficeView` (flex column): it drops down and the office + HUD sit below it (the canvas resizes).
+  While focus is inside an element with `data-captures-keys`, `isTyping()` is true so the game ignores keys.
+- **Store**: `features/tasks/store.ts`: `useTaskSync(socket)` (mounted once in OfficeView), `useTasks()`,
+  `useOpenTaskCounts()` / `countOpenTasks(tasks)` (open = status != DONE, per assignee) and `taskActions`.
+- **Esc**: `useEscape(active, handler)` (`lib/escape.ts`) keeps a stack of open layers; Escape closes only the
+  top-most one (dialog over board, popover over panel); with none open the key is untouched. Chat, Rooms,
+  user menu (+ its character and keybinds modals), people list, board and task dialogs register. New menus must register too.
+
+### User menu and keybinds (`features/auth/UserMenu.tsx`, `features/settings/keybinds.ts`)
+- **User menu** (top right) is portaled to `document.body` (z-60, modals z-70) so it sits above the HUD, board and
+  panels. It is the one place for **Character** (modal with the full `CharacterStudio`), **Status** (presets, custom
+  text, clear) and **Keybinds**; Character/Status only appear inside the office (they need the office profile).
+  The old bottom-left "You" chip is gone. Shared `components/ui/Modal.tsx` (portal, Esc layer, `data-captures-keys`).
+- **Keybinds**: actions interact E, mute M, deafen H, push-to-talk V, chat C, board B, rooms T, people P. Stored per
+  user in `UserSettings.keybinds` (Json, only non-default entries; `pushToTalkKey` stays the column for PTT and is
+  overlaid as `keybinds.pushToTalk`). `GET/PATCH /api/settings` return/accept `keybinds`; the API refuses unknown
+  actions, bad codes, reserved keys (WASD, arrows, Esc, Enter, Tab) and duplicates (`settings/keybinds.ts`).
+  Web: one store (`useKeybinds`, `getKeybinds`, `useKeybind(action, fn, enabled)`, `rebind`, `resetKeybinds`); every
+  listener reads it (VoiceControls, OfficeScene E, chat/board/rooms/people toggles). /settings/voice rebinds PTT
+  through the same store. New shortcuts: add the action in both `keybinds.ts` files.
+
 ## 6. The office editor
 
 Owners and admins: **Edit office** (top right). Editing happens in the real office, so what
@@ -221,6 +313,13 @@ you see is exactly what everyone gets.
    someone saved in between, the second save is refused ("Load the latest") instead of
    silently overwriting their work.
 
+### Whiteboard (`board`)
+
+Wall-mounted Kanban whiteboard (3 × 0.5 tiles, solid obstacle).
+- Exempt from the `ON_WALL` collision check so it mounts flush on walls.
+- Exactly one `board` is included in every office template.
+- Existing offices created before this furniture kind was added will not have one until a template reset or added via the editor.
+
 ## 7. API
 
 | Method | Path | Who | What |
@@ -231,8 +330,10 @@ you see is exactly what everyone gets.
 | PATCH | `/api/workspace` | owner, admin | `{ name }` |
 | POST | `/api/workspace/delete` | owner | `{ confirmName }` |
 | PATCH | `/api/workspace/me` | member | `{ character?, status? }` (empty status = none) |
+| PUT | `/api/workspace/me/desk` | member | `{ deskId }` (move to another free desk; `DESK_TAKEN`, `NO_SUCH_DESK`) |
 | PUT | `/api/workspace/layout` | owner, admin | `{ version, furniture, rooms: [{ id, name }] }` |
 | PUT | `/api/workspace/template` | owner | `{ templateId, version, teamSize? }` (generated: defaults to the member count) |
+| POST | `/api/workspace/wings` | owner, admin | `{ side, version }` (Loft only: 'LEFT' \| 'RIGHT' \| 'BOTTOM'; adds wing) |
 | GET | `/api/workspace/members` | member | with their `deskId` |
 | PATCH / DELETE | `/api/workspace/members/:userId` | owner (or yourself to leave) | `{ role }` |
 | PUT | `/api/workspace/members/:userId/desk` | owner, admin | `{ deskId }` (null = no desk) |
@@ -243,7 +344,7 @@ you see is exactly what everyone gets.
 | POST | `/api/invitations/:token/accept` | signed in, invited email | `{ character? }` → join |
 | POST | `/api/invitations/:token/decline` | public | |
 
-`GET /api/workspace` also returns `status`, `deskId` and `desks` (who sits where).
+`GET /api/workspace` also returns `status`, `deskId`, `desks` (who sits where), `wings` and `canExpand`.
 
 Socket `/office`: `office:state`, `office:joined`, `office:moved`, `office:left`,
 `office:layout`, `office:updated` (character / role / status), `office:zone [id, zone]`,
@@ -297,6 +398,16 @@ details; its creator, or an owner / admin, can cancel it.
 - Once two people are connected, audio is peer to peer: the server only gates who may start
   a call (`rtc:signal` reaches only the tab that joined voice), and each client hangs up when
   the other leaves range or a booking excludes them.
+- **Spatial sound** (`features/voice/spatial.ts`, applied by `VoiceManager.tick` every 150 ms; the
+  server's `talk-rule` is unchanged: meeting room = whole room, elsewhere earshot). Each call has
+  a `PannerNode` (HRTF, direction only) and a `GainNode` (loudness, smoothed over ~80 ms):
+  - Open space: full volume within 1 tile, cosine fall to silence at 4 tiles (calls start under 3,
+    so someone at the start radius is already faint, ~25 %).
+  - Meeting room: you hear the whole room, falling from full (within 1.5 tiles) to 30 % at the room's
+    longer side (the "far wall"). Same curve for both people, wherever they stand.
+  - Direction: the offset to the speaker is rotated by the listener's facing from
+    `controller.snapshot().me.dir` (a seated person faces the chair's direction), so sources in front
+    pan to the front and the right-hand side of the listener pans right.
 - Moving the office to another template deletes running and future bookings of rooms the new
   layout doesn't have.
 - People in a meeting get a toast when it starts.
