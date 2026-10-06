@@ -5,16 +5,19 @@ import { bookingAllows, EARSHOT_PX, withinEarshot } from './talk-rule';
 const room = (id: string, kind: Room['kind']): Room => ({ id, name: id, kind, x: 0, y: 0, w: 10, h: 10, floor: 'oak' });
 const meeting = room('atlas', 'meeting');
 const lounge = room('lounge', 'lounge');
+const chill = room('chill', 'chill');
 
 describe('withinEarshot', () => {
   it('lets people close to each other in the open space talk', () => {
     expect(withinEarshot({ x: 0, y: 0, room: null }, { x: 96, y: 0, room: null })).toBe(true);
     expect(withinEarshot({ x: 0, y: 0, room: lounge }, { x: 0, y: EARSHOT_PX, room: lounge })).toBe(true);
+    expect(withinEarshot({ x: 0, y: 0, room: chill }, { x: 0, y: EARSHOT_PX, room: chill })).toBe(true);
   });
 
   it('refuses people too far apart outside meeting rooms', () => {
     expect(withinEarshot({ x: 0, y: 0, room: null }, { x: EARSHOT_PX + 1, y: 0, room: null })).toBe(false);
     expect(withinEarshot({ x: 0, y: 0, room: lounge }, { x: 200, y: 200, room: lounge })).toBe(false);
+    expect(withinEarshot({ x: 0, y: 0, room: chill }, { x: 200, y: 200, room: chill })).toBe(false);
   });
 
   it('lets everyone in a meeting room talk, whatever the distance', () => {

@@ -4,7 +4,7 @@
 export type FloorKind = 'oak' | 'carpet' | 'terrazzo';
 
 /** Meeting rooms and lounges become zones in the game (voice, chill room...). */
-export type RoomKind = 'open' | 'meeting' | 'lounge';
+export type RoomKind = 'open' | 'meeting' | 'lounge' | 'chill';
 
 export interface Room {
   id: string;
@@ -46,6 +46,9 @@ export const FURNITURE_KINDS = [
   'stool',
   'beanbag',
   'floorLamp',
+  'foosball',
+  'cardTable',
+  'legoBoard',
 ] as const;
 
 export type FurnitureKind = (typeof FURNITURE_KINDS)[number];

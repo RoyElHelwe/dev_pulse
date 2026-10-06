@@ -24,6 +24,9 @@ export const SOLID: Record<FurnitureKind, boolean> = {
   stool: false,
   beanbag: true,
   floorLamp: false,
+  foosball: true,
+  cardTable: true,
+  legoBoard: true,
 };
 
 export interface Rect {

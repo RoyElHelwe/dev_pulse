@@ -6,7 +6,7 @@ export interface CatalogItem {
   label: string;
   w: number;
   h: number;
-  group: 'Work' | 'Meetings' | 'Lounge' | 'Kitchen' | 'Plants';
+  group: 'Work' | 'Meetings' | 'Lounge' | 'Kitchen' | 'Plants' | 'Games';
   /** Colours offered for this piece (first = default). */
   colors?: number[];
 }
@@ -35,6 +35,9 @@ export const CATALOG: CatalogItem[] = [
   { kind: 'stool', label: 'Stool', w: 0.7, h: 0.7, group: 'Kitchen' },
   { kind: 'plant', label: 'Plant', w: 1, h: 1, group: 'Plants' },
   { kind: 'plant', label: 'Big plant', w: 1.3, h: 1.3, group: 'Plants' },
+  { kind: 'foosball', label: 'Foosball table', w: 3, h: 1.6, group: 'Games' },
+  { kind: 'cardTable', label: 'Card table', w: 2.2, h: 2.2, group: 'Games' },
+  { kind: 'legoBoard', label: 'Lego wall', w: 4, h: 0.5, group: 'Games' },
 ];
 
 export function catalogEntry(kind: FurnitureKind) {

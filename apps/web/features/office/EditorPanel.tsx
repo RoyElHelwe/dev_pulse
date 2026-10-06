@@ -2,9 +2,11 @@
 
 import {
   Armchair,
+  Blocks,
   Coffee,
   Columns2,
   Copy,
+  Gamepad2,
   LampFloor,
   Laptop,
   Leaf,
@@ -16,6 +18,7 @@ import {
   RotateCcw,
   RotateCw,
   Sofa,
+  Spade,
   SquareKanban,
   Sprout,
   Square,
@@ -55,6 +58,9 @@ const ICON: Record<FurnitureKind, LucideIcon> = {
   barTable: Table2,
   stool: Square,
   plant: Sprout,
+  foosball: Gamepad2,
+  cardTable: Spade,
+  legoBoard: Blocks,
 };
 
 const GROUPS = [...new Set(CATALOG.map((c) => c.group))];

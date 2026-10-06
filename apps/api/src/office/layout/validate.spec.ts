@@ -52,4 +52,13 @@ describe('validateLayout', () => {
     const board2: Furniture = { id: 'board-2', kind: 'board', x: 33, y: 12, w: 3, h: 0.5 };
     expect(codes(withFurniture([board1, board2], base))).toContain('OVERLAP');
   });
+
+  it('allows a legoBoard overlapping a wall but rejects two overlapping legoBoards', () => {
+    const base = studio();
+    const lego1: Furniture = { id: 'lego-1', kind: 'legoBoard', x: 32, y: 12, w: 4, h: 0.5 };
+    expect(codes(withFurniture([lego1], base))).toEqual([]);
+
+    const lego2: Furniture = { id: 'lego-2', kind: 'legoBoard', x: 33, y: 12, w: 4, h: 0.5 };
+    expect(codes(withFurniture([lego1, lego2], base))).toContain('OVERLAP');
+  });
 });

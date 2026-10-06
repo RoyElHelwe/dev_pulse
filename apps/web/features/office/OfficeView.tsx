@@ -18,6 +18,7 @@ import { LayoutEditor } from '@/game/editor/LayoutEditor';
 import type { OfficeLayout } from '@/game/layout/types';
 import { api, ApiError } from '@/lib/api';
 import { connectOffice, type Presence } from './connection';
+import { GameHost } from '@/features/games/GameHost';
 import { EditorPanel } from './EditorPanel';
 import { officeEvents } from './events';
 import { MoveDeskPrompt } from './MoveDeskPrompt';
@@ -356,11 +357,12 @@ export function OfficeView() {
           />
         )}
         {/* Kept mounted while editing, so calls and chat carry on (they hide their UI). */}
-        {workspace && myId && (
+        {workspace && myId && user && (
           <>
             <VoiceControls {...features} />
             <ChatPanel {...features} />
             <MeetingsPanel {...features} />
+            <GameHost socket={socket} me={{ id: user.id, name: user.displayName, character: workspace.character }} />
           </>
         )}
         {editing && (

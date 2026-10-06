@@ -4,7 +4,7 @@
 export type FloorKind = 'oak' | 'carpet' | 'terrazzo';
 
 /** Meeting rooms and lounges become zones (voice calls, chill room...). */
-export type RoomKind = 'open' | 'meeting' | 'lounge';
+export type RoomKind = 'open' | 'meeting' | 'lounge' | 'chill';
 
 export interface Room {
   id: string;
@@ -48,7 +48,10 @@ export type FurnitureKind =
   | 'barTable'
   | 'stool'
   | 'beanbag'
-  | 'floorLamp';
+  | 'floorLamp'
+  | 'foosball'
+  | 'cardTable'
+  | 'legoBoard';
 
 /**
  * A piece of furniture, centred on (x, y), with its unrotated size w × h.

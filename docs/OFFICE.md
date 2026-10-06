@@ -1,7 +1,7 @@
 # Office, onboarding and invitations
 
 **Owners:** Roy (office, onboarding, editor, zones) · Mira (invitations, members)
-**Code:** `apps/api/src/{office,workspace,invitations}`, `apps/web/game`, `apps/web/features/{office,onboarding,team,workspace}`
+**Code:** `apps/api/src/{office,workspace,invitations,games}`, `apps/web/game`, `apps/web/features/{office,onboarding,team,workspace,games}`
 
 Same idea as the first version on `main`, without AI: the organiser picks a ready-made office
 that fits the team size and arranges it by hand in a live editor.
@@ -41,7 +41,7 @@ sign up ──► /onboarding                     (email) "Roy invited you to De
 | Invite admins, change roles, remove people | ✔ | | |
 | Rename the office | ✔ | ✔ | |
 | Move the office to another template, delete it | ✔ | | |
-| Expand the office with wings (Loft) | ✔ | ✔ | |
+| Expand the office with wings (Loft desks, any template for Chill room) | ✔ | ✔ | |
 | Move to another desk | ✔ | ✔ | ✔ |
 | Leave the office | (delete it instead) | ✔ | ✔ |
 
@@ -102,6 +102,7 @@ Loft only. When a team outgrows the initial 8 desks, owners and admins can expan
   - `BOTTOM`: Moves spawn/entrance to the new outer wall.
 - **Validation & State**: The resulting layout is validated (`validateLayout`). Bumps `layoutVersion` and emits live `office:layout` and `office:desks` socket events.
 - **Storage**: Recorded in the `OfficeWing` table (`workspaceId`, `side`, `seed`, `x`, `y`, `w`, `h`, `deskCount`). Switching template deletes wings.
+- **Chill room wing** (`POST /api/workspace/wings/chill`): Any office template can add a dedicated chill room wing (`side: 'LEFT' | 'RIGHT' | 'BOTTOM'`). Unlike regular wings, it adds a dedicated games room with 0 desks. Allowed once per office (refused with `CHILL_EXISTS` if a chill room already exists). `GET /api/workspace` returns `canAddChill: true` when caller is OWNER/ADMIN and the office has no chill room yet.
 - **Code**: Lives in `apps/api/src/office/layout/wings.ts`. Web mirrors nothing, layout is data.
 
 ### Live presence without lag
@@ -149,7 +150,7 @@ Web: `features/office/connection.ts`, `tabLockStore.ts` (store), `tabLockStore.t
 | **Nearby** | Another person within 3 tiles **in the same room** (walls, even glass, separate people) → `player:near`, then `player:distance` up to 5×/s, `player:far` past 3.5 tiles. The people list tags them "Nearby". | `game/systems/Proximity.ts` |
 | **Your desk** | Each member gets a free desk on joining (joining order), with their name on it (yours in green). Desks follow the office: after an edit people keep their desk if it still exists. Owners and admins move people from the Team page (swaps with whoever sat there). | `workspace/desks.service.ts`, `game/objects/DeskPlates.ts` |
 | **Moving desks** | Any member can move to another free desk (`PUT /api/workspace/me/desk`). Desk art follows the owner. Refused if taken (`DESK_TAKEN`). Emits `office:desks`. | `workspace/desks.service.ts` |
-| **E to use** | At a desk or in front of a screen, a hint appears ("Your desk", "Mira’s desk", "Desk 4 · free"); **E** (or tapping the hint) emits `object:interact`. | `game/systems/Interactions.ts` |
+| **E to use** | At a desk, screen, task board, or games piece (foosball, card table, Lego wall), a hint appears ("Your desk", "Play foosball", "Play Uno", "Build with Lego"); **E** (or tapping the hint) emits `object:interact`. | `game/systems/Interactions.ts` |
 | **Who is where** | The game reports its zone; the server shares it (`office:zone`), for display only (access uses positions). The people list shows "Atlas · Meeting room", "At Mira’s desk"; meeting rooms with people inside show "In use · 2". | `office.gateway.ts`, `game/objects/RoomBadges.ts` |
 | **Status** | A short status in a bubble over the avatar ("Focusing", "On break ☕" or your own text), set from the user menu (top right → Status), stored on the membership. | `UserMenu.tsx`, `StatusSection.tsx` |
 | **Map** | Floor plan in the corner with everyone, and the part of the office on screen. | `Minimap.tsx` |
@@ -165,6 +166,7 @@ officeEvents.on('player:distance', ({ userId, distance }) => voice.setVolume(use
 officeEvents.on('player:far', ({ userId }) => voice.hangUp(userId));
 officeEvents.on('zone:enter', (zone) => zone.type === 'meeting' && meeting.join(zone.id)); // room id, not its name
 officeEvents.on('object:interact', (e) => e.type === 'desk' && e.ownerId === me.id && tasks.open());
+officeEvents.on('object:interact', (e) => ['foosball', 'uno', 'lego'].includes(e.type) && games.open(e));
 ```
 
 Every `on` returns its own "off", handy in `useEffect`. The status bubble is
@@ -276,7 +278,7 @@ game (walking keys are ignored while you type).
   actions, bad codes, reserved keys (WASD, arrows, Esc, Enter, Tab) and duplicates (`settings/keybinds.ts`).
   Web: one store (`useKeybinds`, `getKeybinds`, `useKeybind(action, fn, enabled)`, `rebind`, `resetKeybinds`); every
   listener reads it (VoiceControls, OfficeScene E, chat/board/rooms/people toggles). /settings/voice rebinds PTT
-  through the same store. New shortcuts: add the action in both `keybinds.ts` files.
+  through the same store. New shortcuts (e.g. game actions in foosball): add the action in both `keybinds.ts` files.
 
 ## 6. The office editor
 
@@ -320,6 +322,13 @@ Wall-mounted Kanban whiteboard (3 × 0.5 tiles, solid obstacle).
 - Exactly one `board` is included in every office template.
 - Existing offices created before this furniture kind was added will not have one until a template reset or added via the editor.
 
+### Games furniture (`foosball`, `cardTable`, `legoBoard`)
+
+Catalog group "Games" (`apps/web/game/editor/catalog.ts`):
+- `foosball`: Table football (3 × 1.6 tiles, solid obstacle).
+- `cardTable`: Uno card table (2.2 × 2.2 tiles, round, solid obstacle). Surrounded by 6 sittable chairs.
+- `legoBoard`: Wall-mounted Lego board (4 × 0.5 tiles, solid obstacle). Like `board`, exempt from `ON_WALL` collision checks in `validateLayout` and `placementProblem`.
+
 ## 7. API
 
 | Method | Path | Who | What |
@@ -334,6 +343,8 @@ Wall-mounted Kanban whiteboard (3 × 0.5 tiles, solid obstacle).
 | PUT | `/api/workspace/layout` | owner, admin | `{ version, furniture, rooms: [{ id, name }] }` |
 | PUT | `/api/workspace/template` | owner | `{ templateId, version, teamSize? }` (generated: defaults to the member count) |
 | POST | `/api/workspace/wings` | owner, admin | `{ side, version }` (Loft only: 'LEFT' \| 'RIGHT' \| 'BOTTOM'; adds wing) |
+| POST | `/api/workspace/wings/chill` | owner, admin | `{ side, version }` (any template: adds chill room wing, deskCount 0; `CHILL_EXISTS`) |
+| GET | `/api/workspace/games/leaderboard` | member | `?game=foosball\|uno\|lego&days=7` (top 10 by wins desc, losses asc) |
 | GET | `/api/workspace/members` | member | with their `deskId` |
 | PATCH / DELETE | `/api/workspace/members/:userId` | owner (or yourself to leave) | `{ role }` |
 | PUT | `/api/workspace/members/:userId/desk` | owner, admin | `{ deskId }` (null = no desk) |
@@ -344,12 +355,13 @@ Wall-mounted Kanban whiteboard (3 × 0.5 tiles, solid obstacle).
 | POST | `/api/invitations/:token/accept` | signed in, invited email | `{ character? }` → join |
 | POST | `/api/invitations/:token/decline` | public | |
 
-`GET /api/workspace` also returns `status`, `deskId`, `desks` (who sits where), `wings` and `canExpand`.
+`GET /api/workspace` also returns `status`, `deskId`, `desks` (who sits where), `wings`, `canExpand` and `canAddChill`.
 
 Socket `/office`: `office:state`, `office:joined`, `office:moved`, `office:left`,
 `office:layout`, `office:updated` (character / role / status), `office:zone [id, zone]`,
 `office:desks`, `office:removed` (`removed` / `deleted`); the client sends `move` and
-`zone`.
+`zone`. The `/office` socket also manages games: client sends `game:join`, `game:leave`, `game:action`;
+server emits `game:state`, `game:event`, `game:left`, `game:ended`, `game:error`.
 
 ## 8. Tests
 
@@ -421,3 +433,163 @@ details; its creator, or an owner / admin, can cancel it.
 Every change sends `office:bookings` on the `/office` socket; clients reload the list, and
 re-check every minute which rooms are closed to them (`controller.setLockedRooms`).
 Rules and their tests: `meetings/booking-rules.ts`.
+
+## 10. Chill room and games
+
+**Code:** `apps/api/src/games`, `apps/web/features/games`
+
+Interactive games and break room framework for casual multiplayer activities.
+
+### Room kind and furniture
+
+- **Room kind `chill`**: Defined in `RoomKind` (`'open' | 'meeting' | 'lounge' | 'chill'`). Voice talk-rule (`withinEarshot`) treats `chill` rooms like lounges (earshot radius, not whole room).
+- **Furniture**:
+  - `foosball`: Table football (3 × 1.6 tiles, solid obstacle).
+  - `cardTable`: Round card table for Uno (2.2 × 2.2 tiles, solid obstacle). Surrounded by 6 sittable chairs.
+  - `legoBoard`: Wall-mounted Lego building surface (4 × 0.5 tiles, solid obstacle). Exempt from `ON_WALL` collision checks in `validateLayout` and `placementProblem` (like `board`).
+- **Loft chill room**: Loft template includes a default 11 × 12 chill room (`id: 'chill'`, name "Chill room", terrazzo floor) equipped with 1 foosball table, 1 cardTable surrounded by 6 chairs, 1 legoBoard on the north wall, rug, and plant.
+- **Chill room wing** (`POST /api/workspace/wings/chill`):
+  - Owner or admin can add a chill room wing (`side: 'LEFT' | 'RIGHT' | 'BOTTOM'`) to **any** template (unlike regular desk wings which are Loft only).
+  - Reuses wings machinery (shared wall door cut, layout validation), adding a chill room with `deskCount: 0`.
+  - Maximum one chill room per office: rejected with error `CHILL_EXISTS` if any room already has kind `chill`.
+  - `GET /api/workspace` returns `canAddChill: true` when caller is OWNER/ADMIN and the office has no chill room yet.
+
+### Interaction types and flow
+
+1. **Approach**: Walking near a games piece displays a contextual interaction hint:
+   - Foosball: "Play foosball"
+   - Card table: "Play Uno"
+   - Lego wall: "Build with Lego"
+2. **Interact (E)**: Pressing **E** (or tapping hint) causes `Interactions.ts` to emit `object:interact` on `officeEvents`:
+   - Payload: `{ type: 'foosball' | 'uno' | 'lego', id: string, name: string }` (where `id` is the furniture ID).
+3. **GameHost modal**:
+   - `GameHost` (mounted in `OfficeView.tsx`) catches the event and opens a portaled dialog modal (`z-[70]`).
+   - Dialog sets `data-captures-keys=""` and stops keyboard event propagation (`onKeyDown`/`onKeyUp` `stopPropagation`) so walking keys (WASD/arrows) do not move the avatar while playing.
+   - Registers `useEscape(!!activeGame, handleClose)` to close on Escape.
+   - Renders the lazy game panel (`registry.ts`) inside a `<Suspense>` boundary.
+   - Renders `<Leaderboard game={kind} socket={socket} />` under the game panel.
+4. **Close**: Clicking close (X), clicking backdrop, pressing Escape, or calling `onClose` emits `game:leave { id }` and unmounts the modal.
+
+### API framework
+
+- **Modules** (`apps/api/src/games`):
+  - `GamesCoreModule` (`games-core.module.ts`): provides and exports `GamesRegistry` and `GameResultsService`. Imports `PrismaModule`.
+  - Game modules: `FoosballModule`, `UnoModule`, `LegoModule`. Each imports `GamesCoreModule` and in `onModuleInit()` registers its `GameDefinition` in `GamesRegistry`.
+  - `GamesModule` (`games.module.ts`): imports `GamesCoreModule`, `FoosballModule`, `UnoModule`, `LegoModule`, and `OfficeModule`. Provides `GamesGateway` and `GamesSessionManager`. Controller: `GamesController`. Imported into `AppModule`.
+- **Core signatures** (`game.types.ts`):
+  ```ts
+  export type GameKind = 'foosball' | 'uno' | 'lego';
+  export interface GamePlayerRef { userId: string; name: string; character: string; }
+
+  export interface GameContext {
+    readonly workspaceId: string;
+    readonly objectId: string;
+    readonly kind: GameKind;
+    participants(): GamePlayerRef[];
+    emitState(): void;
+    emitEvent(event: string, data?: unknown, only?: string[]): void;
+    record(r: { winners: string[]; losers: string[] }): Promise<void>;
+    close(): void;
+  }
+
+  export interface GameInstance {
+    onJoin(p: GamePlayerRef, intent: unknown): void;
+    onLeave(userId: string, reason: 'left' | 'far' | 'disconnected'): void;
+    onAction(userId: string, action: unknown): void;
+    view(userId: string): unknown;
+    dispose(): void;
+  }
+
+  export interface GameDefinition {
+    kind: GameKind;
+    furnitureKind: FurnitureKind;
+    create(ctx: GameContext): GameInstance;
+  }
+
+  export class GameError extends Error {
+    constructor(public readonly code: string, message: string) { super(message); }
+  }
+  ```
+- **Session lifecycle**:
+  - `GamesSessionManager` maintains sessions in memory keyed by `${workspaceId}:${objectId}`, lazily creating on first join and disposing when empty or when `ctx.close()` is called.
+  - Participants join socket room `game:${workspaceId}:${objectId}`.
+  - **One active game per user**: joining another game automatically leaves the previous session (`reason: 'left'`).
+  - **Disconnect**: socket disconnect calls `sessionManager.handleDisconnect(userId)` (`reason: 'disconnected'`).
+  - **Rate limiting**: `Budget(60)` per socket (~60 msgs/s); excess messages receive `game:error` with code `RATE_LIMIT`.
+  - **Proximity rules** (`apps/api/src/games/proximity.ts`):
+    - On `game:join`: player must be within 4 tiles (`JOIN_PROXIMITY_TILES = 4`) of furniture center via `OfficeGateway.locate`. Error `NOT_NEAR` if too far.
+    - Periodic sweep: `GamesSessionManager.sweepProximity()` runs every 1 second (`setInterval`). If participant's distance exceeds 7 tiles (`LEAVE_PROXIMITY_TILES = 7`) or player left office, auto-evicts with `leave(..., 'far')` and emits `game:left { id, reason: 'far' }`.
+- **Game results and leaderboard**:
+  - `GameResultsService.record({ workspaceId, game, winners, losers })`: inserts a record into Prisma `GameResult` table (`id`, `workspaceId`, `game`, `winners: String[]`, `losers: String[]`, `createdAt`, cascade delete with Workspace, indexed by `[workspaceId, game, createdAt]`).
+  - Aggregation (`aggregateLeaderboard`): pure function aggregating match rows over a `days` window. 1 win & 1 game per unique winner, 1 loss & 1 game per unique loser. Sorted by `wins desc`, `losses asc`, `games desc`. Top 10 entries returned.
+  - Endpoint `GET /api/workspace/games/leaderboard?game=foosball|uno|lego&days=7`: member-only, query parameters `game` and `days` (integer 1–90, default 7). Returns `{ game, days, entries: [{ userId, name, character, wins, losses, games }] }`.
+
+### Socket protocol (`/office` namespace)
+
+| Event | Direction | Payload | Description |
+| --- | --- | --- | --- |
+| `game:join` | Client → Server | `{ game: GameKind, id: string, intent?: unknown }` | Joins session. Validates object existence, matching furniture kind, budget, and proximity (≤ 4 tiles). Auto-joins socket room. |
+| `game:leave` | Client → Server | `{ id: string }` | Leaves session (`reason: 'left'`). Leaves socket room. |
+| `game:action` | Client → Server | `{ id: string, action: unknown }` | Sends game action. Rate-limited. Game validates and executes; throws `GameError` on bad move. |
+| `game:state` | Server → Client | `{ id: string, game: GameKind, state: unknown }` | Viewer-specific state (`instance.view(userId)`). Sent on join and whenever `ctx.emitState()` is called. |
+| `game:event` | Server → Client | `{ id: string, event: string, data?: unknown }` | Transient game event (e.g. goal scored, cards dealt). Sent to all session participants or specified `only` user IDs. |
+| `game:left` | Server → Client | `{ id: string, reason: 'left' \| 'far' \| 'closed' }` | Emitted to leaving user (or all participants on close). |
+| `game:ended` | Server → Client | `{ id: string, result?: unknown }` | Sent when match concludes or session closes (`{ reason: 'closed' }`). Triggers leaderboard refresh in client. |
+| `game:error` | Server → Client | `{ id?: string, code: string, message: string }` | Emitted to sender on failure. Error codes: `BAD_REQUEST`, `NOT_FOUND`, `WRONG_GAME`, `NOT_NEAR`, `RATE_LIMIT`, `INTERNAL_ERROR`, or custom `GameError` code. |
+
+### Web framework (`apps/web/features/games`)
+
+- **Types & Props** (`types.ts`):
+  ```ts
+  export interface GamePanelProps {
+    objectId: string;
+    name: string;
+    socket: Socket;
+    me: { id: string; name: string; character: string };
+    onClose: () => void;
+  }
+  ```
+- **`useGameSession` API** (`useGameSession.ts`):
+  ```ts
+  const { state, status, error, send, join, leave, onEvent } = useGameSession<GameState>(
+    socket,
+    gameKind,
+    objectId,
+    intent?,
+  );
+  ```
+  - `status`: `'joining' | 'joined' | 'left' | 'error'`.
+  - `error`: `{ code: string; message: string } | null`.
+  - Automatically emits `game:join` on mount and `game:leave` on unmount.
+  - Exposes `send(action)` for player actions and `onEvent((event, data) => void)` for transient events (e.g. sounds, goals).
+- **Registry** (`registry.ts`):
+  - `GAME_PANELS: Record<GameKind, ComponentType<GamePanelProps>>` uses `next/dynamic` to lazily load `./foosball/FoosballPanel`, `./uno/UnoPanel`, and `./lego/LegoPanel`.
+- **`GameHost`** (`GameHost.tsx`):
+  - Mounted once in `OfficeView.tsx`.
+  - Manages active game modal overlay, Escape handling with `useEscape`, and key-capture isolation via `data-captures-keys=""`.
+- **`Leaderboard`** (`Leaderboard.tsx`):
+  - Renders top players this week with rank, `CharacterFace`, player name, and `W / L` statistics.
+  - Automatically re-fetches leaderboard on `game:ended` socket event.
+
+### Keybind actions for games
+
+Rebindable key actions for games (such as foosball controls) must be declared on both sides:
+- **Web** (`apps/web/features/settings/keybinds.ts`): add action to `KEYBIND_ACTIONS`, default key to `DEFAULT_KEYBINDS`, and description to `KEYBIND_LABELS`. Access in components via `useKeybind('<action>')` or `matchesKey(e, '<action>')`.
+- **API** (`apps/api/src/settings/keybinds.ts`): add action to `ACTIONS`, default key to `DEFAULT_KEYBINDS`, and label to `ACTION_LABELS`.
+- Reserved keys (`WASD`, arrow keys, `Escape`, `Enter`, `Tab`) cannot be rebound.
+
+### How to add a game (checklist for steps 12–14: Foosball, Uno, Lego)
+
+1. **Replace API stub module** (`apps/api/src/games/<game>/<game>.module.ts`):
+   - Implement game state, turn flow, timers (`setInterval`), and rules inside a class or factory returning `GameInstance`.
+   - Clean up any timers/listeners in `dispose()`.
+   - Register the definition in `onModuleInit()`: `this.registry.register({ kind, furnitureKind, create: (ctx) => ... })`.
+2. **Replace Web panel stub** (`apps/web/features/games/<game>/<Game>Panel.tsx`):
+   - Replace stub component with interactive game UI (keep default export for dynamic import).
+   - Use `useGameSession<State>(socket, '<game>', objectId)` to sync state and dispatch moves via `send(action)`.
+3. **Record match results**:
+   - On game completion, invoke `await ctx.record({ winners: [userId, ...], losers: [userId, ...] })`.
+   - Broadcast completion with `ctx.emitEvent('ended', result)` or close session with `ctx.close()`.
+4. **Write unit tests**:
+   - Add tests in `apps/api/src/games/<game>/<game>.spec.ts` testing player join/leave, turns, action validation (`GameError`), forfeit handling, and results recording.
+   - Run tests: `docker exec dev_pulse-api-1 pnpm vitest run src/games/<game>`.

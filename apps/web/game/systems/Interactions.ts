@@ -7,8 +7,8 @@ import { Bubble } from '../objects/Bubble';
 import type { DeskOwner } from '../objects/DeskPlates';
 
 interface Target {
-  /** `board` = a screen (tv), `kanban` = the task board on the wall. */
-  type: 'desk' | 'board' | 'kanban';
+  /** `board` = a screen (tv), `kanban` = the task board on the wall, games = chill room games. */
+  type: 'desk' | 'board' | 'kanban' | 'foosball' | 'uno' | 'lego';
   id: string;
   name: string;
   /** Where the player must stand (tiles). */
@@ -69,7 +69,46 @@ export class Interactions {
           anchor: { x: board.x * TILE, y: b.y * TILE - 6 },
         };
       });
-    this.targets = [...desks, ...screens, ...boards];
+    const foosballs: Target[] = layout.furniture
+      .filter((f) => f.kind === 'foosball')
+      .map((f) => {
+        const b = itemBounds(f);
+        return {
+          type: 'foosball',
+          id: f.id,
+          name: 'Foosball table',
+          spot: { x: f.x, y: f.y },
+          area: { x: b.x - 1.2, y: b.y - 1.2, w: b.w + 2.4, h: b.h + 2.4 },
+          anchor: { x: f.x * TILE, y: b.y * TILE - 6 },
+        };
+      });
+    const cardTables: Target[] = layout.furniture
+      .filter((f) => f.kind === 'cardTable')
+      .map((f) => {
+        const b = itemBounds(f);
+        return {
+          type: 'uno',
+          id: f.id,
+          name: 'Uno table',
+          spot: { x: f.x, y: f.y },
+          area: { x: b.x - 1.2, y: b.y - 1.2, w: b.w + 2.4, h: b.h + 2.4 },
+          anchor: { x: f.x * TILE, y: b.y * TILE - 6 },
+        };
+      });
+    const legos: Target[] = layout.furniture
+      .filter((f) => f.kind === 'legoBoard')
+      .map((lego) => {
+        const b = itemBounds(lego);
+        return {
+          type: 'lego',
+          id: lego.id,
+          name: 'Lego wall',
+          spot: { x: lego.x, y: b.y + b.h + 1.2 },
+          area: { x: b.x - 0.5, y: b.y, w: b.w + 1, h: b.h + 2.4 },
+          anchor: { x: lego.x * TILE, y: b.y * TILE - 6 },
+        };
+      });
+    this.targets = [...desks, ...screens, ...boards, ...foosballs, ...cardTables, ...legos];
   }
 
   setOwners(owners: DeskOwner[]) {
@@ -126,6 +165,9 @@ export class Interactions {
   }
 
   private label(t: Target) {
+    if (t.type === 'foosball') return 'Play foosball';
+    if (t.type === 'uno') return 'Play Uno';
+    if (t.type === 'lego') return 'Build with Lego';
     if (t.type === 'board') return 'Use the screen';
     if (t.type === 'kanban') return 'Open the task board';
     const owner = this.owners.get(t.id);

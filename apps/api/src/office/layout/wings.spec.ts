@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
+import { campus } from '../templates/campus';
+import { generatedOffice } from '../templates/generated';
+import { hq } from '../templates/hq';
 import { loft } from '../templates/loft';
+import { studio } from '../templates/studio';
 import { validateLayout } from './validate';
 import { addWing, WingError, type WingSide } from './wings';
 
@@ -158,5 +162,75 @@ describe('wings', () => {
       expect(wingErr.code).toBe('NO_DOOR');
       expect(wingErr.message).toContain('left wall');
     }
+  });
+
+  describe('chill wing', () => {
+    const sides: WingSide[] = ['LEFT', 'RIGHT', 'BOTTOM'];
+
+    it.each(sides)('adds chill wing on loft on side %s with valid layout', (side) => {
+      const loftBase = {
+        ...loft(),
+        rooms: loft().rooms.map((r) => (r.kind === 'chill' ? { ...r, kind: 'lounge' as const } : r)),
+        furniture: loft().furniture.filter((f) => !['foosball', 'cardTable', 'legoBoard'].includes(f.kind)),
+      };
+      const res = addWing(loftBase, side, `chill-loft-${side}`, 1, { special: 'chill' });
+      expect(validateLayout(res.layout)).toEqual([]);
+      expect(res.wing.deskCount).toBe(0);
+      const chillRooms = res.layout.rooms.filter((r) => r.kind === 'chill');
+      expect(chillRooms).toHaveLength(1);
+      expect(chillRooms[0].name).toBe('Chill room');
+      expect(res.layout.furniture.filter((f) => f.kind === 'foosball')).toHaveLength(1);
+      expect(res.layout.furniture.filter((f) => f.kind === 'cardTable')).toHaveLength(1);
+      expect(res.layout.furniture.filter((f) => f.kind === 'legoBoard')).toHaveLength(1);
+    });
+
+    it.each(sides)('adds chill wing directly to loft on side %s and validates', (side) => {
+      const res = addWing(loft(), side, `chill-loft-direct-${side}`, 1, { special: 'chill' });
+      expect(validateLayout(res.layout)).toEqual([]);
+      expect(res.wing.deskCount).toBe(0);
+    });
+
+    it.each(['studio', 'campus', 'hq'] as const)('adds chill wing to %s on every side, validating with exactly one chill room', (tmpl) => {
+      const templates = { studio: studio(), campus: campus(), hq: hq() };
+      for (const side of sides) {
+        const base = templates[tmpl];
+        const res = addWing(base, side, `chill-${tmpl}-${side}`, 1, { special: 'chill' });
+        expect(validateLayout(res.layout)).toEqual([]);
+        expect(res.wing.deskCount).toBe(0);
+        const chillRooms = res.layout.rooms.filter((r) => r.kind === 'chill');
+        expect(chillRooms).toHaveLength(1);
+        expect(chillRooms[0].name).toBe('Chill room');
+        expect(res.layout.furniture.filter((f) => f.kind === 'foosball')).toHaveLength(1);
+        expect(res.layout.furniture.filter((f) => f.kind === 'cardTable')).toHaveLength(1);
+        expect(res.layout.furniture.filter((f) => f.kind === 'legoBoard')).toHaveLength(1);
+      }
+    });
+
+    it('adds chill wing after a normal wing, validating with exactly one chill room', () => {
+      const base = studio();
+      // 1. Add normal wing
+      const normal = addWing(base, 'RIGHT', 'seed-normal', 1);
+      expect(validateLayout(normal.layout)).toEqual([]);
+      expect(normal.wing.deskCount).toBe(8);
+      // 2. Add chill wing
+      const chill = addWing(normal.layout, 'BOTTOM', 'seed-chill', 2, { special: 'chill' });
+      expect(validateLayout(chill.layout)).toEqual([]);
+      expect(chill.wing.deskCount).toBe(0);
+      const chillRooms = chill.layout.rooms.filter((r) => r.kind === 'chill');
+      expect(chillRooms).toHaveLength(1);
+      expect(chillRooms[0].name).toBe('Chill room');
+      expect(chill.layout.furniture.filter((f) => f.kind === 'foosball')).toHaveLength(1);
+      expect(chill.layout.furniture.filter((f) => f.kind === 'cardTable')).toHaveLength(1);
+      expect(chill.layout.furniture.filter((f) => f.kind === 'legoBoard')).toHaveLength(1);
+    });
+
+    it('adds chill wing to a generated office, validating with exactly one chill room', () => {
+      const base = generatedOffice(8, 'seed-gen');
+      const res = addWing(base, 'RIGHT', 'seed-chill-gen', 1, { special: 'chill' });
+      expect(validateLayout(res.layout)).toEqual([]);
+      expect(res.wing.deskCount).toBe(0);
+      const chillRooms = res.layout.rooms.filter((r) => r.kind === 'chill');
+      expect(chillRooms).toHaveLength(1);
+    });
   });
 });

@@ -16,7 +16,12 @@ export interface OfficeEventMap {
   'player:distance': { userId: string; distance: number };
   'player:far': { userId: string };
   /** E pressed next to something. Desks: `ownerId` = who sits there (null = free desk). */
-  'object:interact': { type: 'desk' | 'board' | 'kanban'; id: string; name: string; ownerId?: string | null };
+  'object:interact': {
+    type: 'desk' | 'board' | 'kanban' | 'foosball' | 'uno' | 'lego';
+    id: string;
+    name: string;
+    ownerId?: string | null;
+  };
 }
 
 type Listener<T> = (payload: T) => void;
