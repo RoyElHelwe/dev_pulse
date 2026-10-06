@@ -85,9 +85,14 @@ support for the others and the final polish:
 
 ## 5. Zakaria: what's next
 
-- Start now, nothing blocks it: **Z1 Task backend** (`TasksModule` in `apps/api/src/tasks`,
-  use `MembershipService.require(user.id)` to get the workspace, never a workspace id from
-  the client) and **Z2 Kanban** panel over the office with live updates on `/tasks`.
+- **Z1 Task backend is built** (`TasksModule`, `apps/api/src/tasks`): `GET/POST /api/workspace/tasks`,
+  `PATCH/DELETE /api/workspace/tasks/:id`. Task = per-workspace `number` (key `<PREFIX>-<n>`),
+  type TASK|BUG|STORY, status TODO|IN_PROGRESS|IN_REVIEW|DONE, priority, assignee (a member),
+  reporter, dueDate, `rank` (float order in a column; move = PATCH `{status, rank}`). Everyone in
+  the office can browse/create/edit/move/assign; delete = OWNER/ADMIN or the reporter. Live events
+  on `/office`: `task:created|updated` (full task) and `task:deleted` (`{id}`). A removed member's
+  tasks become unassigned.
+- **Z2 Kanban** UI over the office (next) uses those events.
 - **Z3/Z4 voice and meeting rooms are built** (`features/voice`, `apps/api/src/voice`): peer to
   peer audio placed around you, meeting rooms as one call, bookings in `features/meetings`.
   Without a TURN server, people behind strict NATs can't connect (add one in the ICE servers
