@@ -5,27 +5,13 @@ export interface VoiceSettings {
   voiceMode: VoiceMode;
   /** KeyboardEvent.code ("KeyV", "Space"...). */
   pushToTalkKey: string;
+  keybinds?: Record<string, string>;
 }
 
 export const DEFAULT_VOICE_SETTINGS: VoiceSettings = { voiceMode: 'OPEN', pushToTalkKey: 'KeyV' };
 
 /** Same rule as the API. */
 export const KEY_CODE = /^[A-Za-z0-9]{1,24}$/;
-
-/** Keys the office already uses: M mute, H deafen, E use, WASD and arrows walk. */
-export const OFFICE_KEYS = new Set([
-  'KeyM',
-  'KeyH',
-  'KeyE',
-  'KeyW',
-  'KeyA',
-  'KeyS',
-  'KeyD',
-  'ArrowUp',
-  'ArrowDown',
-  'ArrowLeft',
-  'ArrowRight',
-]);
 
 const NAMES: Record<string, string> = {
   Backquote: '`',
