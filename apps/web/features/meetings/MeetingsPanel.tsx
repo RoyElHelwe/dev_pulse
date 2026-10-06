@@ -1,7 +1,7 @@
 'use client';
 
 import { CalendarClock, ChevronLeft, ChevronRight, X } from 'lucide-react';
-import { type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Socket } from 'socket.io-client';
 import { Alert } from '@/components/ui/Alert';
 import { Button, buttonStyles } from '@/components/ui/Button';
@@ -9,7 +9,9 @@ import { IconButton } from '@/components/ui/IconButton';
 import { Panel } from '@/components/ui/Panel';
 import type { OfficeFeatureProps } from '@/features/office/types';
 import { canManage } from '@/features/workspace/types';
+import { useKeybind, useKeyName } from '@/features/settings/keybinds';
 import { api, ApiError } from '@/lib/api';
+import { useEscape } from '@/lib/escape';
 import { BookingForm } from './BookingForm';
 import { Timetable } from './Timetable';
 import { addDays, type Booking, dayLabel, firstName, hm, type Member, minutesOf, ROW_MINUTES, rowTime, startOfDay } from './time';
@@ -77,15 +79,12 @@ export function MeetingsPanel({ socket, controller, workspace, myId, onToast, ed
   }, [open]);
   const close = () => {
     setOpen(false);
+    setView({ kind: 'grid' });
     buttonRef.current?.focus();
   };
-  // Escape: from the form back to the grid first, then closed.
-  const onKeyDown = (e: KeyboardEvent) => {
-    if (e.key !== 'Escape') return;
-    e.stopPropagation();
-    if (view.kind === 'grid') close();
-    else setView({ kind: 'grid' });
-  };
+  useKeybind('rooms', () => (open ? close() : setOpen(true)), !editing);
+  const roomsKey = useKeyName('rooms');
+  useEscape(open && !editing, () => (view.kind === 'grid' ? close() : setView({ kind: 'grid' })));
 
   const pick = useCallback(
     (roomId: string, from: number, to: number) => {
@@ -108,7 +107,8 @@ export function MeetingsPanel({ socket, controller, workspace, myId, onToast, ed
         <button
           ref={buttonRef}
           type="button"
-          onClick={() => setOpen(!open)}
+          onClick={() => (open ? close() : setOpen(true))}
+          title={`Rooms (${roomsKey})`}
           aria-expanded={open}
           className={buttonStyles('ghost', 'sm', 'h-9')}
         >
@@ -122,7 +122,6 @@ export function MeetingsPanel({ socket, controller, workspace, myId, onToast, ed
           role="dialog"
           aria-label="Meeting rooms"
           tabIndex={-1}
-          onKeyDown={onKeyDown}
           className="absolute inset-x-2 top-[7.75rem] bottom-4 z-30 flex flex-col overflow-hidden outline-none sm:right-4 sm:left-auto sm:w-[min(52rem,calc(100vw-2rem))]"
         >
           <header className="flex items-center gap-1 border-b border-zinc-200/70 py-2 pr-2 pl-4">

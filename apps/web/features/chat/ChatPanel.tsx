@@ -8,6 +8,8 @@ import type { OfficeFeatureProps } from '@/features/office/types';
 import { CharacterFace } from '@/features/workspace/CharacterPreview';
 import { api, ApiError } from '@/lib/api';
 import { cn } from '@/lib/cn';
+import { useEscape } from '@/lib/escape';
+import { useKeybind, useKeyName } from '@/features/settings/keybinds';
 import { useCurrentRoom } from './useCurrentRoom';
 
 const OFFICE = 'office';
@@ -47,11 +49,18 @@ export function ChatPanel({ socket, controller, workspace, people, myId, editing
   const room = useCurrentRoom(controller, workspace.layout);
   const roomId = room?.id ?? null;
   const [open, setOpen] = useState(false);
+  useKeybind('chat', () => setOpen((o) => !o), !editing);
+  const chatKey = useKeyName('chat');
   const [tab, setTab] = useState<'office' | 'room'>('office');
   const [messages, setMessages] = useState<Record<string, ChatMessage[]>>({});
   const [loads, setLoads] = useState<Record<string, LoadState>>({});
   const [unread, setUnread] = useState<Record<string, number>>({});
   const channel = tab === 'room' && room ? room.id : OFFICE;
+
+  useEscape(open, () => {
+    setOpen(false);
+    (document.activeElement as HTMLElement)?.blur();
+  });
 
   // The live listener reads these without re-subscribing.
   const visible = useRef<string | null>(null);
@@ -59,6 +68,8 @@ export function ChatPanel({ socket, controller, workspace, people, myId, editing
   visible.current = shown ? channel : null;
   const roomRef = useRef(roomId);
   roomRef.current = roomId;
+  const controllerRef = useRef(controller);
+  controllerRef.current = controller;
 
   // Live messages (ours come back too, for our other tabs).
   useEffect(() => {
@@ -66,6 +77,8 @@ export function ChatPanel({ socket, controller, workspace, people, myId, editing
     const onMessage = (m: ChatMessage) => {
       // A room we already left: no tab shows it, so it mustn't count as unread.
       if (m.channel !== OFFICE && m.channel !== roomRef.current) return;
+      // The message also shows over the sender's head (yours too), panel open or not.
+      controllerRef.current?.showChat(m.userId, m.text);
       setMessages((all) => ({ ...all, [m.channel]: merge(all[m.channel], [m]) }));
       if (m.userId !== myId && visible.current !== m.channel) {
         setUnread((u) => ({ ...u, [m.channel]: (u[m.channel] ?? 0) + 1 }));
@@ -127,7 +140,12 @@ export function ChatPanel({ socket, controller, workspace, people, myId, editing
   if (!open) {
     return (
       <Panel className="absolute bottom-20 left-4 p-1">
-        <IconButton aria-label={totalUnread ? `Open chat, ${totalUnread} unread` : 'Open chat'} onClick={() => setOpen(true)} className="relative">
+        <IconButton
+          aria-label={totalUnread ? `Open chat, ${totalUnread} unread` : 'Open chat'}
+          title={`Chat (${chatKey})`}
+          onClick={() => setOpen(true)}
+          className="relative"
+        >
           <MessageSquare className="size-4" />
           {totalUnread > 0 && (
             <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-emerald-600 px-1 text-[10px] font-semibold text-white">
@@ -341,12 +359,10 @@ function Composer({ socket, channel, placeholder, onSent }: ComposerProps) {
             if (error) setError('');
           }}
           onKeyDown={(e) => {
-            // Enter sends, Shift+Enter is a new line, Escape gives the keys back to the game.
+            // Enter sends, Shift+Enter is a new line.
             if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
               e.preventDefault();
               send();
-            } else if (e.key === 'Escape') {
-              e.currentTarget.blur();
             }
           }}
           rows={1}

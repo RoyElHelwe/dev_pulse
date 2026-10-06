@@ -4,8 +4,13 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Socket } from 'socket.io-client';
 import { useAuth } from '@/features/auth/AuthProvider';
+import { useKeybind } from '@/features/settings/keybinds';
 import { ChatPanel } from '@/features/chat/ChatPanel';
 import { MeetingsPanel } from '@/features/meetings/MeetingsPanel';
+import { EMPTY_FILTER } from '@/features/tasks/BoardFilters';
+import { useOpenTaskCounts, useTaskSync } from '@/features/tasks/store';
+import { TaskBoard } from '@/features/tasks/TaskBoard';
+import type { BoardFilter } from '@/features/tasks/types';
 import { VoiceControls } from '@/features/voice/VoiceControls';
 import type { MyWorkspace } from '@/features/workspace/types';
 import type { OfficeController } from '@/game/createGame';
@@ -15,7 +20,9 @@ import { api, ApiError } from '@/lib/api';
 import { connectOffice, type Presence } from './connection';
 import { EditorPanel } from './EditorPanel';
 import { officeEvents } from './events';
+import { MoveDeskPrompt } from './MoveDeskPrompt';
 import { OfficeHud } from './OfficeHud';
+import { TabLock } from './TabLock';
 
 interface Editing {
   editor: LayoutEditor;
@@ -220,16 +227,75 @@ export function OfficeView() {
     return () => window.removeEventListener('beforeunload', warn);
   }, [editing]);
 
-  // Until the task manager (Z5) and meeting tools (Z4) listen to E, say what's there.
+  // ---- task board --------------------------------------------------------------------
+
+  useTaskSync(socket);
+  const [boardOpen, setBoardOpen] = useState(false);
+  const [boardFilter, setBoardFilter] = useState<BoardFilter>(EMPTY_FILTER);
+  const closeBoard = useCallback(() => setBoardOpen(false), []);
+  const toggleBoard = useCallback(() => setBoardOpen((o) => !o), []);
+
+  // ---- desk move (E at a free desk) ----
+  const [moveTo, setMoveTo] = useState<{ deskId: string; name: string } | null>(null);
+  const [moving, setMoving] = useState(false);
+  const moveToRef = useRef(moveTo);
+  moveToRef.current = moveTo;
+  const desksRef = useRef(workspace?.desks ?? []);
+  desksRef.current = workspace?.desks ?? [];
+  const moveDesk = useCallback(async () => {
+    const target = moveToRef.current;
+    if (!target) return;
+    setMoving(true);
+    try {
+      // The new desk list comes back on the socket (everyone's desks redraw live).
+      await api('/workspace/me/desk', { method: 'PUT', body: { deskId: target.deskId } });
+      setToast(`${target.name} is your desk now.`);
+    } catch (err) {
+      setToast(err instanceof ApiError ? err.message : 'Could not move your desk. Please try again.');
+    } finally {
+      setMoving(false);
+      setMoveTo(null);
+    }
+  }, []);
+
+  // E at the wall board: everyone's tasks. E at your own desk: only yours.
   useEffect(
     () =>
       officeEvents.on('object:interact', (e) => {
+        if (e.type === 'kanban') {
+          setBoardFilter((f) => ({ ...f, onlyMine: false }));
+          return setBoardOpen(true);
+        }
         if (e.type === 'board') return setToast('Screen: sharing arrives with the meeting rooms.');
-        const whose = !e.ownerId ? `${e.name} is free.` : e.ownerId === myId ? 'Your desk.' : `${e.name}.`;
-        setToast(`${whose} Tasks will open here.`);
+        if (e.ownerId && e.ownerId === myId) {
+          setBoardFilter({ ...EMPTY_FILTER, onlyMine: true });
+          return setBoardOpen(true);
+        }
+        if (e.ownerId) {
+          const owner = desksRef.current.find((d) => d.deskId === e.id);
+          return setToast(owner ? `${e.name} is ${owner.name}’s desk.` : `${e.name}.`);
+        }
+        // A free desk: ask first; E again (or the button) moves you there.
+        if (moveToRef.current?.deskId === e.id) return void moveDesk();
+        setToast('');
+        setMoveTo({ deskId: e.id, name: e.name });
       }),
-    [myId],
+    [myId, moveDesk],
   );
+
+  // The prompt goes away when you walk off, or when someone else takes the desk.
+  useEffect(
+    () => officeEvents.on('zone:leave', (z) => setMoveTo((m) => (m && m.deskId === z.id ? null : m))),
+    [],
+  );
+  useEffect(() => {
+    if (moveTo && workspace?.desks.some((d) => d.deskId === moveTo.deskId)) setMoveTo(null);
+  }, [moveTo, workspace?.desks]);
+
+  // Paper stacks on the desks: one sheet per open task of the owner.
+  const openTasks = useOpenTaskCounts();
+  const gameController = ready ? controllerRef.current : null;
+  useEffect(() => gameController?.setTaskCounts(openTasks), [gameController, openTasks]);
 
   useEffect(() => {
     if (!toast) return;
@@ -238,6 +304,7 @@ export function OfficeView() {
   }, [toast]);
 
   const isEditing = !!editing;
+  useKeybind('board', toggleBoard, !isEditing);
   const features = useMemo(
     () => ({
       socket,
@@ -252,39 +319,64 @@ export function OfficeView() {
   );
 
   return (
-    <div className="relative h-dvh w-full overflow-hidden bg-[#e4e0da]">
-      <div ref={containerRef} className="absolute inset-0" />
-      {/* Soft vignette for depth; ignores the mouse. */}
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_55%,rgb(24_24_27/0.18))]" />
-      <OfficeHud
-        controller={ready ? controllerRef.current : null}
-        workspace={workspace}
-        people={people}
-        toast={toast}
-        online={online}
-        editing={!!editing}
-        onEdit={startEditing}
-      />
-      {/* Kept mounted while editing, so calls and chat carry on (they hide their UI). */}
+    <div className="relative flex h-dvh w-full flex-col overflow-hidden bg-[#e4e0da]">
+      {/* The task board drops down from the top and pushes the office (and its HUD) down. */}
       {workspace && myId && (
-        <>
-          <VoiceControls {...features} />
-          <ChatPanel {...features} />
-          <MeetingsPanel {...features} />
-        </>
-      )}
-      {editing && (
-        <EditorPanel
-          editor={editing.editor}
-          saving={saving}
-          error={editError}
-          onSave={save}
-          onDiscard={discard}
-          onReload={reloadLatest}
-          onReset={resetToTemplate}
-          onProblem={setToast}
+        <TaskBoard
+          open={boardOpen && !isEditing}
+          onClose={closeBoard}
+          filter={boardFilter}
+          onFilterChange={setBoardFilter}
+          myId={myId}
+          role={workspace.role}
         />
       )}
+      <div className="relative min-h-0 flex-1">
+        <div ref={containerRef} className="absolute inset-0" />
+        {/* Soft vignette for depth; ignores the mouse. */}
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_55%,rgb(24_24_27/0.18))]" />
+        <OfficeHud
+          controller={ready ? controllerRef.current : null}
+          workspace={workspace}
+          people={people}
+          toast={toast}
+          online={online}
+          editing={!!editing}
+          onEdit={startEditing}
+          boardOpen={boardOpen}
+          onBoard={toggleBoard}
+        />
+        {moveTo && !isEditing && (
+          <MoveDeskPrompt
+            name={moveTo.name}
+            hasDesk={!!workspace?.deskId}
+            busy={moving}
+            onMove={() => void moveDesk()}
+            onCancel={() => setMoveTo(null)}
+          />
+        )}
+        {/* Kept mounted while editing, so calls and chat carry on (they hide their UI). */}
+        {workspace && myId && (
+          <>
+            <VoiceControls {...features} />
+            <ChatPanel {...features} />
+            <MeetingsPanel {...features} />
+          </>
+        )}
+        {editing && (
+          <EditorPanel
+            editor={editing.editor}
+            saving={saving}
+            error={editError}
+            onSave={save}
+            onDiscard={discard}
+            onReload={reloadLatest}
+            onReset={resetToTemplate}
+            onProblem={setToast}
+          />
+        )}
+      </div>
+      <TabLock />
     </div>
   );
 }

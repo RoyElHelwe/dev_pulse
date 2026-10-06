@@ -6,6 +6,8 @@ import { Panel } from '@/components/ui/Panel';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { useVoiceStates, type VoiceState } from '@/features/voice/store';
 import { CharacterFace } from '@/features/workspace/CharacterPreview';
+import { useKeybind, useKeyName } from '@/features/settings/keybinds';
+import { useEscape } from '@/lib/escape';
 import type { Presence } from './connection';
 
 interface PresenceListProps {
@@ -23,7 +25,11 @@ export function PresenceList({ people, placeOf, myZone, myStatus, nearby }: Pres
   const { user } = useAuth();
   const voice = useVoiceStates();
   const [open, setOpen] = useState(false);
+  useKeybind('people', () => setOpen((o) => !o));
+  const peopleKey = useKeyName('people');
   const ref = useRef<HTMLDivElement>(null);
+
+  useEscape(open, () => setOpen(false));
 
   useEffect(() => {
     if (!open) return;
@@ -40,6 +46,7 @@ export function PresenceList({ people, placeOf, myZone, myStatus, nearby }: Pres
           type="button"
           onClick={() => setOpen(!open)}
           aria-expanded={open}
+          title={`People (${peopleKey})`}
           className="flex h-9 items-center gap-2 rounded-full px-2.5 text-sm font-medium text-zinc-700 transition hover:bg-zinc-900/5"
         >
           <span className="flex -space-x-2">
