@@ -14,7 +14,7 @@ export interface OfficeController {
   /** The whole list of other people (on connect / reconnect). */
   setPlayers(players: PlayerState[]): void;
   upsertPlayer(player: PlayerState): void;
-  movePlayer(id: string, x: number, y: number, dir: number, moving: boolean): void;
+  movePlayer(id: string, x: number, y: number, dir: number, moving: boolean, seated?: boolean): void;
   removePlayer(id: string): void;
   setPlayerCharacter(id: string, character: string): void;
   setOwnCharacter(character: string): void;
@@ -25,6 +25,10 @@ export interface OfficeController {
   setVoice(id: string, inCall: boolean, talking: boolean): void;
   /** Who sits where (name plates on desks). */
   setDesks(desks: DeskOwner[]): void;
+  /** Chat: show a message over someone's head (their id; yours too). */
+  showChat(userId: string, text: string): void;
+  /** Open tasks per user id: the paper stacks on their desks grow with them. */
+  setTaskCounts(counts: ReadonlyMap<string, number>): void;
   /** Touch joystick, -1..1 on each axis (0, 0 = stop). */
   setJoystick(x: number, y: number): void;
   /** Positions for the minimap (tiles). */
@@ -74,6 +78,7 @@ export function createGame(parent: HTMLElement, options: GameOptions): OfficeCon
   // Other people live here, outside the scene, so a layout reload keeps them.
   const players = new Map(options.players.map((p) => [p.id, p]));
   let desks = options.desks;
+  let taskCounts: ReadonlyMap<string, number> = new Map();
   let locked: string[] = [];
   let bookings: RoomBooking[] = [];
   const voice = new Map<string, { inCall: boolean; talking: boolean }>();
@@ -84,6 +89,7 @@ export function createGame(parent: HTMLElement, options: GameOptions): OfficeCon
     touch,
     players: () => [...players.values()],
     desks: () => desks,
+    taskCounts: () => taskCounts,
     locked: () => locked,
     bookings: () => bookings,
     voice: () => voice,
@@ -124,11 +130,11 @@ export function createGame(parent: HTMLElement, options: GameOptions): OfficeCon
       players.set(p.id, p);
       scene()?.upsertPlayer(p);
     },
-    movePlayer(id, x, y, dir, moving) {
+    movePlayer(id, x, y, dir, moving, seated) {
       const p = players.get(id);
       if (!p) return;
-      Object.assign(p, { x, y, dir, moving });
-      scene()?.movePlayer(id, x, y, dir, moving);
+      Object.assign(p, { x, y, dir, moving, seated: !!seated });
+      scene()?.movePlayer(id, x, y, dir, moving, !!seated);
     },
     removePlayer(id) {
       players.delete(id);
@@ -167,6 +173,11 @@ export function createGame(parent: HTMLElement, options: GameOptions): OfficeCon
     setDesks(list) {
       desks = list;
       scene()?.setDesks(list);
+    },
+    showChat: (userId, text) => scene()?.showChat(userId, text),
+    setTaskCounts(counts) {
+      taskCounts = counts;
+      scene()?.setTaskCounts(counts);
     },
     setJoystick: (x, y) => scene()?.setJoystick(x, y),
     setLockedRooms(ids) {

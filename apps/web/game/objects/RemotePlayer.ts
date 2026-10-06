@@ -9,6 +9,7 @@ interface Snapshot {
   y: number;
   dir: Direction;
   moving: boolean;
+  seated: boolean;
 }
 
 /** Draw other people this far in the past, between two received positions. */
@@ -33,16 +34,17 @@ export class RemotePlayer {
     name: string,
     fontFamily: string,
     textResolution: number,
+    private readonly depthOf: (x: number, y: number, seated: boolean) => number,
   ) {
     this.avatar = new Avatar(scene, x, y, recipe, name, fontFamily, textResolution);
-    this.snapshots.push({ t: performance.now(), x, y, dir: 'down', moving: false });
+    this.snapshots.push({ t: performance.now(), x, y, dir: 'down', moving: false, seated: false });
   }
 
-  push(x: number, y: number, dir: Direction, moving: boolean) {
+  push(x: number, y: number, dir: Direction, moving: boolean, seated = false) {
     const now = performance.now();
     const last = this.snapshots[this.snapshots.length - 1];
     if (Math.hypot(x - last.x, y - last.y) > TELEPORT_DISTANCE) this.snapshots = [];
-    this.snapshots.push({ t: now, x, y, dir, moving });
+    this.snapshots.push({ t: now, x, y, dir, moving, seated });
     if (this.snapshots.length > 30) this.snapshots.splice(0, this.snapshots.length - 30);
   }
 
@@ -70,8 +72,9 @@ export class RemotePlayer {
     }
     const moved = Math.abs(x - this.avatar.x) + Math.abs(y - this.avatar.y) > 0.3;
     this.avatar.setPosition(x, y);
-    this.avatar.setDepth(10 + y / 100000);
-    this.avatar.animateAs(current.dir, current.moving || moved, deltaMs);
+    this.avatar.setSeated(current.seated);
+    this.avatar.setDepth(this.depthOf(x, y, current.seated));
+    this.avatar.animateAs(current.dir, !current.seated && (current.moving || moved), deltaMs);
   }
 
   destroy() {

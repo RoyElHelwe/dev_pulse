@@ -3,7 +3,10 @@ import { drawCharacter, type Mood, type Pose } from '../art/character';
 import { phaserPen } from '../art/pen';
 import { encode, type Recipe } from '../art/recipe';
 import { circle, rr } from '../render/draw';
-import { Bubble } from './Bubble';
+import { Bubble, SpeechBubble } from './Bubble';
+
+/** Chat bubbles show at most this many characters. */
+const SAY_MAX = 80;
 
 export type { Direction } from '../art/character';
 import type { Direction } from '../art/character';
@@ -69,13 +72,18 @@ function moodOf(status: string | null): { mood: Mood; mug: boolean } {
  */
 export class Avatar extends Phaser.GameObjects.Container {
   private readonly figure: Phaser.GameObjects.Image;
+  private readonly shadow: Phaser.GameObjects.Graphics;
   /** Texture pixels per world pixel (sharp on retina screens). */
   private readonly texScale: number;
   private code: string;
   private direction: Direction = 'down';
   private phase = 0;
   private moving = false;
+  private _seated = false;
   private status: Bubble | null = null;
+  private speech: SpeechBubble | null = null;
+  private speechTimer: Phaser.Time.TimerEvent | null = null;
+  private speechTween: Phaser.Tweens.Tween | null = null;
   private face = moodOf(null);
   private inCall = false;
   private talking = false;
@@ -95,9 +103,9 @@ export class Avatar extends Phaser.GameObjects.Container {
   ) {
     super(scene, x, y);
 
-    const shadow = scene.add.graphics();
-    shadow.fillStyle(0x000000, 0.16);
-    shadow.fillEllipse(0, 0, 26, 9, 20);
+    this.shadow = scene.add.graphics();
+    this.shadow.fillStyle(0x000000, 0.16);
+    this.shadow.fillEllipse(0, 0, 26, 9, 20);
 
     this.texScale = Math.min(2, textResolution * 0.75);
     this.code = encode(recipe);
@@ -122,13 +130,23 @@ export class Avatar extends Phaser.GameObjects.Container {
     circle(tag, -tagW / 2 + 9.5, -66, 2.5, 0x34d399);
     label.setX(4.5);
 
-    this.add([shadow, this.figure, tag, label]);
+    this.add([this.shadow, this.figure, tag, label]);
     scene.add.existing(this);
     this.redraw();
   }
 
   get facing(): Direction {
     return this.direction;
+  }
+
+  get seated(): boolean {
+    return this._seated;
+  }
+
+  setSeated(seated: boolean) {
+    this._seated = seated;
+    this.shadow.setVisible(!seated);
+    this.redraw();
   }
 
   /** Call every frame with the current velocity (local player). */
@@ -148,6 +166,7 @@ export class Avatar extends Phaser.GameObjects.Container {
 
   /** Call every frame with a known direction (other players, from the network). */
   animateAs(direction: Direction, moving: boolean, deltaMs: number) {
+    if (this._seated) moving = false;
     this.direction = direction;
     // Kept within one stride, so the walk reuses the same 8 frames.
     this.phase = moving ? (this.phase + deltaMs * 0.018) % (Math.PI * 2) : 0;
@@ -163,6 +182,7 @@ export class Avatar extends Phaser.GameObjects.Container {
     if (!text) {
       this.status?.destroy();
       this.status = null;
+      this.speech?.setY(this.speechY());
       return;
     }
     if (this.status) this.status.setText(text);
@@ -175,6 +195,42 @@ export class Avatar extends Phaser.GameObjects.Container {
       });
       this.add(this.status);
     }
+    this.speech?.setY(this.speechY());
+  }
+
+  /** A chat message over the head, above the status: shown for ~5 s plus its length, then fades. Newest replaces. */
+  say(message: string) {
+    const text = message.replace(/\s+/g, ' ').trim();
+    if (!text) return;
+    this.clearSpeech();
+    const shown = text.length > SAY_MAX ? `${text.slice(0, SAY_MAX - 1).trimEnd()}…` : text;
+    this.speech = new SpeechBubble(this.scene, 0, this.speechY(), shown, { fontFamily: this.fontFamily, resolution: this.textResolution });
+    this.add(this.speech);
+    const bubble = this.speech;
+    this.speechTimer = this.scene.time.delayedCall(4500 + shown.length * 40, () => {
+      this.speechTween = this.scene.tweens.add({
+        targets: bubble,
+        alpha: 0,
+        duration: 350,
+        onComplete: () => {
+          if (this.speech === bubble) this.clearSpeech();
+        },
+      });
+    });
+  }
+
+  private speechY() {
+    // Above the status bubble (about 24 px tall) when there is one, else above the name tag.
+    return this.status ? -106 : -79;
+  }
+
+  private clearSpeech() {
+    this.speechTimer?.remove(false);
+    this.speechTween?.stop();
+    this.speechTimer = null;
+    this.speechTween = null;
+    this.speech?.destroy();
+    this.speech = null;
   }
 
   setLook(recipe: Recipe) {
@@ -190,6 +246,8 @@ export class Avatar extends Phaser.GameObjects.Container {
 
   destroy(fromScene?: boolean) {
     const textures = this.scene?.textures;
+    this.speechTimer?.remove(false);
+    this.speechTween?.stop();
     super.destroy(fromScene);
     if (textures) unwear(textures, this.code);
   }
@@ -204,17 +262,20 @@ export class Avatar extends Phaser.GameObjects.Container {
   private redraw() {
     // Everything visible, packed in one number: step (0 standing, 1-8 walking),
     // blink, talking light, direction, mood, mug, headset.
-    const step = this.moving ? 1 + (Math.round(this.phase / FRAME) % 8) : 0;
+    const step = !this._seated && this.moving ? 1 + (Math.round(this.phase / FRAME) % 8) : 0;
     const blink = !this.moving && this.clock % BLINK_EVERY_MS < BLINK_MS ? 1 : 0;
     const talk = this.talking ? 1 + (Math.floor(this.clock / 160) % 2) : 0;
     const { mood, mug } = this.face;
     const frame =
-      step + 9 * (blink + 2 * (talk + 3 * (DIRECTIONS.indexOf(this.direction) + 4 * (MOODS.indexOf(mood) + 4 * (Number(mug) + 2 * Number(this.inCall))))));
+      step +
+      9 * (blink + 2 * (talk + 3 * (DIRECTIONS.indexOf(this.direction) + 4 * (MOODS.indexOf(mood) + 4 * (Number(mug) + 2 * Number(this.inCall)))))) +
+      3456 * Number(this._seated);
     if (frame === this.drawn) return;
     this.drawn = frame;
     const texture = frameTexture(this.scene, this.code, this.recipe, frame, {
       dir: this.direction,
-      moving: this.moving,
+      moving: !this._seated && this.moving,
+      seated: this._seated,
       phase: Math.max(0, step - 1) * FRAME,
       blink: blink === 1,
       mood,

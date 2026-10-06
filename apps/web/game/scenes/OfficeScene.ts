@@ -1,5 +1,6 @@
 import * as Phaser from 'phaser';
 import { officeEvents } from '@/features/office/events';
+import { getKeybinds } from '@/features/settings/keybinds';
 import { isTyping } from '@/lib/dom';
 import { TILE, WALK_SPEED } from '../constants';
 import { EditMode } from '../editor/EditMode';
@@ -16,7 +17,7 @@ import { Proximity } from '../systems/Proximity';
 import { roomFinder } from '../systems/rooms';
 import { drawFloor } from '../render/floors';
 import { FURNITURE } from '../render/furniture';
-import { ensureFurnitureTexture, ensureShadowTexture, setDeskOwners, textureScale } from '../render/sprites';
+import { ensureFurnitureTexture, ensureShadowTexture, setDeskOwners, setDeskPapers, textureScale } from '../render/sprites';
 import { drawWall, wallCollider } from '../render/walls';
 
 /** Someone else in the office, as the network describes them. */
@@ -28,6 +29,7 @@ export interface PlayerState {
   y: number;
   dir: number;
   moving: boolean;
+  seated?: boolean;
   status?: string | null;
   /** Zone they stand in (meeting room, lounge, desk id), or null. */
   zone?: string | null;
@@ -50,6 +52,8 @@ export interface OfficeSceneData {
   players: () => PlayerState[];
   /** Who owns which desk (replayed after a layout reload). */
   desks: () => DeskOwner[];
+  /** Open tasks per user id, for the paper stacks on desks (replayed after a layout reload). */
+  taskCounts: () => ReadonlyMap<string, number>;
   /** Meeting rooms the local player may not enter (replayed after a layout reload). */
   locked: () => string[];
   /** Meeting rooms booked right now, for their badges (replayed after a layout reload). */
@@ -57,25 +61,41 @@ export interface OfficeSceneData {
   /** Who is in a call and talking (replayed after a layout reload). */
   voice: () => ReadonlyMap<string, { inCall: boolean; talking: boolean }>;
   /** Called when the local player moves (to send it to the others). */
-  onMove: (x: number, y: number, dir: number, moving: boolean) => void;
+  onMove: (x: number, y: number, dir: number, moving: boolean, seated: boolean) => void;
   /** Called when the local player enters or leaves a zone (shared with the others). */
   onZone: (zoneId: string | null) => void;
 }
 
 /** For the minimap and voice: positions in tiles, and the room each person stands in (null outside rooms). */
 export interface OfficeSnapshot {
-  me: { x: number; y: number; room: string | null };
-  others: { id: string; x: number; y: number; room: string | null }[];
+  me: { x: number; y: number; room: string | null; dir: Direction; seated: boolean };
+  others: { id: string; x: number; y: number; room: string | null; dir: Direction; seated: boolean }[];
   view: { x: number; y: number; w: number; h: number };
 }
 
-// Draw order: floor and walls (baked) < rugs < shadows < furniture < people.
-export const DEPTH = { floor: 0, rug: 1, shadow: 2, furniture: 3, plates: 4, badges: 9, people: 10, hints: 900 };
+// Draw order: floor and walls (baked) < rugs < shadows < y-sorted (furniture + people + plates) < badges < hints.
+export const DEPTH = { floor: 0, rug: 1, shadow: 2, sorted: 10, badges: 20, hints: 900 };
 
 const ZOOM_MIN = 0.6;
 const ZOOM_MAX = 1.5;
 /** Send the local position at most every 50 ms (20 per second) while walking. */
 const SEND_INTERVAL_MS = 50;
+const SIT_DWELL_MS = 500;
+const STAND_HOLD_MS = 500;
+
+interface Seat {
+  id: string;
+  item: Furniture;
+  x: number;
+  y: number;
+  centerX: number;
+  centerY: number;
+  dir: Direction | null;
+}
+
+interface ActiveSeat extends Seat {
+  dir: Direction;
+}
 
 export class OfficeScene extends Phaser.Scene {
   private opts!: OfficeSceneData;
@@ -90,6 +110,7 @@ export class OfficeScene extends Phaser.Scene {
   private userZoom = 1;
   private remotes = new Map<string, RemotePlayer>();
   private desks: DeskOwner[] = [];
+  private taskCounts: ReadonlyMap<string, number> = new Map();
   private sprites = new Map<string, { image: Phaser.GameObjects.Image; shadow?: Phaser.GameObjects.Image; key: string }>();
   private editMode: EditMode | null = null;
   private proximity!: Proximity;
@@ -101,7 +122,13 @@ export class OfficeScene extends Phaser.Scene {
   private badgesDirty = true;
   /** Virtual joystick (touch screens), -1..1 on each axis. */
   private joystick = { x: 0, y: 0 };
-  private lastSent = { at: 0, moving: false, dir: 'down' as Direction };
+  private seats: Seat[] = [];
+  private seat: ActiveSeat | null = null;
+  private seatCandidate: Seat | null = null;
+  private dwellMs = 0;
+  private standHoldMs = 0;
+  private justLeft: string | null = null;
+  private lastSent = { at: 0, moving: false, dir: 'down' as Direction, seated: false };
 
   constructor() {
     super('office');
@@ -118,7 +145,13 @@ export class OfficeScene extends Phaser.Scene {
     this.joystick = { x: 0, y: 0 };
     this.currentZone = null;
     this.locked = [];
-    this.lastSent = { at: 0, moving: false, dir: 'down' };
+    this.seats = [];
+    this.seat = null;
+    this.seatCandidate = null;
+    this.dwellMs = 0;
+    this.standHoldMs = 0;
+    this.justLeft = null;
+    this.lastSent = { at: 0, moving: false, dir: 'down', seated: false };
   }
 
   create() {
@@ -128,11 +161,24 @@ export class OfficeScene extends Phaser.Scene {
     const solids = this.physics.add.staticGroup();
     this.obstacles = [];
     this.zones = deriveZones(layout);
+    this.seats = layout.furniture
+      .filter((f) => f.kind === 'chair' || f.kind === 'armchair' || f.kind === 'stool')
+      .map((item) => ({
+        id: item.id,
+        item,
+        x: item.x * TILE,
+        y: item.y * TILE + 5,
+        centerX: item.x * TILE,
+        centerY: item.y * TILE,
+        dir: item.kind === 'stool' ? null : chairFacing(item.rotation ?? 0),
+      }));
 
     this.bakeStaticScenery(layout, worldW, worldH, solids);
 
     // Furniture: one image per piece (see render/sprites.ts), desks drawn for their owners.
+    this.taskCounts = this.opts.taskCounts();
     setDeskOwners(this, ownersOf(this.opts.desks()));
+    setDeskPapers(this, papersOf(this.opts.desks(), this.taskCounts));
     const scale = textureScale(this.opts.dpr);
     for (const item of layout.furniture) {
       this.addFurniture(item, scale);
@@ -157,7 +203,7 @@ export class OfficeScene extends Phaser.Scene {
     const text = { fontFamily: this.opts.fontFamily, resolution: this.opts.dpr * 2 };
     this.roomAt = roomFinder(layout);
     this.proximity = new Proximity(this.roomAt);
-    this.plates = new DeskPlates(this, layout, { ...text, myId: this.opts.myId, depth: DEPTH.plates });
+    this.plates = new DeskPlates(this, layout, { ...text, myId: this.opts.myId, depth: DEPTH.sorted + 0.9 });
     this.badges = new RoomBadges(this, layout, { ...text, depth: DEPTH.badges });
     this.interactions = new Interactions(this, layout, { ...text, myId: this.opts.myId, touch: this.opts.touch, depth: DEPTH.hints });
     this.setDesks(this.opts.desks());
@@ -183,7 +229,7 @@ export class OfficeScene extends Phaser.Scene {
     };
     // E uses what you stand next to. A DOM listener: one call per press, whatever the frame rate.
     const onKey = (e: KeyboardEvent) => {
-      if (e.key.toLowerCase() !== 'e' || e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (e.code !== getKeybinds().interact || e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
       if (!isTyping() && !this.editMode) this.interactions.trigger();
     };
     window.addEventListener('keydown', onKey);
@@ -218,24 +264,85 @@ export class OfficeScene extends Phaser.Scene {
 
   update(time: number, delta: number) {
     const body = this.player.body as Phaser.Physics.Arcade.Body;
-    let vx = 0;
-    let vy = 0;
-    let speed = WALK_SPEED;
-    if (!isTyping() && !this.editMode) {
-      const k = this.keys;
-      vx = Number(k.right.isDown || k.d.isDown) - Number(k.left.isDown || k.a.isDown);
-      vy = Number(k.down.isDown || k.s.isDown) - Number(k.up.isDown || k.w.isDown);
-      if (vx === 0 && vy === 0 && (this.joystick.x !== 0 || this.joystick.y !== 0)) {
-        vx = this.joystick.x;
-        vy = this.joystick.y;
-        speed = WALK_SPEED * Math.min(1, Math.hypot(vx, vy));
+    const typing = isTyping();
+
+    if (this.justLeft) {
+      const leftSeat = this.seats.find((s) => s.id === this.justLeft);
+      if (!leftSeat || !inSeatZone(leftSeat, this.player.x, this.player.y)) {
+        this.justLeft = null;
       }
     }
-    const v = new Phaser.Math.Vector2(vx, vy).normalize().scale(speed);
-    body.setVelocity(v.x, v.y);
 
-    this.player.setDepth(DEPTH.people + this.player.y / 100000);
-    this.player.animate(body.velocity.x, body.velocity.y, delta);
+    let ix = 0;
+    let iy = 0;
+    let speed = WALK_SPEED;
+    if (!typing && !this.editMode) {
+      const k = this.keys;
+      ix = Number(k.right.isDown || k.d.isDown) - Number(k.left.isDown || k.a.isDown);
+      iy = Number(k.down.isDown || k.s.isDown) - Number(k.up.isDown || k.w.isDown);
+      if (ix === 0 && iy === 0 && (this.joystick.x !== 0 || this.joystick.y !== 0)) {
+        ix = this.joystick.x;
+        iy = this.joystick.y;
+        speed = WALK_SPEED * Math.min(1, Math.hypot(ix, iy));
+      }
+    }
+
+    if (this.seat) {
+      body.setVelocity(0, 0);
+      body.reset(this.seat.x, this.seat.y);
+      this.player.animateAs(this.seat.dir, false, delta);
+
+      const hasInput = (ix !== 0 || iy !== 0) && !typing;
+      if (hasInput) {
+        this.standHoldMs += delta;
+        if (this.standHoldMs >= STAND_HOLD_MS) {
+          this.standUp(false, ix, iy);
+        }
+      } else {
+        this.standHoldMs = 0;
+      }
+    } else {
+      const v = new Phaser.Math.Vector2(ix, iy).normalize().scale(speed);
+      body.setVelocity(v.x, v.y);
+      this.player.animate(body.velocity.x, body.velocity.y, delta);
+
+      if (!typing && !this.editMode) {
+        const matchingSeats = this.seats.filter((s) => inSeatZone(s, this.player.x, this.player.y) && this.isSeatFree(s));
+        let candidate: Seat | null = null;
+        if (matchingSeats.length === 1) {
+          candidate = matchingSeats[0];
+        } else if (matchingSeats.length > 1) {
+          matchingSeats.sort(
+            (a, b) =>
+              Math.hypot(this.player.x - a.centerX, this.player.y - a.centerY) -
+              Math.hypot(this.player.x - b.centerX, this.player.y - b.centerY),
+          );
+          candidate = matchingSeats[0];
+        }
+
+        if (candidate) {
+          if (this.seatCandidate?.id === candidate.id) {
+            this.dwellMs += delta;
+          } else {
+            this.seatCandidate = candidate;
+            this.dwellMs = delta;
+          }
+          if (this.dwellMs >= SIT_DWELL_MS) {
+            this.sit(candidate);
+            this.seatCandidate = null;
+            this.dwellMs = 0;
+          }
+        } else {
+          this.seatCandidate = null;
+          this.dwellMs = 0;
+        }
+      } else {
+        this.seatCandidate = null;
+        this.dwellMs = 0;
+      }
+    }
+
+    this.player.setDepth(this.peopleDepth(this.player.x, this.player.y, this.player.seated));
     for (const remote of this.remotes.values()) remote.update(delta);
     this.maybeSend(time, body.velocity.x !== 0 || body.velocity.y !== 0);
     this.updateZone();
@@ -248,9 +355,19 @@ export class OfficeScene extends Phaser.Scene {
 
   upsertPlayer(p: PlayerState) {
     const existing = this.remotes.get(p.id);
-    if (existing) return existing.push(p.x, p.y, DIRECTIONS[p.dir] ?? 'down', p.moving);
-    const remote = new RemotePlayer(this, p.x, p.y, recipeOf(p.character), p.name, this.opts.fontFamily, this.opts.dpr * 2);
+    if (existing) return existing.push(p.x, p.y, DIRECTIONS[p.dir] ?? 'down', p.moving, !!p.seated);
+    const remote = new RemotePlayer(
+      this,
+      p.x,
+      p.y,
+      recipeOf(p.character),
+      p.name,
+      this.opts.fontFamily,
+      this.opts.dpr * 2,
+      (x, y, s) => this.peopleDepth(x, y, s),
+    );
     remote.avatar.setStatus(p.status);
+    remote.push(p.x, p.y, DIRECTIONS[p.dir] ?? 'down', p.moving, !!p.seated);
     this.remotes.set(p.id, remote);
     this.setPlayerZone(p.id, p.zone ?? null);
   }
@@ -281,9 +398,22 @@ export class OfficeScene extends Phaser.Scene {
     this.redecorateDesks();
   }
 
+  /** Chat: `message` appears over `userId`'s head (yours or someone else's). */
+  showChat(userId: string, message: string) {
+    const avatar = userId === this.opts.myId ? this.player : this.remotes.get(userId)?.avatar;
+    avatar?.say(message);
+  }
+
+  /** Open tasks per user: each desk's paper stack follows its owner's count. */
+  setTaskCounts(counts: ReadonlyMap<string, number>) {
+    this.taskCounts = counts;
+    this.redecorateDesks();
+  }
+
   /** Desks show their owner's things (mug in their colour, their kind of clutter...). */
   private redecorateDesks() {
     setDeskOwners(this, ownersOf(this.desks));
+    setDeskPapers(this, papersOf(this.desks, this.taskCounts));
     const scale = textureScale(this.opts.dpr);
     const items = this.editMode ? [] : this.opts.layout.furniture.filter((f) => f.kind === 'desk');
     for (const item of items) {
@@ -324,6 +454,7 @@ export class OfficeScene extends Phaser.Scene {
     }
     const inside = this.locked.find(({ rect }) => overlapsRect(playerBody(this.player.x, this.player.y), rect));
     if (!inside) return null;
+    if (this.seat) this.standUp(true);
     const to = this.arrivalPoint(this.opts.layout);
     (this.player.body as Phaser.Physics.Arcade.Body).reset(to.x, to.y);
     this.cameras.main.centerOn(to.x, to.y);
@@ -342,16 +473,22 @@ export class OfficeScene extends Phaser.Scene {
 
   snapshot(): OfficeSnapshot {
     const cam = this.cameras.main.worldView;
-    const at = (x: number, y: number) => ({ x: x / TILE, y: y / TILE, room: this.roomAt(x / TILE, y / TILE) });
+    const at = (avatar: Avatar) => ({
+      x: avatar.x / TILE,
+      y: avatar.y / TILE,
+      room: this.roomAt(avatar.x / TILE, avatar.y / TILE),
+      dir: avatar.facing,
+      seated: avatar.seated,
+    });
     return {
-      me: at(this.player.x, this.player.y),
-      others: [...this.remotes].map(([id, r]) => ({ id, ...at(r.avatar.x, r.avatar.y) })),
+      me: at(this.player),
+      others: [...this.remotes].map(([id, r]) => ({ id, ...at(r.avatar) })),
       view: { x: cam.x / TILE, y: cam.y / TILE, w: cam.width / TILE, h: cam.height / TILE },
     };
   }
 
-  movePlayer(id: string, x: number, y: number, dir: number, moving: boolean) {
-    this.remotes.get(id)?.push(x, y, DIRECTIONS[dir] ?? 'down', moving);
+  movePlayer(id: string, x: number, y: number, dir: number, moving: boolean, seated = false) {
+    this.remotes.get(id)?.push(x, y, DIRECTIONS[dir] ?? 'down', moving, seated);
   }
 
   removePlayer(id: string) {
@@ -382,6 +519,7 @@ export class OfficeScene extends Phaser.Scene {
   /** Organisers: switch to editing (the player stops, the camera is free). */
   startEditing(editor: LayoutEditor, onProblem: (text: string) => void) {
     if (this.editMode) return;
+    if (this.seat) this.standUp(true);
     this.cameras.main.stopFollow();
     this.plates.setVisible(false);
     this.editMode = new EditMode(
@@ -413,15 +551,90 @@ export class OfficeScene extends Phaser.Scene {
 
   private maybeSend(time: number, moving: boolean) {
     const dir = this.player.facing;
-    const changed = moving !== this.lastSent.moving || dir !== this.lastSent.dir;
+    const seated = this.player.seated;
+    const changed = moving !== this.lastSent.moving || dir !== this.lastSent.dir || seated !== this.lastSent.seated;
     if ((moving && time - this.lastSent.at >= SEND_INTERVAL_MS) || changed) {
-      this.lastSent = { at: time, moving, dir };
+      this.lastSent = { at: time, moving, dir, seated };
       this.sendPosition(moving);
     }
   }
 
   private sendPosition(moving = false) {
-    this.opts.onMove(Math.round(this.player.x), Math.round(this.player.y), DIRECTIONS.indexOf(this.player.facing), moving);
+    this.lastSent = { at: performance.now(), moving, dir: this.player.facing, seated: this.player.seated };
+    this.opts.onMove(
+      Math.round(this.player.x),
+      Math.round(this.player.y),
+      DIRECTIONS.indexOf(this.player.facing),
+      moving,
+      this.player.seated,
+    );
+  }
+
+  private isSeatFree(seat: Seat): boolean {
+    if (seat.id === this.justLeft) return false;
+    for (const remote of this.remotes.values()) {
+      if (remote.avatar.seated && Math.hypot(remote.avatar.x - seat.x, remote.avatar.y - seat.y) <= 14) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  private sit(seat: Seat) {
+    const dir = seat.dir ?? this.player.facing;
+    this.seat = { ...seat, dir };
+    this.standHoldMs = 0;
+    const body = this.player.body as Phaser.Physics.Arcade.Body;
+    body.checkCollision.none = true;
+    body.setVelocity(0, 0);
+    body.reset(seat.x, seat.y);
+    this.player.setSeated(true);
+    this.player.animateAs(dir, false, 0);
+    this.sendPosition(false);
+  }
+
+  private standUp(forced = false, ix = 0, iy = 0) {
+    if (!this.seat) return;
+    const seat = this.seat;
+    const seatId = seat.id;
+    const front = seat.dir;
+    const primaryDir = forced ? null : inputDirection(ix, iy);
+
+    const allDirs: Direction[] = ['up', 'down', 'left', 'right'];
+    const tryDirs: Direction[] = [];
+    if (primaryDir) {
+      tryDirs.push(primaryDir);
+    }
+    if (front && !tryDirs.includes(front)) {
+      tryDirs.push(front);
+    }
+    for (const d of allDirs) {
+      if (!tryDirs.includes(d)) {
+        tryDirs.push(d);
+      }
+    }
+
+    let targetX = seat.x;
+    let targetY = seat.y;
+    for (const d of tryDirs) {
+      const { dx, dy } = STEP_OFF_OFFSETS[d];
+      const cx = seat.x + dx;
+      const cy = seat.y + dy;
+      if (this.isFree(cx, cy)) {
+        targetX = cx;
+        targetY = cy;
+        break;
+      }
+    }
+
+    const body = this.player.body as Phaser.Physics.Arcade.Body;
+    body.checkCollision.none = false;
+    body.reset(targetX, targetY);
+    this.player.setSeated(false);
+    this.seat = null;
+    this.justLeft = seatId;
+    this.standHoldMs = 0;
+    this.sendPosition(false);
   }
 
   private addFurniture(item: Furniture, scale: number) {
@@ -447,7 +660,15 @@ export class OfficeScene extends Phaser.Scene {
   private furnitureDepth(item: Furniture) {
     const spec = FURNITURE[item.kind];
     const b = pixels(itemBounds(item));
-    return spec.layer === 'floor' ? DEPTH.rug : DEPTH.furniture + (b.y + b.h + (spec.layer === 'wall' ? 40 : 0)) / 100000;
+    return spec.layer === 'floor' ? DEPTH.rug : DEPTH.sorted + (b.y + b.h) / 100000;
+  }
+
+  private peopleDepth(x: number, y: number, seated = false): number {
+    if (seated) {
+      const seat = this.seats.find((s) => Math.hypot(x - s.centerX, y - s.centerY) <= 24);
+      if (seat) return this.furnitureDepth(seat.item) + 0.000001;
+    }
+    return DEPTH.sorted + y / 100000;
   }
 
   private addCollider(group: Phaser.Physics.Arcade.StaticGroup, x: number, y: number, w: number, h: number) {
@@ -582,6 +803,37 @@ export class OfficeScene extends Phaser.Scene {
 
 // (helpers)
 
+function chairFacing(deg = 0): Direction {
+  const r = ((deg % 360) + 360) % 360;
+  if (r === 90) return 'right';
+  if (r === 180) return 'down';
+  if (r === 270) return 'left';
+  return 'up';
+}
+
+function inSeatZone(seat: Seat, px: number, py: number): boolean {
+  if (seat.item.kind === 'armchair') {
+    const b = pixels(itemBounds(seat.item));
+    return px >= b.x - 8 && px <= b.x + b.w + 8 && py >= b.y - 8 && py <= b.y + b.h + 8;
+  }
+  return Math.hypot(px - seat.centerX, py - seat.centerY) <= TILE * 0.45;
+}
+
+function inputDirection(ix: number, iy: number): Direction | null {
+  if (ix === 0 && iy === 0) return null;
+  if (Math.abs(ix) > Math.abs(iy)) {
+    return ix > 0 ? 'right' : 'left';
+  }
+  return iy > 0 ? 'down' : 'up';
+}
+
+const STEP_OFF_OFFSETS: Record<Direction, { dx: number; dy: number }> = {
+  up: { dx: 0, dy: -22 },
+  down: { dx: 0, dy: 22 },
+  left: { dx: -22, dy: 0 },
+  right: { dx: 22, dy: 0 },
+};
+
 function pixels(r: Rect): Rect {
   return { x: r.x * TILE, y: r.y * TILE, w: r.w * TILE, h: r.h * TILE };
 }
@@ -602,4 +854,9 @@ function toEvent(zone: Zone) {
 /** Desk id → its owner's character. */
 function ownersOf(desks: DeskOwner[]) {
   return new Map(desks.filter((d) => d.character).map((d) => [d.deskId, d.character!]));
+}
+
+/** Desk id → how many open tasks its owner has. */
+function papersOf(desks: DeskOwner[], counts: ReadonlyMap<string, number>) {
+  return new Map(desks.map((d) => [d.deskId, counts.get(d.userId) ?? 0]));
 }

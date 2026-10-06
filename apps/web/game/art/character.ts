@@ -17,6 +17,8 @@ export interface Pose {
   /** Walk cycle angle (radians). */
   phase?: number;
   moving?: boolean;
+  /** Sitting on a chair (does not walk). */
+  seated?: boolean;
   /** Clock in ms, for blinking, breathing and steam. Leave out for a still picture. */
   time?: number;
   /** Eyes closed, when the caller keeps its own clock (the game). */
@@ -51,10 +53,11 @@ export function drawCharacter(pen: Pen, recipe: Recipe, pose: Pose) {
   const dir = pose.dir;
   const side = dir === 'left' || dir === 'right';
   const time = pose.time ?? 0;
-  const phase = pose.moving ? (pose.phase ?? 0) : 0;
+  const isMoving = !pose.seated && Boolean(pose.moving);
+  const phase = isMoving ? (pose.phase ?? 0) : 0;
   const swing = Math.sin(phase);
   const breathe = pose.time === undefined ? 0 : Math.sin(time / 650) * 0.35;
-  const bob = pose.moving ? Math.abs(Math.cos(phase)) * 1.5 : breathe;
+  const bob = isMoving ? Math.abs(Math.cos(phase)) * 1.5 : breathe;
 
   const build = recipe.build === 'slim' ? 0 : recipe.build === 'regular' ? 1 : 2;
   const lx = recipe.height * 1.6;
@@ -77,6 +80,8 @@ export function drawCharacter(pen: Pen, recipe: Recipe, pose: Pose) {
     pen.circle(x - 0.5, y - 0.6, r - 0.8, k.base);
   };
 
+  if (pose.seated) pen.push(0, 7);
+
   if (side) {
     pen.push(0, 0, 0, dir === 'left' ? -1 : 1);
     drawSide();
@@ -85,20 +90,31 @@ export function drawCharacter(pen: Pen, recipe: Recipe, pose: Pose) {
     drawFrontOrBack(dir === 'down');
   }
 
+  if (pose.seated) pen.pop();
+
   // ---------------------------------------------------------------- front / back
   function drawFrontOrBack(front: boolean) {
-    const lift = pose.moving ? swing * 1.8 : 0;
+    const lift = isMoving ? swing * 1.8 : 0;
 
     hairPass(front ? 'down' : 'up', 'behind');
     if (front && recipe.top === 'hoodie') pen.ellipse(0, ty + 0.5, bw - 3, 8, c.top.deep);
 
     // Legs, then shoes.
-    for (const s of [-1, 1]) {
-      const x = s < 0 ? -legW - 1 : 1;
-      const dy = s < 0 ? -lift : lift;
-      leg(x, legTop + dy, legW, 12 + lx, s > 0);
-      pen.rect(x - 0.5, -4 + dy, legW + 1, 4, 2, c.shoes.shadow);
-      pen.rect(x - 0.5, -4 + dy, legW, 3.2, 2, c.shoes.base);
+    if (pose.seated) {
+      for (const s of [-1, 1]) {
+        const x = s < 0 ? -legW - 1 : 1;
+        leg(x, legTop, legW, 7, s > 0);
+        pen.rect(x - 0.5, legTop + 6, legW + 1, 4, 2, c.shoes.shadow);
+        pen.rect(x - 0.5, legTop + 6, legW, 3.2, 2, c.shoes.base);
+      }
+    } else {
+      for (const s of [-1, 1]) {
+        const x = s < 0 ? -legW - 1 : 1;
+        const dy = s < 0 ? -lift : lift;
+        leg(x, legTop + dy, legW, 12 + lx, s > 0);
+        pen.rect(x - 0.5, -4 + dy, legW + 1, 4, 2, c.shoes.shadow);
+        pen.rect(x - 0.5, -4 + dy, legW, 3.2, 2, c.shoes.base);
+      }
     }
     if (recipe.bottom === 'skirt') {
       pen.poly([-half + 1, legTop - 3, half - 1, legTop - 3, half + 1.5, legTop + 8, -half - 1.5, legTop + 8], c.bottom.shadow);
@@ -114,7 +130,7 @@ export function drawCharacter(pen: Pen, recipe: Recipe, pose: Pose) {
     else if (recipe.top === 'hoodie') blob(-6, ty - 1, 12, 8, 4, { ...c.top, base: c.top.shadow, shadow: c.top.deep });
 
     // Arms and hands; the right hand may hold a mug.
-    const arm = pose.moving ? swing * 2 : 0;
+    const arm = isMoving ? swing * 2 : 0;
     const armW = 5 + build * 0.3;
     for (const s of [-1, 1]) {
       const x = s < 0 ? -half - armW + 1 : half - 1;
@@ -289,15 +305,39 @@ export function drawCharacter(pen: Pen, recipe: Recipe, pose: Pose) {
     const sh = sw / 2;
     hairPass('side', 'behind');
 
-    const back = -swing * 3.5;
-    const fore = swing * 3.5;
-    leg(back - legW / 2, legTop, legW, 12 + lx, true);
-    pen.rect(back - legW / 2 + 1, -4, legW + 1, 4, 2, c.shoes.shadow);
-    leg(fore - legW / 2, legTop, legW, 12 + lx, false);
-    pen.rect(fore - legW / 2 + 1, -4, legW + 1, 4, 2, c.shoes.base);
-    if (recipe.bottom === 'skirt') {
-      pen.poly([-sh + 1, legTop - 3, sh - 1, legTop - 3, sh + 2.5, legTop + 8, -sh - 2.5, legTop + 8], c.bottom.base);
-      pen.poly([-sh - 2.5, legTop + 6.5, sh + 2.5, legTop + 6.5, sh + 2.5, legTop + 8, -sh - 2.5, legTop + 8], c.bottom.shadow);
+    if (pose.seated) {
+      const hx = -2;
+      const tw = sh + 5;
+      const hy = legTop + 1.5;
+      const th = 5;
+      if (recipe.bottom === 'trousers') {
+        pen.rect(hx, hy, tw, th, 2.5, c.bottom.shadow);
+        pen.rect(hx, hy, tw - 0.5, th - 1, 2, c.bottom.base);
+      } else {
+        pen.rect(hx, hy, tw, th, 2.5, c.skin.shadow);
+        pen.rect(hx, hy, tw - 0.5, th - 1, 2, c.skin.base);
+        if (recipe.bottom === 'shorts') {
+          pen.rect(hx - 0.3, hy - 0.5, tw * 0.55, th + 1, 2, c.bottom.shadow);
+          pen.rect(hx - 0.3, hy - 0.5, tw * 0.55 - 0.5, th, 2, c.bottom.base);
+        }
+      }
+      pen.rect(hx + tw - 1, hy + 0.5, 4.5, 4, 2, c.shoes.shadow);
+      pen.rect(hx + tw - 1, hy + 0.5, 4, 3.2, 2, c.shoes.base);
+      if (recipe.bottom === 'skirt') {
+        pen.poly([-sh + 1, legTop - 3, sh - 1, legTop - 3, sh + 2.5, legTop + 8, -sh - 2.5, legTop + 8], c.bottom.base);
+        pen.poly([-sh - 2.5, legTop + 6.5, sh + 2.5, legTop + 6.5, sh + 2.5, legTop + 8, -sh - 2.5, legTop + 8], c.bottom.shadow);
+      }
+    } else {
+      const back = -swing * 3.5;
+      const fore = swing * 3.5;
+      leg(back - legW / 2, legTop, legW, 12 + lx, true);
+      pen.rect(back - legW / 2 + 1, -4, legW + 1, 4, 2, c.shoes.shadow);
+      leg(fore - legW / 2, legTop, legW, 12 + lx, false);
+      pen.rect(fore - legW / 2 + 1, -4, legW + 1, 4, 2, c.shoes.base);
+      if (recipe.bottom === 'skirt') {
+        pen.poly([-sh + 1, legTop - 3, sh - 1, legTop - 3, sh + 2.5, legTop + 8, -sh - 2.5, legTop + 8], c.bottom.base);
+        pen.poly([-sh - 2.5, legTop + 6.5, sh + 2.5, legTop + 6.5, sh + 2.5, legTop + 8, -sh - 2.5, legTop + 8], c.bottom.shadow);
+      }
     }
 
     // The far arm swings behind the body.
@@ -349,7 +389,7 @@ export function drawCharacter(pen: Pen, recipe: Recipe, pose: Pose) {
   function hairPass(view: 'down' | 'up' | 'side', pass: 'behind' | 'front') {
     const k = c.hair;
     const style = recipe.hair;
-    const sway = pose.moving ? swing * 1.5 : 0;
+    const sway = isMoving ? swing * 1.5 : 0;
     const chain = (x: number, from: number, to: number, r: number) => {
       for (let y = from, i = 0; y <= to; y += r * 1.25, i++) pen.circle(x, y, r, i % 2 ? k.shadow : k.base);
     };
