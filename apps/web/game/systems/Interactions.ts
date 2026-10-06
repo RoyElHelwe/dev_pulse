@@ -7,7 +7,8 @@ import { Bubble } from '../objects/Bubble';
 import type { DeskOwner } from '../objects/DeskPlates';
 
 interface Target {
-  type: 'desk' | 'board';
+  /** `board` = a screen (tv), `kanban` = the task board on the wall. */
+  type: 'desk' | 'board' | 'kanban';
   id: string;
   name: string;
   /** Where the player must stand (tiles). */
@@ -55,7 +56,20 @@ export class Interactions {
           anchor: { x: tv.x * TILE, y: b.y * TILE - 6 },
         };
       });
-    this.targets = [...desks, ...screens];
+    const boards: Target[] = layout.furniture
+      .filter((f) => f.kind === 'board')
+      .map((board) => {
+        const b = itemBounds(board);
+        return {
+          type: 'kanban',
+          id: board.id,
+          name: 'Task board',
+          spot: { x: board.x, y: b.y + b.h + 1.2 },
+          area: { x: b.x - 0.5, y: b.y, w: b.w + 1, h: b.h + 2.4 },
+          anchor: { x: board.x * TILE, y: b.y * TILE - 6 },
+        };
+      });
+    this.targets = [...desks, ...screens, ...boards];
   }
 
   setOwners(owners: DeskOwner[]) {
@@ -113,8 +127,9 @@ export class Interactions {
 
   private label(t: Target) {
     if (t.type === 'board') return 'Use the screen';
+    if (t.type === 'kanban') return 'Open the task board';
     const owner = this.owners.get(t.id);
-    if (!owner) return `${t.name} · free`;
+    if (!owner) return `Move to ${t.name}`;
     return owner.userId === this.o.myId ? 'Your desk' : `${owner.name.split(' ')[0]}’s desk`;
   }
 
