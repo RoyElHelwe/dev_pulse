@@ -65,6 +65,11 @@ export class AuthService {
     return this.startSession(publicUser, client, trustedDevice);
   }
 
+  /** Dev switcher only (DEV_LOGIN): signs in as this user, skipping password and 2FA. */
+  async devSignIn(userId: string, client: ClientInfo): Promise<SignInResult> {
+    return this.openSession(await this.me(userId), client);
+  }
+
   /** Second step: the code from the authenticator app (or a backup code). */
   async completeTwoFactor(mfaToken: string | undefined, code: string, client: ClientInfo): Promise<SignInResult> {
     const payload = this.tokens.verifyPurposeToken<{ sub: string }>('mfa', mfaToken);

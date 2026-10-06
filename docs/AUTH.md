@@ -236,3 +236,19 @@ Callback URL to register at Google / GitHub / 42 (adapt host and port to `SERVER
 - Real Google / GitHub / 42 sign-in needs their credentials in `.env` (not committed).
 - Without SMTP, emails only go to the API logs.
 - Next for Mira: profile + avatar (M3), invitations (M4), members and roles (M5).
+
+## 8. Dev identity switcher (`DEV_LOGIN`)
+
+Set `DEV_LOGIN=true` in `.env` (default `false`; **never in production**: it is ignored when
+`NODE_ENV=production`, and the api logs a loud warning at startup when on), then recreate the api
+(`docker compose ... up -d api`).
+
+- `/login` and `/register` show an identity switcher instead of the forms: click a user to sign in as
+  them (no password, no 2FA), or create a test user (random name, verified email, optionally joining an
+  existing office with a random character). "Use the real sign-in" shows the normal forms.
+- The user menu gets "Switch user (dev)" (signs out, then back to the switcher).
+- Endpoints, all public and refusing when off (`GET` answers `enabled: false`, the others 404):
+  `GET /api/auth/dev` -> `{ enabled, users[] }`, `POST /api/auth/dev/login { userId }`,
+  `POST /api/auth/dev/users { name?, joinUserId? }`. They use the normal session code, so the
+  one-device rule still applies.
+- Code: `apps/api/src/auth/dev-login.*`, `apps/web/features/auth/DevSwitcher.tsx`.
