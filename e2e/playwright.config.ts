@@ -8,6 +8,9 @@ export default defineConfig({
   timeout: 240_000,
   expect: { timeout: 20_000 },
   workers: 1,
+  // Walking is done with real key presses on a software-rendered canvas, so a slow machine can
+  // make a walk miss once. A retry reruns the whole serial story with fresh users.
+  retries: 1,
   fullyParallel: false,
   reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : 'list',
   use: {

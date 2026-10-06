@@ -81,6 +81,7 @@ export async function peopleList(page: Page) {
   await expect(list).toBeVisible();
   const text = (await list.innerText()).replace(/\s*\n\s*/g, ' | ');
   await page.getByRole('button', { name: /in the office/ }).click();
+  await page.locator('canvas').click({ position: { x: 10, y: 10 } }).catch(() => undefined);
   return text;
 }
 
