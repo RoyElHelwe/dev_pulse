@@ -10,7 +10,8 @@ import { Kbd } from '@/components/ui/Kbd';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { api, ApiError } from '@/lib/api';
 import { cn } from '@/lib/cn';
-import { KEY_CODE, keyName, OFFICE_KEYS, type VoiceMode, type VoiceSettings as Settings } from './settings';
+import { rebind, useKeybinds } from '@/features/settings/keybinds';
+import { keyName, type VoiceMode, type VoiceSettings as Settings } from './settings';
 
 const MODES: { mode: VoiceMode; title: string; text: string; Icon: typeof Mic }[] = [
   { mode: 'OPEN', title: 'Open mic', text: 'People nearby hear you whenever you are not muted (M).', Icon: Mic },
@@ -21,6 +22,7 @@ const MODES: { mode: VoiceMode; title: string; text: string; Icon: typeof Mic }[
 export function VoiceSettings() {
   const { status, user } = useAuth();
   const router = useRouter();
+  const keybinds = useKeybinds();
   const [settings, setSettings] = useState<Settings | null>(null);
   const [picking, setPicking] = useState(false);
   const [message, setMessage] = useState<{ tone: 'success' | 'error'; text: string } | null>(null);
@@ -50,21 +52,19 @@ export function VoiceSettings() {
   // "Press a key": the next key pressed becomes the push-to-talk key (Escape cancels).
   useEffect(() => {
     if (!picking) return;
-    const pick = (e: KeyboardEvent) => {
+    const pick = async (e: KeyboardEvent) => {
       e.preventDefault();
       setPicking(false);
       if (e.code === 'Escape') return;
-      if (!KEY_CODE.test(e.code)) return setMessage({ tone: 'error', text: 'That key can’t be used. Try another one.' });
-      if (OFFICE_KEYS.has(e.code)) {
-        const text = `${keyName(e.code)} is already used in the office (walk, mute, deafen or use). Try another key.`;
-        return setMessage({ tone: 'error', text });
+      const result = await rebind('pushToTalk', e.code);
+      if (!result.ok) {
+        setMessage({ tone: 'error', text: result.error });
+      } else {
+        setMessage({ tone: 'success', text: 'Saved.' });
       }
-      void save({ pushToTalkKey: e.code });
     };
     window.addEventListener('keydown', pick);
     return () => window.removeEventListener('keydown', pick);
-    // save reads the latest settings through the closure of this render.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [picking]);
 
   if (!user || !settings) {
@@ -103,7 +103,7 @@ export function VoiceSettings() {
         <Card
           title="Push-to-talk key"
           description="Hold it to talk. It does nothing while you type in a text field."
-          aside={<Kbd className="h-8 min-w-8 text-sm">{keyName(settings.pushToTalkKey)}</Kbd>}
+          aside={<Kbd className="h-8 min-w-8 text-sm">{keyName(keybinds.pushToTalk)}</Kbd>}
         >
           <Button variant="secondary" onClick={() => setPicking(!picking)} aria-pressed={picking}>
             {picking ? 'Press a key… (Esc to cancel)' : 'Change key'}
@@ -118,7 +118,7 @@ export function VoiceSettings() {
       )}
 
       <p className="text-sm text-zinc-500">
-        In the office: <Kbd>M</Kbd> mutes your mic, <Kbd>H</Kbd> deafens (you hear no one and nobody hears you).
+        In the office: <Kbd>{keyName(keybinds.mute)}</Kbd> mutes your mic, <Kbd>{keyName(keybinds.deafen)}</Kbd> deafens (you hear no one and nobody hears you). You can change them in the user menu → Keybinds.
       </p>
     </div>
   );

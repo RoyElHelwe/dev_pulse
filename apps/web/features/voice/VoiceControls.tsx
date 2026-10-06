@@ -8,6 +8,7 @@ import { Kbd } from '@/components/ui/Kbd';
 import { Panel } from '@/components/ui/Panel';
 import type { OfficeFeatureProps } from '@/features/office/types';
 import { CharacterFace } from '@/features/workspace/CharacterPreview';
+import { getKeybinds, useKeybinds } from '@/features/settings/keybinds';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { isTyping } from '@/lib/dom';
@@ -19,9 +20,10 @@ const IDLE: VoiceSnapshot = { joined: false, muted: false, deafened: false, push
 
 /**
  * Bottom-centre voice bar: mic (join, then mute), deafen, leave, who we hear.
- * Shortcuts: M mutes, H deafens (D walks right), the push-to-talk key talks.
+ * Shortcuts: mute, deafen, and push-to-talk read from the keybind store.
  */
 export function VoiceControls({ socket, controller, workspace, people, myId, onToast, editing }: OfficeFeatureProps) {
+  const keybinds = useKeybinds();
   const [voice, setVoice] = useState<VoiceSnapshot>(IDLE);
   const [settings, setSettings] = useState<VoiceSettings>(DEFAULT_VOICE_SETTINGS);
   const [joining, setJoining] = useState(false);
@@ -79,8 +81,8 @@ export function VoiceControls({ socket, controller, workspace, people, myId, onT
   }, []);
   useEffect(() => managerRef.current?.setPushToTalk(settings.voiceMode === 'PUSH_TO_TALK'), [settings.voiceMode, socket]);
 
-  // Keyboard: M mute, H deafen, hold the push-to-talk key. Never while typing.
-  const pttKey = settings.voiceMode === 'PUSH_TO_TALK' ? settings.pushToTalkKey : null;
+  // Keyboard: mute, deafen, hold the push-to-talk key. Never while typing.
+  const pttKey = settings.voiceMode === 'PUSH_TO_TALK' ? keybinds.pushToTalk : null;
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
       const manager = managerRef.current;
@@ -93,9 +95,10 @@ export function VoiceControls({ socket, controller, workspace, people, myId, onT
         return manager.setKeyHeld(true);
       }
       if (e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
-      // Like the mic button: while deafened, M undeafens.
-      if (e.code === 'KeyM') return state.deafened ? manager.setDeafened(false) : manager.setMuted(!state.muted);
-      if (e.code === 'KeyH') manager.setDeafened(!state.deafened);
+      const bound = getKeybinds();
+      // Like the mic button: while deafened, mute undeafens.
+      if (e.code === bound.mute) return state.deafened ? manager.setDeafened(false) : manager.setMuted(!state.muted);
+      if (e.code === bound.deafen) manager.setDeafened(!state.deafened);
     };
     const up = (e: KeyboardEvent) => {
       if (e.code !== pttKey) return;
@@ -126,9 +129,11 @@ export function VoiceControls({ socket, controller, workspace, people, myId, onT
     if (result === 'unsupported') onToast('Voice isn’t supported in this browser.');
   }
 
+  const muteKey = keyName(keybinds.mute);
+  const deafenKey = keyName(keybinds.deafen);
   const micOff = voice.joined && (voice.muted || voice.deafened);
   // Deafened turns the mic off too: the mic button then undeafens.
-  const micLabel = !voice.joined ? 'Join voice' : voice.deafened ? 'Undeafen (M)' : voice.muted ? 'Unmute (M)' : 'Mute (M)';
+  const micLabel = !voice.joined ? 'Join voice' : voice.deafened ? `Undeafen (${muteKey})` : voice.muted ? `Unmute (${muteKey})` : `Mute (${muteKey})`;
   const heard = voice.peers.map((id) => people.find((p) => p.id === id)).filter((p) => !!p);
 
   // While the office is edited the call goes on; only the bar is hidden.
@@ -149,7 +154,7 @@ export function VoiceControls({ socket, controller, workspace, people, myId, onT
         {voice.joined && !micOff ? <Mic className="size-4" /> : <MicOff className="size-4" />}
       </IconButton>
       <IconButton
-        aria-label={voice.deafened ? 'Undeafen (H)' : 'Deafen (H)'}
+        aria-label={voice.deafened ? `Undeafen (${deafenKey})` : `Deafen (${deafenKey})`}
         aria-pressed={voice.deafened}
         onClick={() => managerRef.current?.setDeafened(!voice.deafened)}
         disabled={!voice.joined}
@@ -183,7 +188,7 @@ export function VoiceControls({ socket, controller, workspace, people, myId, onT
                 'Talking…'
               ) : (
                 <>
-                  Hold <Kbd>{keyName(settings.pushToTalkKey)}</Kbd> to talk
+                  Hold <Kbd>{keyName(keybinds.pushToTalk)}</Kbd> to talk
                 </>
               )}
             </span>
