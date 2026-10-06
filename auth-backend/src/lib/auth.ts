@@ -1,6 +1,6 @@
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
-import { twoFactor } from "better-auth/plugins";
+import { twoFactor, jwt, organization } from "better-auth/plugins";
 import { prisma } from "./prisma.js";
 import { sendEmail } from "./email.js";
 
@@ -13,6 +13,11 @@ export const auth = betterAuth({
   emailAndPassword: {
 	enabled: true,
 	requireEmailVerification: true,
+  },
+
+  //the session is our REFRESH token it lives 7 days in the DB
+  session: {
+	expiresIn: 60 * 60 * 24 * 7, // 7 days
   },
 
   emailVerification: {
@@ -50,12 +55,44 @@ export const auth = betterAuth({
 	},
   },
 
-  //2FA with an authenticator app + backup codes
   plugins: [
+	// 2FA with an authenticator app + backup codes
 	twoFactor({
 	  issuer: "Transcendence",
 	  // OAuth users have no password, so let them turn on 2FA without one.
 	  allowPasswordless: true,
+	}),
+
+	jwt({
+	  jwt: {
+		expirationTime: "15m",
+		// Only what the team needs. Without this, the whole user object goes into the token.
+		definePayload: ({ user }) => ({
+		  id: user.id,
+		  email: user.email,
+		  name: user.name,
+		}),
+	  },
+	}),
+
+	// Workspaces, members, roles (owner / admin / member) and invitations.
+	// Renamed so the tables match our plan: workspace, workspaceMember, workspaceId.
+	organization({
+	  schema: {
+		organization: {
+		  modelName: "workspace",
+		},
+		member: {
+		  modelName: "workspaceMember",
+		  fields: { organizationId: "workspaceId" },
+		  additionalFields: {
+			character: { type: "string", required: false, defaultValue: "default" },
+		  },
+		},
+		invitation: {
+		  fields: { organizationId: "workspaceId" },
+		},
+	  },
 	}),
   ],
 

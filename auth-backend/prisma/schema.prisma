@@ -15,17 +15,20 @@ datasource db {
 }
 
 model User {
-  id            String    @id
-  name          String
-  email         String
-  emailVerified Boolean   @default(false)
-  image         String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  sessions      Session[]
-  accounts      Account[]
-   twoFactorEnabled Boolean?    @default(false)
-  twofactors       TwoFactor[] 
+  id               String      @id
+  name             String
+  email            String
+  emailVerified    Boolean     @default(false)
+  image            String?
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+  sessions         Session[]
+  accounts         Account[]
+  twoFactorEnabled Boolean?    @default(false)
+  twofactors       TwoFactor[]
+
+  workspacemembers WorkspaceMember[]
+  invitations      Invitation[]
 
   @@unique([email])
   @@map("user")
@@ -41,6 +44,8 @@ model Session {
   userAgent String?
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  activeOrganizationId String?
 
   @@unique([token])
   @@index([userId])
@@ -78,6 +83,7 @@ model Verification {
   @@index([identifier])
   @@map("verification")
 }
+
 model TwoFactor {
   id                      String    @id
   secret                  String
@@ -85,10 +91,68 @@ model TwoFactor {
   userId                  String
   user                    User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   verified                Boolean   @default(true)
-  failedVerificationCount Int       @default(0)
+  failedVerificationCount Int?      @default(0)
   lockedUntil             DateTime?
 
   @@index([secret])
   @@index([userId])
   @@map("twoFactor")
+}
+
+model Jwks {
+  id         String    @id
+  publicKey  String
+  privateKey String
+  createdAt  DateTime
+  expiresAt  DateTime?
+  alg        String?
+  crv        String?
+
+  @@map("jwks")
+}
+
+model Workspace {
+  id               String            @id
+  name             String
+  slug             String
+  logo             String?
+  createdAt        DateTime
+  metadata         String?
+  workspacemembers WorkspaceMember[]
+  invitations      Invitation[]
+
+  @@unique([slug])
+  @@map("workspace")
+}
+
+model WorkspaceMember {
+  id          String    @id
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role        String    @default("member")
+  createdAt   DateTime
+  character   String?   @default("default")
+
+  @@index([workspaceId])
+  @@index([userId])
+  @@map("workspaceMember")
+}
+
+model Invitation {
+  id          String    @id
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  email       String
+  role        String?
+  status      String    @default("pending")
+  expiresAt   DateTime
+  createdAt   DateTime  @default(now())
+  inviterId   String
+  user        User      @relation(fields: [inviterId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([email])
+  @@map("invitation")
 }
