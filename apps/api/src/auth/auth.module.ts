@@ -5,6 +5,8 @@ import { AuthGuard } from '../common/auth/auth.guard';
 import { AppConfig } from '../config/app-config';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
+import { DevLoginController } from './dev-login.controller';
+import { DevLoginService } from './dev-login.service';
 import { deriveKey } from './crypto/secrets';
 import { EmailTokensService } from './email-tokens.service';
 import { OAuthController } from './oauth/oauth.controller';
@@ -29,9 +31,10 @@ import { VerificationService } from './verification.service';
       }),
     }),
   ],
-  controllers: [AuthController, OAuthController],
+  controllers: [AuthController, OAuthController, DevLoginController],
   providers: [
     AuthService,
+    DevLoginService,
     TokensService,
     EmailTokensService,
     VerificationService,
