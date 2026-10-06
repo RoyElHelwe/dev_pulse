@@ -2,14 +2,14 @@
 
 import { ArrowLeft, ArrowRight, Building2, Check, MailOpen, Sparkles } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { z } from 'zod';
 import { Alert } from '@/components/ui/Alert';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { TextField } from '@/components/ui/TextField';
 import { useAuth } from '@/features/auth/AuthProvider';
-import { CharacterGrid } from '@/features/workspace/CharacterGrid';
+import { CharacterStudio } from '@/features/workspace/CharacterStudio';
 import { LayoutPreview } from '@/features/workspace/LayoutPreview';
 import type { OfficeLayout } from '@/game/layout/types';
 import { api, ApiError } from '@/lib/api';
@@ -27,15 +27,14 @@ interface Template {
 }
 
 const GENERATED = 'generated';
-const STEPS = ['Name', 'Team', 'Office', 'You'] as const;
-// Picking a range makes the office for its biggest team; the exact number makes it fit.
-const TEAM_SIZES = [
-  { label: 'Just me', min: 1, max: 1 },
-  { label: '2–8', min: 2, max: 8 },
-  { label: '9–24', min: 9, max: 24 },
-  { label: '25–48', min: 25, max: 48 },
-  { label: '49–100', min: 49, max: 100 },
-];
+const STEPS = ['Name', 'Office', 'You'] as const;
+
+const GENERATED_SIZES = [
+  { label: 'Small', hint: '~8 people', size: 8 },
+  { label: 'Medium', hint: '~24 people', size: 24 },
+  { label: 'Large', hint: '~48 people', size: 48 },
+] as const;
+
 const NOTICES: Record<string, string> = {
   removed: 'You were removed from your office. Create a new one or wait for an invitation.',
   deleted: 'Your office was deleted by its organiser.',
@@ -48,7 +47,17 @@ const nameSchema = z
   .min(2, 'Use at least 2 characters.')
   .max(40, 'Use at most 40 characters.');
 
-/** Creating an office: name → team size → template → character. No AI, just good defaults. */
+function sortTemplates(list: Template[]): Template[] {
+  return [...list].sort((a, b) => {
+    if (a.id === 'loft') return -1;
+    if (b.id === 'loft') return 1;
+    if (a.id === GENERATED) return 1;
+    if (b.id === GENERATED) return -1;
+    return 0;
+  });
+}
+
+/** Creating an office: name → office → character. No AI, just good defaults. */
 export function OnboardingWizard() {
   const router = useRouter();
   const notice = NOTICES[useSearchParams().get('notice') ?? ''];
@@ -56,48 +65,30 @@ export function OnboardingWizard() {
   const [step, setStep] = useState(-1); // -1 = welcome
   const [name, setName] = useState('');
   const [nameError, setNameError] = useState('');
-  const [teamSize, setTeamSize] = useState<number | null>(null);
-  const [exactSize, setExactSize] = useState('');
+  const [generatedSize, setGeneratedSize] = useState(8);
   const [templates, setTemplates] = useState<Template[]>([]);
-  const [templateId, setTemplateId] = useState<string | null>(null);
+  const [templateId, setTemplateId] = useState<string | null>('loft');
   const [character, setCharacter] = useState('maya');
   const [error, setError] = useState('');
   const [creating, setCreating] = useState(false);
 
-  // The previews, with the generated office made for this team (its look comes from the name).
-  const previewQuery =
-    step >= 1 && teamSize !== null
-      ? `team=${teamSize}&seed=${encodeURIComponent(name.trim())}`
-      : null;
   useEffect(() => {
-    if (!previewQuery) return;
+    if (step < 1) return;
     let live = true;
-    api<Template[]>(`/office/templates?${previewQuery}`).then(
-      (list) => live && setTemplates(list),
-      () => live && setError('Could not load the office templates.'),
+    api<Template[]>(`/office/templates?team=${generatedSize}&seed=${encodeURIComponent(name.trim())}`).then(
+      (list) => {
+        if (!live) return;
+        setTemplates(sortTemplates(list));
+        setTemplateId((prev) => prev ?? 'loft');
+      },
+      () => {
+        if (live) setError('Could not load the office templates.');
+      },
     );
     return () => {
       live = false;
     };
-  }, [previewQuery]);
-
-  // The office made for the team, else the template that fits it best.
-  const recommended = useMemo(() => {
-    if (teamSize === null) return null;
-    return (
-      templates.find((t) => t.id === GENERATED) ??
-      templates.find(
-        (t) => teamSize >= t.minTeam && teamSize <= t.maxTeam && teamSize <= t.maxTeam / 1.5,
-      ) ??
-      templates.find((t) => teamSize >= t.minTeam && teamSize <= t.maxTeam) ??
-      templates[templates.length - 1]
-    );
-  }, [teamSize, templates]);
-
-  function pickTeamSize(size: number) {
-    setTeamSize(size);
-    setTemplateId(null);
-  }
+  }, [step >= 1, generatedSize, name]);
 
   function next() {
     setError('');
@@ -106,9 +97,7 @@ export function OnboardingWizard() {
       if (!parsed.success) return setNameError(parsed.error.issues[0].message);
       setNameError('');
     }
-    if (step === 1 && teamSize === null) return setError('Pick the size of your team.');
-    if (step === 1 && !templateId) setTemplateId(recommended?.id ?? GENERATED);
-    if (step === 2 && !templateId) return setError('Pick an office.');
+    if (step === 1 && !templateId) return setError('Pick an office.');
     setStep(step + 1);
   }
 
@@ -121,7 +110,7 @@ export function OnboardingWizard() {
           name: name.trim(),
           templateId,
           character,
-          ...(templateId === GENERATED && { teamSize }),
+          ...(templateId === GENERATED && { teamSize: generatedSize }),
         },
       });
       await reloadUser();
@@ -173,7 +162,7 @@ export function OnboardingWizard() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl">
+    <div className={cn('mx-auto', step === 2 ? 'max-w-4xl' : 'max-w-3xl')}>
       <ol className="flex items-center gap-2" aria-label="Steps">
         {STEPS.map((label, i) => (
           <li key={label} className="flex flex-1 items-center gap-2">
@@ -232,72 +221,24 @@ export function OnboardingWizard() {
 
         {step === 1 && (
           <>
-            <h1 className="text-2xl font-semibold tracking-tight">How big is your team?</h1>
-            <p className="mt-1 text-zinc-600">We&apos;ll suggest an office with enough desks.</p>
-            <div
-              className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-5"
-              role="radiogroup"
-              aria-label="Team size"
-            >
-              {TEAM_SIZES.map((t) => {
-                const picked = teamSize !== null && teamSize >= t.min && teamSize <= t.max;
-                return (
-                  <button
-                    key={t.label}
-                    type="button"
-                    role="radio"
-                    aria-checked={picked}
-                    onClick={() => {
-                      setExactSize('');
-                      pickTeamSize(t.max);
-                    }}
-                    className={cn(
-                      'rounded-2xl px-4 py-5 text-center ring-1 transition',
-                      picked
-                        ? 'bg-zinc-900 text-white ring-zinc-900'
-                        : 'bg-white ring-zinc-200 hover:ring-zinc-400',
-                    )}
-                  >
-                    <span className="block text-lg font-semibold">{t.label}</span>
-                    <span className={cn('text-xs', picked ? 'text-zinc-300' : 'text-zinc-500')}>
-                      {t.max === 1 ? 'person' : 'people'}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-            <TextField
-              label="Or exactly"
-              type="number"
-              min={1}
-              max={100}
-              inputMode="numeric"
-              className="mt-4 w-40"
-              value={exactSize}
-              onChange={(e) => {
-                setExactSize(e.target.value);
-                const size = Math.round(Number(e.target.value));
-                if (size >= 1 && size <= 100) pickTeamSize(size);
-              }}
-              hint="people, up to 100"
-            />
-          </>
-        )}
-
-        {step === 2 && (
-          <>
             <h1 className="text-2xl font-semibold tracking-tight">Pick your office</h1>
             <p className="mt-1 text-zinc-600">You can move, add and remove furniture any time.</p>
             <div className="mt-6 grid gap-4 sm:grid-cols-2" role="radiogroup" aria-label="Office">
               {templates.map((t) => (
-                <button
+                <div
                   key={t.id}
-                  type="button"
                   role="radio"
                   aria-checked={templateId === t.id}
+                  tabIndex={0}
                   onClick={() => setTemplateId(t.id)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      setTemplateId(t.id);
+                    }
+                  }}
                   className={cn(
-                    'flex flex-col overflow-hidden rounded-2xl bg-white text-left ring-2 transition',
+                    'flex cursor-pointer flex-col overflow-hidden rounded-2xl bg-white text-left ring-2 transition focus-visible:outline-2 focus-visible:outline-emerald-500',
                     templateId === t.id ? 'ring-zinc-900' : 'ring-zinc-200 hover:ring-zinc-300',
                   )}
                 >
@@ -307,38 +248,70 @@ export function OnboardingWizard() {
                   <div className="flex flex-1 flex-col gap-1.5 p-4">
                     <span className="flex items-center justify-between gap-2 font-semibold">
                       {t.name}
-                      {recommended?.id === t.id && (
+                      {t.id === 'loft' && (
                         <Badge tone="success">
-                          <Sparkles className="size-3" />{' '}
-                          {t.id === GENERATED ? 'Recommended' : 'Best fit'}
+                          <Sparkles className="size-3" /> Recommended
                         </Badge>
                       )}
                     </span>
                     <span className="text-sm text-zinc-600">{t.description}</span>
-                    <span className="mt-auto pt-2 text-xs text-zinc-500">
-                      {t.id === GENERATED &&
-                        `For ${teamSize === 1 ? 'you' : `${teamSize} people`} · `}
-                      {t.desks} desks · {t.meetingRooms} meeting room{t.meetingRooms > 1 ? 's' : ''}
-                    </span>
+                    <div className="mt-auto space-y-1.5 pt-2 text-xs text-zinc-500">
+                      {t.id === 'loft' && (
+                        <p className="text-zinc-600">Starts small, add wings as your team grows</p>
+                      )}
+                      {t.id === GENERATED && (
+                        <div className="flex flex-wrap gap-1.5 pb-0.5">
+                          {GENERATED_SIZES.map((s) => {
+                            const active = generatedSize === s.size;
+                            return (
+                              <button
+                                key={s.size}
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setGeneratedSize(s.size);
+                                  setTemplateId(t.id);
+                                }}
+                                className={cn(
+                                  'rounded-full px-2.5 py-0.5 text-xs font-medium transition',
+                                  active && templateId === GENERATED
+                                    ? 'bg-zinc-900 text-white'
+                                    : 'border border-zinc-200 bg-zinc-50 text-zinc-700 hover:border-zinc-300 hover:bg-white',
+                                )}
+                              >
+                                {s.label}{' '}
+                                <span
+                                  className={cn(
+                                    'text-[11px]',
+                                    active && templateId === GENERATED
+                                      ? 'text-zinc-300'
+                                      : 'text-zinc-500',
+                                  )}
+                                >
+                                  {s.hint}
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                      <p>
+                        {t.desks} desks · {t.meetingRooms} meeting room
+                        {t.meetingRooms > 1 ? 's' : ''}
+                      </p>
+                    </div>
                   </div>
-                </button>
+                </div>
               ))}
             </div>
           </>
         )}
 
-        {step === 3 && (
+        {step === 2 && (
           <>
             <h1 className="text-2xl font-semibold tracking-tight">Choose your character</h1>
             <p className="mt-1 text-zinc-600">This is how your team sees you in the office.</p>
-            <CharacterGrid
-              value={character}
-              onPick={setCharacter}
-              fresh={8}
-              className="mt-6 gap-3 sm:grid-cols-8"
-              tileClassName="rounded-2xl p-2"
-              previewClassName="h-20"
-            />
+            <CharacterStudio value={character} onChange={setCharacter} className="mt-6" />
           </>
         )}
 

@@ -7,10 +7,11 @@ import { useEffect, useState } from 'react';
 import { Alert } from '@/components/ui/Alert';
 import { Button, buttonStyles } from '@/components/ui/Button';
 import { useAuth } from '@/features/auth/AuthProvider';
-import { CharacterGrid } from '@/features/workspace/CharacterGrid';
+import { CharacterStudio } from '@/features/workspace/CharacterStudio';
 import { ROLE_LABEL, type Role } from '@/features/workspace/types';
 import { PRESET_KEYS } from '@/game/art/recipe';
 import { api, ApiError } from '@/lib/api';
+import { cn } from '@/lib/cn';
 
 interface Invitation {
   workspaceName: string;
@@ -75,9 +76,10 @@ export function InvitationView({ token }: { token: string }) {
 
   const here = `/invite/${token}`;
   const sameAccount = user?.email === invitation.email;
+  const showPicker = status === 'signed-in' && sameAccount && !user?.workspace;
 
   return (
-    <div className="mx-auto max-w-md text-center">
+    <div className={cn('mx-auto text-center', showPicker ? 'max-w-2xl' : 'max-w-md')}>
       <span className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-700">
         <PartyPopper className="size-7" aria-hidden="true" />
       </span>
@@ -128,11 +130,11 @@ export function InvitationView({ token }: { token: string }) {
           </Alert>
         )}
 
-        {status === 'signed-in' && sameAccount && !user?.workspace && (
+        {showPicker && (
           <>
             <div className="text-left">
               <p className="mb-2 text-sm font-medium text-zinc-700">Pick your character</p>
-              <CharacterGrid value={character} onPick={setCharacter} />
+              <CharacterStudio value={character} onChange={setCharacter} disabled={busy !== null} />
             </div>
             <Button size="lg" className="rounded-xl" loading={busy === 'accept'} disabled={busy !== null} onClick={accept}>
               Join {invitation.workspaceName}
