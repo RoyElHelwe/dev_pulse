@@ -24,6 +24,8 @@ export interface DeskOptions {
   headsetOn?: boolean;
   /** Clock in ms for steam, flames and LEDs; leave out for a still picture. */
   time?: number;
+  /** The owner's open tasks: a stack of papers that grows with it (0 = none; steps stop growing at 8). */
+  papers?: number;
 }
 
 /** A light the desk gives off (monitors, lamp, candle), in desk coordinates. */
@@ -231,6 +233,24 @@ export function drawDesk(pen: Pen, w: number, h: number, options: DeskOptions): 
         pen.pop();
       }
     });
+  }
+  // 6. Open tasks: a stack of papers on the left of the desk, one more sheet per task (up to 8, then a clip).
+  const sheets = owner ? Math.min(8, Math.max(0, Math.floor(options.papers ?? 0))) : 0;
+  if (sheets > 0) {
+    const sx = x0 + 10;
+    const sy = -2;
+    const jitter = seededRandom(`papers:${options.seed}`);
+    pen.ellipse(sx + 1.5, sy + 5, 13, 4, TECH.body.ramp.deep, 0.18);
+    for (let i = 0; i < sheets; i++) {
+      pen.push(sx - i * 0.35, sy - i * 0.8, (jitter() - 0.5) * 0.22);
+      pen.rect(-5.5, -7, 11, 14, 0.6, PAPER.ramp.shadow, 0.95);
+      pen.rect(-5.5, -7, 10.4, 13.2, 0.6, PAPER.ramp.base);
+      pen.pop();
+    }
+    pen.push(sx - (sheets - 1) * 0.35, sy - (sheets - 1) * 0.8, 0);
+    for (let l = 0; l < 4; l++) pen.rect(-3.8, -4.5 + l * 2.8, 7 - (l % 2) * 2, 0.6, 0.3, TECH.silver.ramp.shadow, 0.8);
+    if ((options.papers ?? 0) > 8) pen.rect(-1.5, -8.5, 3, 4, 0.6, CLOTH[0].ramp.base);
+    pen.pop();
   }
   return lights;
 

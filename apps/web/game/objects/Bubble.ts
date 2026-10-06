@@ -15,6 +15,39 @@ interface BubbleOptions {
 }
 
 /**
+ * A chat message over someone's head: wrapped text in a rounded white bubble with a
+ * tail. The container's origin is the bottom centre of the tail tip.
+ */
+export class SpeechBubble extends Phaser.GameObjects.Container {
+  constructor(scene: Phaser.Scene, x: number, y: number, text: string, o: { fontFamily: string; resolution: number }) {
+    super(scene, x, y);
+    const label = scene.add
+      .text(0, 0, text, {
+        fontFamily: o.fontFamily,
+        fontSize: '11px',
+        fontStyle: '500',
+        color: '#27272a',
+        wordWrap: { width: 150, useAdvancedWrap: true },
+        align: 'center',
+      })
+      .setOrigin(0.5, 1)
+      .setResolution(o.resolution);
+    const w = Math.max(28, label.width + 18);
+    const h = label.height + 12;
+    const bg = scene.add.graphics();
+    const top = -h - 5;
+    bg.fillStyle(0x000000, 0.12);
+    bg.fillRoundedRect(-w / 2, top + 1.5, w, h, 10);
+    rr(bg, -w / 2, top, w, h, 10, 0xffffff, 0.98);
+    bg.fillStyle(0xffffff, 0.98);
+    bg.fillTriangle(-4, top + h - 0.5, 4, top + h - 0.5, 0, top + h + 5);
+    label.setY(top + h - 6);
+    this.add([bg, label]);
+    scene.add.existing(this);
+  }
+}
+
+/**
  * A rounded label (status above an avatar, "Press E" hints, name plates).
  * The container's origin is the bottom centre of the bubble.
  */
