@@ -11,6 +11,7 @@ export const SOLID: Record<FurnitureKind, boolean> = {
   divider: true,
   meetingTable: true,
   tv: false,
+  board: true,
   sofa: true,
   armchair: true,
   coffeeTable: true,

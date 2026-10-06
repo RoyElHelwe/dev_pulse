@@ -17,6 +17,7 @@ export function hq() {
   b.add({ kind: 'plant', x: 75.0, y: 10.9, w: 1, h: 1 });
 
   for (const oy of [15.5, 23, 30.5, 38, 45.5]) for (const ox of [6, 20, 34, 48, 62]) b.deskCluster(ox, oy);
+  b.add({ kind: 'board', x: 53.5, y: 12.75, w: 3, h: 0.5 });
   for (const y of [21.75, 29.25, 36.75, 44.25]) for (const x of [16.5, 30.5, 44.5, 58.5]) b.add({ kind: 'plant', x, y, w: 1.2, h: 1.2 });
   b.add({ kind: 'plant', x: 1.0, y: 13.9, w: 1, h: 1 });
   b.add({ kind: 'plant', x: 75.0, y: 13.9, w: 1, h: 1 });

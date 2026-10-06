@@ -11,6 +11,7 @@ export function loft() {
   b.add({ kind: 'plant', x: 30.9, y: 11.0, w: 1, h: 1 });
 
   for (const ox of [4, 18]) b.deskCluster(ox, 15);
+  b.add({ kind: 'board', x: 29, y: 12.75, w: 3, h: 0.5 });
   b.add({ kind: 'plant', x: 1.0, y: 13.9, w: 1, h: 1 });
   b.add({ kind: 'plant', x: 31.0, y: 13.9, w: 1, h: 1 });
   b.add({ kind: 'bookshelf', x: 31.4, y: 18, w: 4, h: 0.8, rotation: 90 });

@@ -31,7 +31,7 @@ export function validateLayout(layout: OfficeLayout): LayoutProblem[] {
     }
   }
 
-  for (const item of solids) {
+  for (const item of solids.filter((f) => f.kind !== 'board')) {
     const px = shrink(toPixels(itemBounds(item)), 2);
     if (walls.some((w) => overlaps(px, w))) {
       problems.push({ code: 'ON_WALL', message: 'Furniture can’t stand on a wall or a door.', itemIds: [item.id] });

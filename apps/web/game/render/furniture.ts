@@ -23,6 +23,7 @@ const WOOD_WALNUT = 0x6e5241;
 const METAL_DARK = 0x262a2e;
 const BOOK_COLORS = [0xc0574a, 0x3f6e8c, 0xe3b55a, 0x4f7d5c, 0xd9d4cc, 0x2f3e4e, 0x8c6a9f];
 const MUG_COLORS = [0xffffff, 0x2f3e4e, 0xd9734e, 0x6b9080];
+const CARD_COLORS = [0xf4d35e, 0xee964b, 0x0ea5e9, 0x10b981, 0xf43f5e];
 
 const desk: DrawFn = (g, w, h, random) => {
   const x = -w / 2;
@@ -89,6 +90,28 @@ const tv: DrawFn = (g, w, h) => {
   rr(g, -w / 2, -h / 2, w, h, 2, 0x111417);
   g.fillStyle(0x3b4b58, 1);
   g.fillRect(-w / 2 + 3, -h / 2 + 2, w - 6, 1.5);
+};
+
+const board: DrawFn = (g, w, h, random) => {
+  rr(g, -w / 2, -h / 2, w, h, 2, METAL_DARK);
+  rr(g, -w / 2 + 1, -h / 2 + 1, w - 2, h - 2, 1, 0xffffff);
+  g.fillStyle(0xd0d5dd, 1);
+  g.fillRect(-w / 2 + 1, -h / 2 + 1, w - 2, 2.5);
+
+  const colW = (w - 2) / 3;
+  g.fillStyle(0xe4e7ec, 1);
+  g.fillRect(-w / 2 + 1 + colW, -h / 2 + 3.5, 1, h - 4.5);
+  g.fillRect(-w / 2 + 1 + colW * 2, -h / 2 + 3.5, 1, h - 4.5);
+
+  for (let col = 0; col < 3; col++) {
+    const colLeft = -w / 2 + 1 + col * colW;
+    const count = 1 + Math.floor(random() * 3);
+    for (let i = 0; i < count; i++) {
+      const cx = colLeft + 3 + i * 8;
+      const cy = -h / 2 + 5 + (i % 2) * 2;
+      rr(g, cx, cy, 6, 4, 1, pick(random, CARD_COLORS));
+    }
+  }
 };
 
 const seat = (cushions: number): DrawFn => (g, w, h, _random, color = 0x5f7a6b) => {
@@ -223,6 +246,7 @@ export const FURNITURE: Record<FurnitureKind, FurnitureSpec> = {
   divider: { solid: true, draw: divider },
   meetingTable: { solid: true, draw: meetingTable },
   tv: { solid: false, layer: 'wall', draw: tv },
+  board: { solid: true, layer: 'wall', draw: board },
   sofa: { solid: true, draw: seat(3) },
   armchair: { solid: true, draw: seat(1) },
   coffeeTable: { solid: true, draw: coffeeTable },

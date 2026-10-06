@@ -36,6 +36,7 @@ export type FurnitureKind =
   | 'divider'
   | 'meetingTable'
   | 'tv'
+  | 'board'
   | 'sofa'
   | 'armchair'
   | 'coffeeTable'

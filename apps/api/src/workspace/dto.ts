@@ -10,6 +10,7 @@ import {
   Length,
   Matches,
   Max,
+  MaxLength,
   Min,
   ValidateIf,
   ValidateNested,
@@ -162,3 +163,18 @@ export class UpdateLayoutDto {
   @Type(() => RoomNameDto)
   rooms: RoomNameDto[];
 }
+
+export class WingDto {
+  @IsIn(['LEFT', 'RIGHT', 'BOTTOM'])
+  side: 'LEFT' | 'RIGHT' | 'BOTTOM';
+
+  @IsInt()
+  version: number;
+}
+
+export class MyDeskDto {
+  @IsString()
+  @MaxLength(100)
+  deskId: string;
+}
+
