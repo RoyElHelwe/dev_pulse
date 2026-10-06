@@ -5,6 +5,7 @@ import { AuthModule } from './auth/auth.module';
 import { OriginMiddleware } from './common/origin.middleware';
 import { ConfigModule } from './config/config.module';
 import { ChatModule } from './chat/chat.module';
+import { TasksModule } from './tasks/tasks.module';
 import { HealthModule } from './health/health.module';
 import { InvitationsModule } from './invitations/invitations.module';
 import { OfficeModule } from './office/office.module';
@@ -29,6 +30,7 @@ import { WorkspaceModule } from './workspace/workspace.module';
     MeetingsModule,
     VoiceModule,
     ChatModule,
+    TasksModule,
     SettingsModule,
     HealthModule,
   ],
