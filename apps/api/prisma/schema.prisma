@@ -39,6 +39,8 @@ model User {
   settings        UserSettings?
   chatMessages    ChatMessage[]
   bookings        RoomBooking[]
+  tasksReported   Task[]    @relation("TaskReporter")
+  tasksAssigned   Task[]    @relation("TaskAssignee")
 }
 
 /// An organisation and its virtual office. Created by its owner (the organiser).
@@ -58,6 +60,32 @@ model Workspace {
   invitations  Invitation[]
   chatMessages ChatMessage[]
   bookings     RoomBooking[]
+  tasks        Task[]
+  wings        OfficeWing[]
+}
+
+enum WingSide {
+  LEFT
+  RIGHT
+  BOTTOM
+}
+
+/// A generated extension of a Loft office. The composed layout lives in Workspace.layout;
+/// this table records what was added (position in tiles, in the current layout's coordinates).
+model OfficeWing {
+  id          String   @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  side        WingSide
+  seed        String
+  x           Float
+  y           Float
+  w           Float
+  h           Float
+  deskCount   Int
+  createdAt   DateTime @default(now())
+
+  @@index([workspaceId])
 }
 
 /// OWNER: the organiser (one per workspace). ADMIN: can invite and edit the office.
@@ -220,6 +248,8 @@ model UserSettings {
   voiceMode     VoiceMode @default(OPEN)
   /// KeyboardEvent.code held to talk in PUSH_TO_TALK mode ("KeyV", "Space"...).
   pushToTalkKey String    @default("KeyV")
+  /// Rebound keys by action (KeyboardEvent.code). Missing actions use the defaults.
+  keybinds      Json      @default("{}")
   updatedAt     DateTime  @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -264,4 +294,58 @@ model RoomBooking {
   createdBy User      @relation(fields: [createdById], references: [id], onDelete: Cascade)
 
   @@index([workspaceId, roomId, startsAt])
+}
+
+// ============================================================================
+// TASKS (Jira-like global board: apps/api/src/tasks)
+// ============================================================================
+
+enum TaskType {
+  TASK
+  BUG
+  STORY
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  IN_REVIEW
+  DONE
+}
+
+enum TaskPriority {
+  HIGHEST
+  HIGH
+  MEDIUM
+  LOW
+  LOWEST
+}
+
+/// One issue of a workspace. Shown as `<PREFIX>-<number>` (prefix from the workspace name).
+model Task {
+  id          String       @id @default(cuid())
+  workspaceId String
+  /// Sequential per workspace (1, 2, 3...), never reused.
+  number      Int
+  type        TaskType     @default(TASK)
+  title       String
+  description String       @default("")
+  status      TaskStatus   @default(TODO)
+  priority    TaskPriority @default(MEDIUM)
+  /// A member of the workspace; cleared when they leave.
+  assigneeId  String?
+  reporterId  String
+  dueDate     DateTime?
+  /// Order inside a status column (lower = higher up).
+  rank        Float
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  reporter  User      @relation("TaskReporter", fields: [reporterId], references: [id], onDelete: Cascade)
+  assignee  User?     @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+
+  @@unique([workspaceId, number])
+  @@index([workspaceId, status, rank])
+  @@index([workspaceId, assigneeId])
 }
