@@ -63,6 +63,7 @@ model Workspace {
   tasks        Task[]
   wings        OfficeWing[]
   gameResults  GameResult[]
+  legoBoards   LegoBoard[]
 }
 
 enum WingSide {
@@ -367,4 +368,24 @@ model GameResult {
 
   @@index([workspaceId, game, createdAt])
 }
+
+// ============================================================================
+// LEGO (apps/api/src/games/lego)
+// ============================================================================
+
+/// One JSON row per board = 1 read on load, 1 upsert per (debounced) write,
+/// <=1536 bricks (~25KB); a row per brick would give thousands of tiny writes
+/// and no benefit since we never query bricks individually.
+model LegoBoard {
+  id          String   @id @default(cuid())
+  workspaceId String
+  objectId    String
+  bricks      Json
+  updatedAt   DateTime @updatedAt
+
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, objectId])
+}
+
 

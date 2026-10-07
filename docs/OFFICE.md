@@ -593,3 +593,25 @@ Rebindable key actions for games (such as foosball controls) must be declared on
 4. **Write unit tests**:
    - Add tests in `apps/api/src/games/<game>/<game>.spec.ts` testing player join/leave, turns, action validation (`GameError`), forfeit handling, and results recording.
    - Run tests: `docker exec dev_pulse-api-1 pnpm vitest run src/games/<game>`.
+
+### Lego wall (persistent art board, step 14)
+
+**Code:** `apps/api/src/games/lego`, `apps/web/features/games/lego`, `apps/web/game/render/legoArt.ts`
+
+Unlike foosball/Uno the Lego wall is not a match: no GameResult, nothing is recorded or ended. It reuses the games framework only for join/leave, proximity and per-viewer game:state; the art itself outlives sessions.
+
+- **Board**: 48 × 32 studs per legoBoard furniture id. A brick is a tuple [x, y, w, h, c] (top-left stud, footprint after rotation, palette index 0–15). Footprints: 1×1, 1×2, 2×1, 2×2, 1×4, 4×1, 2×4, 4×2. Bricks never overlap and stay inside the board.
+- **Storage**: table LegoBoard { workspaceId, objectId, bricks Json, updatedAt }, unique on (workspaceId, objectId), cascade with the workspace. One JSON row per board (not a row per brick): a board has at most 1536 bricks (~25 KB), is always read and written whole, and is never queried per brick, so one read on first use and one debounced (400 ms) upsert per burst of edits beats thousands of tiny rows. parseBricks drops anything invalid/overlapping when loading. LegoService keeps the loaded boards in memory (single API process) and flushes on shutdown.
+- **Actions** (game:action): {type:'place',x,y,w,h,c}, {type:'remove',x,y} (removes the brick covering that stud), {type:'clear'} (OWNER/ADMIN only, else FORBIDDEN). Errors: INVALID_BRICK, LOADING, RATE_LIMIT (15 actions/s per user, on top of the gateway budget), BAD_REQUEST. View: { ready, w, h, bricks, canClear, players, version }.
+- **Live miniature**: /office broadcast lego:art { id, bricks } to the whole workspace (throttled, trailing 300 ms). GET /api/workspace/lego (member) returns { boards: [{ id, bricks }] } for the initial load; LegoSync (mounted in OfficeView) fetches it on connect and applies lego:art to the legoArt store. The wall object's texture key includes the art version, so OfficeScene swaps the texture on change (the wall is 4 × 0.5 tiles, so the 48 × 32 art is drawn squashed vertically). Until the first fetch lands the old decorative placeholder is shown.
+
+### Foosball (step 12)
+
+**Code:** \pps/api/src/games/foosball/{foosball.physics,foosball.game}.ts\, \pps/web/features/games/foosball/*\. Full protocol: \.tiered/step-12-protocol.md\.
+
+- Server-authoritative, 30 Hz tick (4 physics substeps), field 120 x 64 units, 4 rods per side (goalkeeper, defense, midfield, attack). First to 5 wins.
+- Phases: \lobby\ -> \countdown\ -> \playing\ <-> \goal\ -> \ended\ (rematch back to lobby). Join as spectator, then \sit\/\stand\; start needs equal teams (1v1 or 2v2).
+- Rods: 1v1 owner controls all 4, 2v2 each controls 2. Actions \move {rod,dir}\, \kick {rod}\. A teammate's absence hands his rods to the partner.
+- Leaving/disconnect during a match: if a side is fully absent for 10 s (\GRACE_MS\) it forfeits; result recorded once via \ctx.record\.
+- Keys: W/S or arrows move the rod (fixed), keybind actions \oosKick\ (Space) and \oosSwitch\ (Q; 1-4 select directly).
+- Tests: \oosball.physics.spec.ts\, \oosball.game.spec.ts\.

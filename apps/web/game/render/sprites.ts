@@ -7,6 +7,7 @@ import { itemBounds } from '../layout/derive';
 import type { Furniture } from '../layout/types';
 import { rr, seededRandom } from './draw';
 import { FURNITURE } from './furniture';
+import { drawLegoWall, legoArt } from './legoArt';
 
 // Each piece of furniture is drawn once into a small texture, then shown as
 // an image: cheap to draw every frame, and easy to move in the editor.
@@ -48,7 +49,8 @@ function deskPapers(scene: Phaser.Scene, item: Furniture) {
 
 export function furnitureTextureKey(item: Furniture, owner?: string, papers = 0) {
   const seed = VARIES.has(item.kind) ? item.id : '';
-  return `furniture:${item.kind}:${item.w}:${item.h}:${item.color ?? ''}:${seed}:${owner ?? ''}${owner && papers ? `:p${papers}` : ''}`;
+  const legoSuffix = item.kind === 'legoBoard' && legoArt.get(item.id) !== undefined ? `:${item.id}:lego${legoArt.version(item.id)}` : '';
+  return `furniture:${item.kind}:${item.w}:${item.h}:${item.color ?? ''}:${seed}:${owner ?? ''}${owner && papers ? `:p${papers}` : ''}${legoSuffix}`;
 }
 
 /** Texture pixels per world pixel: sharp at the default zoom on retina screens. */
@@ -64,7 +66,9 @@ export function ensureFurnitureTexture(scene: Phaser.Scene, item: Furniture, sca
   const w = item.w * TILE;
   const h = item.h * TILE;
   const g = scene.make.graphics({}, false);
+  const lego = item.kind === 'legoBoard' ? legoArt.get(item.id) : undefined;
   if (item.kind === 'desk') drawDesk(phaserPen(g), w, h, { seed: item.id, owner: owner ? recipeOf(owner) : null, wear: DESK_WEAR, papers });
+  else if (lego !== undefined) drawLegoWall(g, w, h, lego);
   else FURNITURE[item.kind].draw(g, w, h, seededRandom(item.id), item.color);
   const texture = scene.textures.addDynamicTexture(key, Math.ceil((w + PAD * 2) * scale), Math.ceil((h + PAD * 2) * scale))!;
   g.setScale(scale).setPosition((w / 2 + PAD) * scale, (h / 2 + PAD) * scale);

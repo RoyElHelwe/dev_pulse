@@ -19,6 +19,7 @@ import type { OfficeLayout } from '@/game/layout/types';
 import { api, ApiError } from '@/lib/api';
 import { connectOffice, type Presence } from './connection';
 import { GameHost } from '@/features/games/GameHost';
+import { LegoSync } from '@/features/games/lego/LegoSync';
 import { EditorPanel } from './EditorPanel';
 import { officeEvents } from './events';
 import { MoveDeskPrompt } from './MoveDeskPrompt';
@@ -363,6 +364,7 @@ export function OfficeView() {
             <ChatPanel {...features} />
             <MeetingsPanel {...features} />
             <GameHost socket={socket} me={{ id: user.id, name: user.displayName, character: workspace.character }} />
+            <LegoSync socket={socket} />
           </>
         )}
         {editing && (

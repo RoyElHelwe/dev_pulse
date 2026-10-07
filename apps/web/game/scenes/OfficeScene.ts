@@ -17,6 +17,7 @@ import { Proximity } from '../systems/Proximity';
 import { roomFinder } from '../systems/rooms';
 import { drawFloor } from '../render/floors';
 import { FURNITURE } from '../render/furniture';
+import { legoArt } from '../render/legoArt';
 import { ensureFurnitureTexture, ensureShadowTexture, setDeskOwners, setDeskPapers, textureScale } from '../render/sprites';
 import { drawWall, wallCollider } from '../render/walls';
 
@@ -250,7 +251,11 @@ export class OfficeScene extends Phaser.Scene {
       this.zoomBy(dy > 0 ? 1 / 1.12 : 1.12);
     });
     this.scale.on('resize', this.onResize, this);
+    const unsubLego = legoArt.subscribe((objectId) => {
+      this.updateLegoBoard(objectId);
+    });
     this.events.once('shutdown', () => {
+      unsubLego();
       this.editMode?.destroy();
       this.editMode = null;
       this.proximity.clear();
@@ -426,6 +431,24 @@ export class OfficeScene extends Phaser.Scene {
       sprite.key = key;
       // Desk textures are per desk and owner: nobody else uses the old one.
       if (this.textures.exists(old)) this.textures.remove(old);
+    }
+  }
+
+  /** Lego wall boards redraw when art is placed/erased. */
+  private updateLegoBoard(objectId?: string) {
+    const scale = textureScale(this.opts.dpr);
+    const items = this.editMode ? [] : this.opts.layout.furniture.filter((f) => f.kind === 'legoBoard' && (!objectId || f.id === objectId));
+    for (const item of items) {
+      const sprite = this.sprites.get(item.id);
+      if (!sprite) continue;
+      const key = ensureFurnitureTexture(this, item, scale);
+      if (key === sprite.key) continue;
+      const old = sprite.key;
+      sprite.image.setTexture(key);
+      sprite.key = key;
+      if (old.includes(':lego') && this.textures.exists(old)) {
+        this.textures.remove(old);
+      }
     }
   }
 
