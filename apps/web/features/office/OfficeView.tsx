@@ -269,6 +269,7 @@ export function OfficeView() {
           return setBoardOpen(true);
         }
         if (e.type === 'board') return setToast('Screen: sharing arrives with the meeting rooms.');
+        if (e.type !== 'desk') return; // game tables and the Lego wall belong to GameHost
         if (e.ownerId && e.ownerId === myId) {
           setBoardFilter({ ...EMPTY_FILTER, onlyMine: true });
           return setBoardOpen(true);
