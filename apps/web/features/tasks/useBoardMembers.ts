@@ -7,6 +7,7 @@ import type { BoardMember } from './types';
 interface MemberApiResponse {
   userId: string;
   displayName: string;
+  email?: string;
   character: string;
   role: 'OWNER' | 'ADMIN' | 'MEMBER';
 }
@@ -25,6 +26,7 @@ export function useBoardMembers(enabled: boolean): BoardMember[] {
           data.map((m) => ({
             userId: m.userId,
             displayName: m.displayName,
+            email: m.email,
             character: m.character,
             role: m.role,
           })),

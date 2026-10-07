@@ -255,3 +255,151 @@ test('5. Esc closes people list popover when opened', async () => {
   await expect(peopleBtn).toHaveAttribute('aria-expanded', 'false');
   await expect(list).toBeHidden();
 });
+
+let zedUserId = '';
+
+test('6. >8 members: row shows exactly 8 faces (count buttons with aria-label starting "Filter by " inside [data-testid=filter-faces], excluding Unassigned) and the + button shows a +N badge with correct N', async ({ playwright }) => {
+  const authRes = await org.request.get('/api/auth/me');
+  expect(authRes.ok()).toBe(true);
+  const me = await authRes.json();
+  const aliceId: string = me.id;
+
+  const api = await playwright.request.newContext({
+    ignoreHTTPSErrors: true,
+    baseURL: new URL(org.url()).origin,
+  });
+
+  for (let i = 1; i <= 12; i++) {
+    const name = i === 12 ? 'Zed Zebra' : `Member${String(i).padStart(2, '0')} ${stamp}`;
+    const res = await api.post('/api/auth/dev/users', {
+      data: { name, joinUserId: aliceId },
+    });
+    expect(res.ok()).toBe(true);
+    if (i === 12) {
+      const data = await res.json().catch(() => ({}));
+      zedUserId = data.user?.id || '';
+    }
+  }
+  await api.dispose();
+
+  if (!zedUserId) {
+    const membersRes = await org.request.get('/api/workspace/members');
+    const membersList = await membersRes.json();
+    const zed = membersList.find((m: { displayName: string }) => m.displayName === 'Zed Zebra');
+    zedUserId = zed?.userId;
+  }
+
+  // Re-open board so members are fetched
+  const board = org.getByRole('region', { name: 'Task board' });
+  if (await board.isVisible()) {
+    await org.getByRole('button', { name: 'Close task board' }).click();
+    await expect(board).toBeHidden();
+  }
+  const boardButton = org.getByRole('button', { name: /^Board/ });
+  await boardButton.click();
+  await expect(board).toBeVisible();
+
+  const filterFaces = org.getByTestId('filter-faces');
+  await expect(filterFaces).toBeVisible();
+
+  // Count buttons with aria-label starting "Filter by " inside [data-testid=filter-faces], excluding Unassigned
+  const faceButtons = filterFaces.locator('button[aria-label^="Filter by "]:not([aria-label="Filter by Unassigned"])');
+  await expect(faceButtons).toHaveCount(8);
+
+  // Unassigned button is visible
+  await expect(filterFaces.getByRole('button', { name: 'Filter by Unassigned' })).toBeVisible();
+
+  // The + button shows a +N badge with correct N
+  const membersRes = await org.request.get('/api/workspace/members');
+  const membersList = await membersRes.json();
+  const extraCount = membersList.length - 8;
+  const plusBtn = filterFaces.getByRole('button', { name: 'Find more people' });
+  await expect(plusBtn).toBeVisible();
+  await expect(plusBtn).toContainText(`+${extraCount}`);
+
+  if (SHOTS) await org.screenshot({ path: `${SHOTS}/board-17-row.png` });
+});
+
+test('7. + opens dialog: search input is focused; typing "Zebra" narrows rows to the matching person(s); Enter toggles the active row (checkmark / aria-selected=true); filter pins that person into the 8-face row (aria-pressed=true button for them appears) while selected, row still has exactly 8 faces; Esc closes ONLY the dialog (board region still visible); Clear selection empties it (re-open dialog, click "Clear selection", assert no aria-pressed=true faces); also click a row with the mouse to toggle and check the board cards filter', async () => {
+  const board = org.getByRole('region', { name: 'Task board' });
+  await expect(board).toBeVisible();
+  const filterFaces = org.getByTestId('filter-faces');
+  const plusBtn = filterFaces.getByRole('button', { name: 'Find more people' });
+
+  // + opens dialog
+  await plusBtn.click();
+  const dialog = org.getByRole('dialog', { name: 'Find people' });
+  await expect(dialog).toBeVisible();
+
+  // search input is focused
+  const searchInput = dialog.getByLabel('Search people');
+  await expect(searchInput).toBeFocused();
+
+  // typing "Zebra" narrows rows to the matching person(s)
+  await searchInput.fill('Zebra');
+  const rows = dialog.getByTestId('people-picker-row');
+  await expect(rows).toHaveCount(1);
+  await expect(rows.first()).toContainText('Zed Zebra');
+
+  // Enter toggles the active row (checkmark / aria-selected=true)
+  await org.keyboard.press('Enter');
+  await expect(rows.first()).toHaveAttribute('aria-selected', 'true');
+  await expect(rows.first().locator('.lucide-check')).toBeVisible();
+
+  if (SHOTS) await org.screenshot({ path: `${SHOTS}/board-17-dialog.png` });
+
+  // filter pins that person into the 8-face row (aria-pressed=true button for them appears) while selected, row still has exactly 8 faces
+  const zedFaceBtn = filterFaces.getByRole('button', { name: 'Filter by Zed Zebra' });
+  await expect(zedFaceBtn).toBeVisible();
+  await expect(zedFaceBtn).toHaveAttribute('aria-pressed', 'true');
+
+  const faceButtons = filterFaces.locator('button[aria-label^="Filter by "]:not([aria-label="Filter by Unassigned"])');
+  await expect(faceButtons).toHaveCount(8);
+
+  // Esc closes ONLY the dialog (board region still visible)
+  await org.keyboard.press('Escape');
+  await expect(dialog).toBeHidden();
+  await expect(board).toBeVisible();
+
+  // Clear selection empties it (re-open dialog, click "Clear selection", assert no aria-pressed=true faces)
+  await plusBtn.click();
+  await expect(dialog).toBeVisible();
+
+  const clearBtn = dialog.getByRole('button', { name: 'Clear selection' });
+  await expect(clearBtn).toBeEnabled();
+  await clearBtn.click();
+
+  const pressedFaces = filterFaces.locator('button[aria-pressed="true"]');
+  await expect(pressedFaces).toHaveCount(0);
+
+  // Also click a row with the mouse to toggle and check the board cards filter
+  const taskRes = await org.request.post('/api/workspace/tasks', {
+    data: {
+      title: 'Zebra task for filter test',
+      assigneeId: zedUserId,
+    },
+  });
+  expect(taskRes.ok()).toBe(true);
+
+  // Search "Zebra" and click row with mouse to toggle
+  await searchInput.fill('Zebra');
+  await expect(rows).toHaveCount(1);
+  await rows.first().click();
+  await expect(rows.first()).toHaveAttribute('aria-selected', 'true');
+
+  // Close dialog via Done button
+  await dialog.getByRole('button', { name: 'Done' }).click();
+  await expect(dialog).toBeHidden();
+
+  // Board cards filter: Zebra task is visible, "Fix login bug" is hidden
+  await expect(board.getByText('Zebra task for filter test')).toBeVisible();
+  await expect(board.getByText('Fix login bug')).toBeHidden();
+
+  // Click face button in face row to toggle off
+  await zedFaceBtn.click();
+  const pressedFacesAfter = filterFaces.locator('button[aria-pressed="true"]');
+  await expect(pressedFacesAfter).toHaveCount(0);
+  await expect(board.getByText('Fix login bug')).toBeVisible();
+  await expect(board.getByText('Zebra task for filter test')).toBeVisible();
+});
+

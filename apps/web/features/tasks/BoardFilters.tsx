@@ -1,7 +1,10 @@
 'use client';
 
-import { Search, X } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { Plus, Search, X } from 'lucide-react';
 import { cn } from '@/lib/cn';
+import { PeoplePicker } from './PeoplePicker';
+import { countOpenTasks, useTasks } from './store';
 import { AssigneeAvatar } from './TaskIcons';
 import type { BoardFilter, BoardMember, TaskView } from './types';
 
@@ -42,6 +45,42 @@ export function matchesFilter(task: TaskView, f: BoardFilter, myId: string): boo
   return true;
 }
 
+export function compareMembers(
+  a: BoardMember,
+  b: BoardMember,
+  myId: string,
+  openCounts: Map<string, number>,
+): number {
+  const aMe = a.userId === myId ? 1 : 0;
+  const bMe = b.userId === myId ? 1 : 0;
+  if (aMe !== bMe) return bMe - aMe;
+
+  const aCount = openCounts.get(a.userId) ?? 0;
+  const bCount = openCounts.get(b.userId) ?? 0;
+  if (aCount !== bCount) return bCount - aCount;
+
+  return a.displayName.localeCompare(b.displayName);
+}
+
+export function pickVisibleMembers(
+  members: BoardMember[],
+  selectedIds: string[],
+  myId: string,
+  openCounts: Map<string, number>,
+  max = 8,
+): BoardMember[] {
+  const selectedSet = new Set(selectedIds);
+  return [...members]
+    .sort((a, b) => {
+      const aSel = selectedSet.has(a.userId) ? 1 : 0;
+      const bSel = selectedSet.has(b.userId) ? 1 : 0;
+      if (aSel !== bSel) return bSel - aSel;
+
+      return compareMembers(a, b, myId, openCounts);
+    })
+    .slice(0, max);
+}
+
 export interface BoardFiltersProps {
   members: BoardMember[];
   filter: BoardFilter;
@@ -49,6 +88,7 @@ export interface BoardFiltersProps {
   myId: string;
   taskCount: number;
   shownCount: number;
+  openCounts?: Map<string, number>;
 }
 
 export function BoardFilters({
@@ -58,7 +98,32 @@ export function BoardFilters({
   myId,
   taskCount,
   shownCount,
+  openCounts: propOpenCounts,
 }: BoardFiltersProps) {
+  const { tasks } = useTasks();
+  const computedOpenCounts = useMemo(() => {
+    const counts = countOpenTasks(tasks);
+    let unassigned = 0;
+    for (const t of tasks) {
+      if (t.status !== 'DONE' && !t.assigneeId) {
+        unassigned++;
+      }
+    }
+    counts.set('none', unassigned);
+    return counts;
+  }, [tasks]);
+
+  const effectiveOpenCounts = propOpenCounts ?? computedOpenCounts;
+
+  const shownMembers = useMemo(
+    () => pickVisibleMembers(members, filter.assignees, myId, effectiveOpenCounts, 8),
+    [members, filter.assignees, myId, effectiveOpenCounts],
+  );
+
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const showPlus = members.length > 8;
+  const badgeCount = members.length - shownMembers.length;
+
   const toggleAssignee = (id: string) => {
     const assignees = filter.assignees.includes(id)
       ? filter.assignees.filter((x) => x !== id)
@@ -100,9 +165,10 @@ export function BoardFilters({
       <div
         role="group"
         aria-label="Filter by user"
-        className="flex items-center -space-x-1.5 max-w-[40vw] overflow-x-auto py-1 px-0.5"
+        data-testid="filter-faces"
+        className="flex items-center -space-x-1.5 py-1 px-0.5"
       >
-        {members.map((member) => {
+        {shownMembers.map((member) => {
           const isSelected = filter.assignees.includes(member.userId);
           return (
             <button
@@ -139,7 +205,37 @@ export function BoardFilters({
         >
           <AssigneeAvatar />
         </button>
+
+        {showPlus && (
+          <button
+            type="button"
+            aria-label="Find more people"
+            title="Find more people"
+            onClick={() => setPickerOpen(true)}
+            className="relative z-0 flex size-6 items-center justify-center rounded-full bg-zinc-100 text-zinc-600 ring-2 ring-white transition hover:bg-zinc-200 hover:text-zinc-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+          >
+            <Plus className="size-3.5" aria-hidden="true" />
+            {badgeCount > 0 && (
+              <span
+                className="absolute -top-1 -right-1.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-zinc-700 px-0.5 text-[9px] font-bold text-white shadow-xs leading-none"
+                aria-hidden="true"
+              >
+                +{badgeCount}
+              </span>
+            )}
+          </button>
+        )}
       </div>
+
+      <PeoplePicker
+        open={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        members={members}
+        openCounts={effectiveOpenCounts}
+        filter={filter}
+        onChange={onChange}
+        myId={myId}
+      />
 
       {/* Only my issues toggle chip */}
       <button
