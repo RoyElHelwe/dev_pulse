@@ -9,6 +9,8 @@ export const ACTIONS = [
   'board',
   'rooms',
   'people',
+  'foosKick',
+  'foosSwitch',
 ] as const;
 
 export type Action = (typeof ACTIONS)[number];
@@ -22,6 +24,8 @@ export const DEFAULT_KEYBINDS: Record<Action, string> = {
   board: 'KeyB',
   rooms: 'KeyT',
   people: 'KeyP',
+  foosKick: 'Space',
+  foosSwitch: 'KeyQ',
 };
 
 export const ACTION_LABELS: Record<Action, string> = {
@@ -33,6 +37,8 @@ export const ACTION_LABELS: Record<Action, string> = {
   board: 'Task board',
   rooms: 'Rooms & timetable',
   people: 'People list',
+  foosKick: 'Foosball: kick',
+  foosSwitch: 'Foosball: switch rod',
 };
 
 export const RESERVED = [
