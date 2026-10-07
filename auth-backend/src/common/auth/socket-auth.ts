@@ -19,3 +19,6 @@ export async function authenticateSocket(socket: SocketLike): Promise<AuthUser |
   socket.data.session = result.session;
   return result.user;
 }
+//WebSockets are authenticated once on connection not per message
+//Reads the cookie from socket.handshake.headers and calls getSession
+//On success: stores user and session on socket.data and returns the user

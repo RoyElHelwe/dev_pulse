@@ -7,3 +7,5 @@ export const CurrentUser = createParamDecorator(
 	return req.user;
   },
 );
+//a parameter decorator: used on a method argument
+//returns req.user which the guard set

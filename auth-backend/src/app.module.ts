@@ -20,6 +20,7 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
 	// We turn off its built-in guard because we use our own AuthGuard below.
 	AuthModule.forRoot({ auth, disableGlobalAuthGuard: true }),//connect the vetter auth conf to nestjs
   ],
+  controllers: [AppController],
   providers: [
 	AppService,
 	//our AuthGuard runs before EVERY route. Open routes use @Public().

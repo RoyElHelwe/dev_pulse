@@ -29,5 +29,17 @@ export class AuthGuard implements CanActivate {//creqate the guard
 /**this file check if the user is sign in or no using auth guard
  * browser->get profile->authguard->better-auth->session valid->yes or no 
  */
-// reflector is hlper that let us to read metadata that decorate put on class or method
+// Reflector helps you read metadata created by decorators
 //decorator put info->reflector read them
+//@Public() marks a route as not requiring authentication
+//Cookie Carries the session token from browser
+//AuthGuard is the security checkpoint for HTTP routes it check whether the user is logged in before gave it to controller
+//ExecutionContext:This gives our guard information about the current request
+
+/**sooooo:the AuthGuard protects our HTTP routes i
+ * it first skips WebSockets because they have their own authentication function 
+ * then it checks if the route is public or belongs to Better Auth
+ * for protected routes, it asks Better Auth to validate the session using the request's cookie
+ * if there is no valid session, it returns 401
+ * if the session is valid, it puts the user and session on req, 
+ * then allows the request to reach the controller. */
