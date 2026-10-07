@@ -72,24 +72,44 @@ test('setup: organiser creates office and teammate joins', async () => {
   await inOffice(staff);
 });
 
-test('1. A clicks Board button, task board opens, HUD positioned below board', async () => {
+const SHOTS = process.env.E2E_SHOTS; // optional dir for review screenshots
+
+let closedX = 0; // where the HUD's Board button sits with the board shut
+
+test('1. A clicks Board button: the board floats in from the right and pushes the whole office off to the left', async () => {
   const boardButton = org.getByRole('button', { name: /^Board/ });
-  await expect(boardButton).toHaveAttribute('aria-expanded', 'false');
+  const zoomIn = org.getByRole('button', { name: 'Zoom in' });
+  await expect(org.getByRole('button', { name: 'Open task board' })).toBeVisible();
+  closedX = (await boardButton.boundingBox())!.x;
+  if (SHOTS) await org.screenshot({ path: `${SHOTS}/board-1-closed.png` });
 
   await boardButton.click();
-  await expect(boardButton).toHaveAttribute('aria-expanded', 'true');
-
   const board = org.getByRole('region', { name: 'Task board' });
   await expect(board).toBeVisible();
+  await expect(org.getByRole('button', { name: 'Close task board' })).toBeVisible();
 
-  // The Board button must remain visible and be positioned below the board's bottom edge
-  await expect(boardButton).toBeVisible();
+  const view = org.viewportSize()!;
+  // Settled: the board floats ~20px in from the top, right and bottom borders, rounded, not stuck to them.
   await expect.poll(async () => {
-    const boardBox = await board.boundingBox();
-    const btnBox = await boardButton.boundingBox();
-    if (!boardBox || !btnBox) return false;
-    return btnBox.y >= (boardBox.y + boardBox.height) - 1;
+    const b = await board.boundingBox();
+    const right = b ? view.width - (b.x + b.width) : -999;
+    return right > 14 && right < 26; // at rest, inset from the edge
   }, { timeout: 10_000 }).toBe(true);
+  await org.waitForTimeout(500); // and the pushed-off HUD has been made inert
+  const box = (await board.boundingBox())!;
+  expect(view.width - (box.x + box.width)).toBeGreaterThan(14);
+  expect(box.y).toBeGreaterThan(14);
+  expect(box.y).toBeLessThan(30);
+  expect(view.height - (box.y + box.height)).toBeGreaterThan(14);
+  // The whole office layer moved: the left HUD (Board button) left the screen and is not reachable there,
+  // the right-hand HUD (zoom) is what is still on screen at the left.
+  const b = (await boardButton.boundingBox())!;
+  expect(b.x + b.width).toBeLessThanOrEqual(0);
+  await expect.poll(() => boardButton.getAttribute('inert'), { timeout: 5000 }).not.toBeNull();
+  const z = (await zoomIn.boundingBox())!;
+  expect(z.x).toBeGreaterThanOrEqual(0);
+  expect(z.x + z.width).toBeLessThan(box.x);
+  if (SHOTS) await org.screenshot({ path: `${SHOTS}/board-3-open.png` });
 });
 
 test('2. A creates card "Fix login bug", appears in "To do", B sees it live', async () => {
@@ -159,11 +179,68 @@ test('4. Esc closes card dialog then board, leaving board hidden', async () => {
   await expect(editDialog).toBeHidden();
   await expect(boardOrg).toBeVisible();
 
-  // Second Escape closes board (Board button aria-expanded=false, region hidden/inert)
+  // Second Escape closes board (region hidden/inert) and the office slides back, usable again
   await org.keyboard.press('Escape');
   const boardButton = org.getByRole('button', { name: /^Board/ });
-  await expect(boardButton).toHaveAttribute('aria-expanded', 'false');
   await expect(boardOrg).toBeHidden();
+  await expect(org.getByRole('button', { name: 'Open task board' })).toBeVisible();
+  await expect.poll(async () => Math.round((await boardButton.boundingBox())?.x ?? -999), { timeout: 5000 }).toBe(Math.round(closedX));
+  expect(await boardButton.getAttribute('inert')).toBeNull();
+});
+
+test('4b. Dragging the edge handle follows the pointer, snaps open past 35% and shut again', async () => {
+  const board = org.getByRole('region', { name: 'Task board' });
+  const boardButton = org.getByRole('button', { name: /^Board/ });
+  await expect(board).toBeHidden();
+  const view = org.viewportSize()!;
+  const openHandle = org.getByRole('button', { name: 'Open task board' });
+  const closeHandle = org.getByRole('button', { name: 'Close task board' });
+  // The handle rests on the screen edge once an animation has finished.
+  const settled = () =>
+    expect.poll(async () => Math.round(((await openHandle.boundingBox())?.x ?? 0) + 20), { timeout: 5000 }).toBe(view.width);
+
+  await settled();
+  const h = (await openHandle.boundingBox())!;
+  const [hx, hy] = [h.x + h.width / 2, h.y + h.height / 2];
+
+  // A short drag (< 35% of the width) springs back shut.
+  await org.mouse.move(hx, hy);
+  await org.mouse.down();
+  await org.mouse.move(hx - 60, hy, { steps: 6 });
+  await org.waitForTimeout(250); // pause: no flick
+  await org.mouse.up();
+  await expect(openHandle).toBeVisible();
+  await expect(board).toBeHidden();
+  await settled();
+
+  // A long slow drag: the office tracks the pointer mid-drag, then the board snaps open on release.
+  await org.mouse.move(hx, hy);
+  await org.mouse.down();
+  await org.mouse.move(hx - 120, hy, { steps: 8 });
+  await org.waitForTimeout(150);
+  await org.mouse.move(hx - 400, hy, { steps: 12 });
+  await org.waitForTimeout(100);
+  const mid = (await boardButton.boundingBox())!;
+  expect(mid.x).toBeLessThan(closedX - 380); // the HUD moved with the pointer (office pushed a bit further than it)
+  expect(mid.x).toBeGreaterThan(closedX - 520);
+  if (SHOTS) await org.screenshot({ path: `${SHOTS}/board-2-half-dragged.png` });
+  await org.waitForTimeout(150); // pause: no flick
+  await org.mouse.up();
+  await expect(closeHandle).toBeVisible();
+  await expect(board).toBeVisible();
+  await expect.poll(async () => (await board.boundingBox())?.x ?? 9999).toBeLessThan(view.width - 700);
+
+  // Drag it back to the right: closes.
+  const c = (await closeHandle.boundingBox())!;
+  const [cx, cy] = [c.x + c.width / 2, c.y + c.height / 2];
+  await org.mouse.move(cx, cy);
+  await org.mouse.down();
+  await org.mouse.move(cx + 120, cy, { steps: 6 });
+  await org.mouse.move(cx + 600, cy, { steps: 12 });
+  await org.mouse.up(); // a flick to the right
+  await expect(openHandle).toBeVisible();
+  await expect(board).toBeHidden();
+  await expect.poll(async () => Math.round((await boardButton.boundingBox())?.x ?? -999), { timeout: 5000 }).toBe(Math.round(closedX));
 });
 
 test('5. Esc closes people list popover when opened', async () => {

@@ -11,6 +11,8 @@ export interface OfficeController {
   zoomIn(): void;
   zoomOut(): void;
   resetView(): void;
+  /** Keep the player this many CSS px right of the view centre (negative: left), e.g. while the task board is open. */
+  setViewShift(cssPx: number): void;
   /** The whole list of other people (on connect / reconnect). */
   setPlayers(players: PlayerState[]): void;
   upsertPlayer(player: PlayerState): void;
@@ -122,6 +124,7 @@ export function createGame(parent: HTMLElement, options: GameOptions): OfficeCon
     zoomIn: () => scene()?.zoomBy(1.2),
     zoomOut: () => scene()?.zoomBy(1 / 1.2),
     resetView: () => scene()?.resetView(),
+    setViewShift: (cssPx) => scene()?.setViewShift(cssPx),
     setPlayers(list) {
       for (const id of players.keys()) if (!list.some((p) => p.id === id)) this.removePlayer(id);
       list.forEach((p) => this.upsertPlayer(p));

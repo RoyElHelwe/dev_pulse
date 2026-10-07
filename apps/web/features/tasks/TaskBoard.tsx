@@ -88,7 +88,7 @@ function Column({
   return (
     <div
       className={cn(
-        'flex flex-col min-w-64 shrink-0 md:shrink md:min-w-0 flex-1 rounded-xl bg-zinc-100/80 border border-zinc-200/50 min-h-0 transition-shadow',
+        'flex flex-col min-w-64 shrink-0 @3xl:shrink @3xl:min-w-0 flex-1 rounded-xl bg-zinc-100/80 border border-zinc-200/50 min-h-0 transition-shadow',
         isHovered && 'ring-2 ring-emerald-400/60',
       )}
       onDragOver={(e) => onDragOver(e, status)}
@@ -253,7 +253,7 @@ export function TaskBoard({
       return;
     }
     const timer = setTimeout(() => {
-      boardRef.current?.focus();
+      boardRef.current?.focus({ preventScroll: true });
     }, 50);
     return () => clearTimeout(timer);
   }, [open]);
@@ -365,23 +365,12 @@ export function TaskBoard({
   return (
     <>
       <div
-        className={cn(
-          'grid transition-[grid-template-rows] duration-300 ease-out motion-reduce:transition-none',
-          open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]',
-        )}
-      >
-        <div
-          className="min-h-0 overflow-hidden"
-          inert={!open || undefined}
-          aria-hidden={!open}
-        >
-          <div
             ref={boardRef}
             role="region"
             aria-label="Task board"
             tabIndex={-1}
             data-captures-keys=""
-            className="flex h-[min(62dvh,36rem)] flex-col border-b border-zinc-200/80 bg-white/90 shadow outline-none backdrop-blur"
+            className="@container flex h-full flex-col outline-none"
           >
             <Header
               prefix={prefix}
@@ -422,7 +411,7 @@ export function TaskBoard({
                 Loading issues...
               </div>
             ) : (
-              <div className="flex min-h-0 flex-1 gap-3 overflow-x-auto p-4 md:grid md:grid-cols-4">
+              <div className="flex min-h-0 flex-1 gap-3 overflow-x-auto p-4 @3xl:grid @3xl:grid-cols-4">
                 {STATUSES.map((status) => (
                   <Column
                     key={status}
@@ -446,8 +435,6 @@ export function TaskBoard({
                 ))}
               </div>
             )}
-          </div>
-        </div>
       </div>
 
       {dialogMode && (
