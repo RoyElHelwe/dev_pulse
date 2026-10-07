@@ -607,11 +607,11 @@ Unlike foosball/Uno the Lego wall is not a match: no GameResult, nothing is reco
 
 ### Foosball (step 12)
 
-**Code:** \pps/api/src/games/foosball/{foosball.physics,foosball.game}.ts\, \pps/web/features/games/foosball/*\. Full protocol: \.tiered/step-12-protocol.md\.
+**Code:** `apps/api/src/games/foosball/{foosball.physics,foosball.game}.ts`, `apps/web/features/games/foosball/*`.
 
 - Server-authoritative, 30 Hz tick (4 physics substeps), field 120 x 64 units, 4 rods per side (goalkeeper, defense, midfield, attack). First to 5 wins.
-- Phases: \lobby\ -> \countdown\ -> \playing\ <-> \goal\ -> \ended\ (rematch back to lobby). Join as spectator, then \sit\/\stand\; start needs equal teams (1v1 or 2v2).
-- Rods: 1v1 owner controls all 4, 2v2 each controls 2. Actions \move {rod,dir}\, \kick {rod}\. A teammate's absence hands his rods to the partner.
-- Leaving/disconnect during a match: if a side is fully absent for 10 s (\GRACE_MS\) it forfeits; result recorded once via \ctx.record\.
-- Keys: W/S or arrows move the rod (fixed), keybind actions \oosKick\ (Space) and \oosSwitch\ (Q; 1-4 select directly).
-- Tests: \oosball.physics.spec.ts\, \oosball.game.spec.ts\.
+- Phases: `lobby` -> `countdown` -> `playing` <-> `goal` -> `ended` (rematch back to lobby). Join as spectator, then `sit`/`stand`; start needs equal teams (1v1 or 2v2).
+- Rods: 1v1 owner controls all 4, 2v2 each controls 2. Actions `move {rod,dir}`, `kick {rod}`. A teammate's absence hands his rods to the partner.
+- Leaving/disconnect during a match: if a side is fully absent for 10 s (`GRACE_MS`) it forfeits; result recorded once via `ctx.record`.
+- Keys: W/S or arrows move the rod (fixed), keybind actions `foosKick` (Space) and `foosSwitch` (Q; 1-4 select directly).
+- Tests: `foosball.physics.spec.ts`, `foosball.game.spec.ts`.

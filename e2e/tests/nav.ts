@@ -8,6 +8,7 @@ import type { Layout } from './helpers';
 const SOLID = new Set([
   'desk', 'divider', 'meetingTable', 'sofa', 'armchair', 'coffeeTable',
   'plant', 'bookshelf', 'counter', 'fridge', 'barTable', 'beanbag', 'board',
+  'foosball', 'cardTable', 'legoBoard',
 ]);
 const WALL = { solid: { t: 10, face: 34 }, glass: { t: 6, face: 18 } };
 const TILE = 32;
