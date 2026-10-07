@@ -200,7 +200,7 @@ export function UserMenu({ className, compact, profile }: UserMenuProps) {
                 type="button"
                 onClick={async () => {
                   await signOut();
-                  router.replace('/login');
+                  window.location.replace('/login');
                 }}
                 className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm text-amber-700 hover:bg-amber-50"
               >
