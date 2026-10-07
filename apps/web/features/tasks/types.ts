@@ -46,6 +46,7 @@ export interface TaskView {
 export interface BoardMember {
   userId: string;
   displayName: string;
+  email?: string;
   character: string;
   role: 'OWNER' | 'ADMIN' | 'MEMBER';
 }
