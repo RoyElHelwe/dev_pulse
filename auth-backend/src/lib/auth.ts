@@ -1,6 +1,6 @@
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
-import { twoFactor, jwt, organization } from "better-auth/plugins";
+import { twoFactor, organization } from "better-auth/plugins";
 import { prisma } from "./prisma.js";
 import { sendEmail } from "./email.js";
 
@@ -15,14 +15,16 @@ export const auth = betterAuth({
 	requireEmailVerification: true,
   },
 
-  //the session is our REFRESH token it lives 7 days in the DB
+  //one session cookie does everything (no JWTno refresh token)
+  //the session is a row in the db so we can delete it to sign a device out at once
   session: {
-	expiresIn: 60 * 60 * 24 * 7, // 7 days
+	expiresIn: 60 * 15, // 15 min: signed out after 15 minutes of doing nothing
+	updateAge: 60, // while the user is active, push the expiry forward (at most once a minute)
   },
 
   emailVerification: {
-	sendOnSignUp: true,                 // send the email right after register
-	autoSignInAfterVerification: true,  // log in when the link is clicked
+	sendOnSignUp: true, // send the email right after register
+	autoSignInAfterVerification: true, // log in when the link is clicked
 	sendVerificationEmail: async ({ user, url }) => {
 	  void sendEmail(
 		user.email,
@@ -34,7 +36,7 @@ export const auth = betterAuth({
 			Verify my email
 		  </a>
 		  <p>If you didn't create an account, ignore this email.</p>
-		`
+		`,
 	  );
 	},
   },
@@ -61,18 +63,6 @@ export const auth = betterAuth({
 	  issuer: "Transcendence",
 	  // OAuth users have no password, so let them turn on 2FA without one.
 	  allowPasswordless: true,
-	}),
-
-	jwt({
-	  jwt: {
-		expirationTime: "15m",
-		// Only what the team needs. Without this, the whole user object goes into the token.
-		definePayload: ({ user }) => ({
-		  id: user.id,
-		  email: user.email,
-		  name: user.name,
-		}),
-	  },
 	}),
 
 	// Workspaces, members, roles (owner / admin / member) and invitations.
