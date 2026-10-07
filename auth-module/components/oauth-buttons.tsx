@@ -4,14 +4,15 @@ import { useState } from "react";
 import { authClient } from "@/lib/auth-client";
 
 const FRONTEND_URL = "http://localhost:3000";
-type Provider = "google" | "github";
+type Provider = "google" | "github" | "fortytwo";
 
 const PROVIDERS: { id: Provider; label: string }[] = [
   { id: "google", label: "Continue with Google" },
   { id: "github", label: "Continue with GitHub" },
+  { id: "fortytwo", label: "Continue with 42" }, // 42 intra (genericOAuth on the backend)
 ];
 
-// Buttons that send the user to Google / GitHub, then back to our app.
+// Buttons that send the user to Google / GitHub / 42, then back to our app.
 // Used on both the login and the register page (OAuth creates the account if needed).
 export function OAuthButtons({ onError }: { onError: (msg: string) => void }) {
   const [loading, setLoading] = useState<Provider | null>(null);

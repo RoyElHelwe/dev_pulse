@@ -202,7 +202,7 @@ export default function LoginPage() {
 			</button>
 		  </div>
 
-		  {/* NEW: Google / GitHub */}
+		  {/* Google / GitHub / 42 */}
 		  <OAuthButtons onError={showError} />
 		</form>
 	  </div>

@@ -3,16 +3,20 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
-import { TwoFactorSettings } from "./two-factor-settings";
 
 export default function DashboardPage() {
   const router = useRouter();
-
-  const { data: session, isPending, refetch } = authClient.useSession();
+  const { data: session, isPending } = authClient.useSession();
 
   useEffect(() => {
-	if (!isPending && !session) {
-	  router.push("/login");
+	if (isPending) return;
+	if (!session) {
+	  router.replace("/login");
+	  return;
+	}
+	// 2FA is mandatory: first login -> set it up before using the app
+	if (!session.user.twoFactorEnabled) {
+	  router.replace("/two-factor/setup");
 	}
   }, [isPending, session, router]);
 
@@ -21,12 +25,8 @@ export default function DashboardPage() {
 	router.push("/login");
   }
 
-  if (isPending) {
+  if (isPending || !session || !session.user.twoFactorEnabled) {
 	return <p className="text-center mt-20">Loading...</p>;
-  }
-
-  if (!session) {
-	return null;
   }
 
   return (
@@ -36,14 +36,7 @@ export default function DashboardPage() {
 	  <p>Hello, <b>{session.user.name}</b> 👋</p>
 	  <p>Email: {session.user.email}</p>
 	  <p>Email verified: {session.user.emailVerified ? "✅ yes" : "❌ no"}</p>
-	  {/* NEW */}
-	  <p>2FA: {session.user.twoFactorEnabled ? "✅ on" : "❌ off"}</p>
-
-	  {}
-	  <TwoFactorSettings
-		enabled={!!session.user.twoFactorEnabled}
-		onChange={() => refetch()}
-	  />
+	  <p>2FA: ✅ on</p>
 
 	  <button onClick={handleLogout} className="bg-red-600 text-white p-2">
 		Logout
