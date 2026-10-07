@@ -38,7 +38,7 @@ interface OfficeHudProps {
   /** The office editor is open (it brings its own panels). */
   editing: boolean;
   onEdit(): void;
-  /** The task board is open (it sits above the HUD and pushes it down). */
+  /** The task board is open (it floats in from the right and pushes this whole HUD off to the left). */
   boardOpen: boolean;
   onBoard(): void;
 }

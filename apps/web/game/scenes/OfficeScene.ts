@@ -563,11 +563,26 @@ export class OfficeScene extends Phaser.Scene {
   zoomBy(factor: number) {
     this.userZoom = Phaser.Math.Clamp(this.userZoom * factor, ZOOM_MIN, ZOOM_MAX);
     this.cameras.main.zoomTo(this.targetZoom(), 160, 'Sine.easeOut', true);
+    this.applyViewShift();
   }
 
   resetView() {
     this.userZoom = 1;
     this.cameras.main.zoomTo(this.targetZoom(), 220, 'Sine.easeOut', true);
+    this.applyViewShift();
+  }
+
+  /** Where the camera keeps the player, in CSS px right of the view centre (the task board pushes the view left). */
+  private viewShift = 0;
+
+  setViewShift(cssPx: number) {
+    this.viewShift = cssPx;
+    this.applyViewShift();
+  }
+
+  private applyViewShift() {
+    // Follow offsets are world units; the camera eases there through its follow lerp.
+    this.cameras.main.setFollowOffset((this.viewShift * this.opts.dpr) / this.targetZoom(), 0);
   }
 
   // ---- internals ---------------------------------------------------------------
@@ -794,6 +809,7 @@ export class OfficeScene extends Phaser.Scene {
   private onResize(size: Phaser.Structs.Size) {
     this.cameras.main.setSize(size.width, size.height);
     this.cameras.main.setZoom(this.targetZoom());
+    this.applyViewShift();
   }
 
   private *remoteTiles(): Iterable<[string, { x: number; y: number }]> {

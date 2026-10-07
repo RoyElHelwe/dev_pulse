@@ -9,6 +9,7 @@ import { ChatPanel } from '@/features/chat/ChatPanel';
 import { MeetingsPanel } from '@/features/meetings/MeetingsPanel';
 import { EMPTY_FILTER } from '@/features/tasks/BoardFilters';
 import { useOpenTaskCounts, useTaskSync } from '@/features/tasks/store';
+import { BoardDrawer } from '@/features/tasks/BoardDrawer';
 import { TaskBoard } from '@/features/tasks/TaskBoard';
 import type { BoardFilter } from '@/features/tasks/types';
 import { VoiceControls } from '@/features/voice/VoiceControls';
@@ -236,6 +237,8 @@ export function OfficeView() {
   const [boardFilter, setBoardFilter] = useState<BoardFilter>(EMPTY_FILTER);
   const closeBoard = useCallback(() => setBoardOpen(false), []);
   const toggleBoard = useCallback(() => setBoardOpen((o) => !o), []);
+  // The camera keeps the player in the part of the office that is still on screen.
+  const pushView = useCallback((shift: number) => controllerRef.current?.setViewShift(shift), []);
 
   // ---- desk move (E at a free desk) ----
   const [moveTo, setMoveTo] = useState<{ deskId: string; name: string } | null>(null);
@@ -307,6 +310,10 @@ export function OfficeView() {
   }, [toast]);
 
   const isEditing = !!editing;
+  // The board closes for the editor and stays closed afterwards (it used to pop back open on save).
+  useEffect(() => {
+    if (isEditing) setBoardOpen(false);
+  }, [isEditing]);
   useKeybind('board', toggleBoard, !isEditing);
   const features = useMemo(
     () => ({
@@ -322,19 +329,26 @@ export function OfficeView() {
   );
 
   return (
-    <div className="relative flex h-dvh w-full flex-col overflow-hidden bg-[#e4e0da]">
-      {/* The task board drops down from the top and pushes the office (and its HUD) down. */}
-      {workspace && myId && (
-        <TaskBoard
-          open={boardOpen && !isEditing}
-          onClose={closeBoard}
-          filter={boardFilter}
-          onFilterChange={setBoardFilter}
-          myId={myId}
-          role={workspace.role}
-        />
-      )}
-      <div className="relative min-h-0 flex-1">
+    <div className="relative h-dvh w-full overflow-hidden bg-[#e4e0da]">
+      {/* The task board waits off-screen on the right; opening it pushes this whole layer (canvas + HUD) left. */}
+      <BoardDrawer
+        open={boardOpen && !isEditing}
+        onOpenChange={setBoardOpen}
+        onPush={pushView}
+        drawer={
+          workspace && myId && !isEditing ? (
+            <TaskBoard
+              open={boardOpen}
+              onClose={closeBoard}
+              filter={boardFilter}
+              onFilterChange={setBoardFilter}
+              myId={myId}
+              role={workspace.role}
+            />
+          ) : null
+        }
+      >
+      <div className="relative h-full w-full">
         <div ref={containerRef} className="absolute inset-0" />
         {/* Soft vignette for depth; ignores the mouse. */}
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_55%,rgb(24_24_27/0.18))]" />
@@ -381,6 +395,7 @@ export function OfficeView() {
           />
         )}
       </div>
+      </BoardDrawer>
       <TabLock />
     </div>
   );
