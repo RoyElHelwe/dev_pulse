@@ -1,7 +1,7 @@
 'use client';
 
 import { UserPlus } from 'lucide-react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { Alert } from '@/components/ui/Alert';
 import { Avatar } from '@/components/ui/Avatar';
@@ -9,7 +9,6 @@ import { Button } from '@/components/ui/Button';
 import { api, ApiError } from '@/lib/api';
 import { safeRedirect } from '@/lib/redirect';
 import { AuthShell } from './AuthShell';
-import { useAuth } from './AuthProvider';
 import type { SignInResponse } from './types';
 
 export interface DevUser {
@@ -52,9 +51,7 @@ export function DevSwitcherGate({ children }: { children: React.ReactNode }) {
 }
 
 function DevSwitcher({ initialUsers, onUseReal }: { initialUsers: DevUser[]; onUseReal: () => void }) {
-  const router = useRouter();
   const params = useSearchParams();
-  const { setUser } = useAuth();
   const redirect = safeRedirect(params.get('redirect'));
   const [users] = useState(initialUsers);
   const [name, setName] = useState('');
@@ -68,15 +65,12 @@ function DevSwitcher({ initialUsers, onUseReal }: { initialUsers: DevUser[]; onU
     try {
       const result = await api<SignInResponse>(path, { body });
       if (result.status === 'signed-in') {
-        setUser(result.user);
-        router.replace(redirect);
+        // Full page load, not a client navigation: the router may still hold the
+        // pre-sign-in redirect to /login, and in-memory stores belong to the previous user.
+        window.location.replace(redirect);
         return;
       }
-      setError(
-        result.status === 'session-active'
-          ? 'That user is signed in on another device. Use "Switch user" in its menu to sign it out first.'
-          : 'Could not sign in.',
-      );
+      setError('Could not sign in.');
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Could not reach the server.');
     }
