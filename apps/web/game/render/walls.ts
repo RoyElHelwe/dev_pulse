@@ -4,10 +4,17 @@ import type { Wall } from '../layout/types';
 
 type G = Phaser.GameObjects.Graphics;
 
+// 2.5D walls. The collider is only the wall's footprint (its thickness). What
+// you see is the wall standing up from its base line: a painted front face
+// rising `height` px above the base, topped by a thin dark cap. Tall faces
+// cover the floor behind them, so game/render/wallFaces.ts fades them near people.
 export const WALL = {
-  solid: { thickness: 10, face: 34 },
-  glass: { thickness: 6, face: 18 },
+  solid: { thickness: 10, height: 80 },
+  glass: { thickness: 6, height: 80 },
 };
+
+/** Extra pixels drawn under the base line (contact shadow). */
+export const WALL_SHADOW = 6;
 
 export interface Rect {
   x: number;
@@ -20,16 +27,26 @@ export function isHorizontal(wall: Wall) {
   return wall.y1 === wall.y2;
 }
 
-/** Area the player cannot walk into (the wall plus its visible face). */
+/** Visible height of the wall's face above its base line (0: low wall, only the cap). */
+export function wallHeight(wall: Wall) {
+  return wall.face === false ? 0 : WALL[wall.kind].height;
+}
+
+/** Y of the base line: where the wall meets the floor on its south side. */
+export function wallBase(wall: Wall) {
+  const t = WALL[wall.kind].thickness;
+  return (isHorizontal(wall) ? wall.y1 : Math.max(wall.y1, wall.y2)) * TILE + t / 2;
+}
+
+/** Area the player cannot walk into: the wall's footprint. */
 export function wallCollider(wall: Wall): Rect {
-  const { thickness, face } = WALL[wall.kind];
+  const { thickness } = WALL[wall.kind];
   if (isHorizontal(wall)) {
-    const faceH = wall.face === false ? 0 : face;
     return {
       x: Math.min(wall.x1, wall.x2) * TILE,
       y: wall.y1 * TILE - thickness / 2,
       w: Math.abs(wall.x2 - wall.x1) * TILE,
-      h: thickness + faceH,
+      h: thickness,
     };
   }
   return {
@@ -40,48 +57,79 @@ export function wallCollider(wall: Wall): Rect {
   };
 }
 
+/** Everything drawn for the wall (cap, face and contact shadow), in pixels. */
+export function wallBounds(wall: Wall): Rect {
+  const r = wallCollider(wall);
+  const height = wallHeight(wall);
+  const { thickness } = WALL[wall.kind];
+  const base = wallBase(wall);
+  const top = isHorizontal(wall) ? base - height - thickness : r.y - height;
+  return { x: r.x, y: top, w: r.w, h: base + WALL_SHADOW - top };
+}
+
 /**
- * Draws one wall. Horizontal walls are seen in 3/4 view: a dark top edge plus
- * the painted front face below it, so the office feels like it has height.
+ * Draws one wall in world coordinates. Horizontal walls: front face, skirting
+ * and a cap on top. Vertical walls: a long cap (the wall seen from above, lifted
+ * by its height) ending in the south end face.
  */
 export function drawWall(g: G, wall: Wall) {
-  const { thickness, face } = WALL[wall.kind];
+  const { thickness } = WALL[wall.kind];
+  const height = wallHeight(wall);
   const r = wallCollider(wall);
+  const base = wallBase(wall);
+  const solid = wall.kind === 'solid';
 
-  if (wall.kind === 'solid') {
-    if (isHorizontal(wall) && wall.face !== false) {
-      const top = r.y + thickness;
+  if (isHorizontal(wall)) {
+    if (height === 0) return drawCap(g, wall, r);
+    const faceTop = base - height;
+    const cap = { x: r.x, y: faceTop - thickness, w: r.w, h: thickness };
+    if (solid) {
       g.fillStyle(0xeee9e2, 1); // painted wall
-      g.fillRect(r.x, top, r.w, face);
-      g.fillStyle(0x000000, 0.06); // shade under the ceiling
-      g.fillRect(r.x, top, r.w, 4);
+      g.fillRect(r.x, faceTop, r.w, height);
+      g.fillStyle(0x000000, 0.08); // shade under the cap
+      g.fillRect(r.x, faceTop, r.w, 5);
       g.fillStyle(0xd6cec3, 1); // skirting board
-      g.fillRect(r.x, top + face - 4, r.w, 4);
+      g.fillRect(r.x, base - 5, r.w, 5);
       g.fillStyle(0x000000, 0.08); // contact shadow on the floor
-      g.fillRect(r.x, top + face, r.w, 5);
+      g.fillRect(r.x, base, r.w, WALL_SHADOW);
+    } else {
+      g.fillStyle(0xcfe7ef, 0.3);
+      g.fillRect(r.x, faceTop, r.w, height);
+      g.fillStyle(0xffffff, 0.45);
+      g.fillRect(r.x, faceTop + 4, r.w, 1.5);
+      g.fillStyle(0x7d8a93, 1);
+      g.fillRect(r.x, base - 3, r.w, 3);
+      for (let px = r.x; px <= r.x + r.w + 0.5; px += TILE * 2) {
+        g.fillRect(Math.min(px, r.x + r.w - 2), faceTop, 2, height);
+      }
     }
-    const cap = isHorizontal(wall) ? { ...r, h: thickness } : r;
+    drawCap(g, wall, cap);
+    return;
+  }
+
+  // Vertical: the cap is the footprint lifted by the wall's height; below its south end the end face.
+  const cap = { x: r.x, y: r.y - height, w: r.w, h: r.h };
+  if (height > 0) {
+    g.fillStyle(solid ? 0xeee9e2 : 0xcfe7ef, solid ? 1 : 0.3);
+    g.fillRect(r.x, cap.y + cap.h, r.w, height);
+    if (solid) {
+      g.fillStyle(0xd6cec3, 1);
+      g.fillRect(r.x, base - 5, r.w, 5);
+    }
+    g.fillStyle(0x000000, 0.08);
+    g.fillRect(r.x, base, r.w, WALL_SHADOW);
+  }
+  drawCap(g, wall, cap);
+}
+
+function drawCap(g: G, wall: Wall, cap: Rect) {
+  if (wall.kind === 'solid') {
     g.fillStyle(0x2d3236, 1);
     g.fillRect(cap.x, cap.y, cap.w, cap.h);
     g.fillStyle(0x4a5258, 1);
     g.fillRect(cap.x, cap.y, cap.w, 2);
     return;
   }
-
-  // Glass: translucent panes with thin aluminium frames.
-  if (isHorizontal(wall)) {
-    const top = r.y + thickness;
-    g.fillStyle(0xcfe7ef, 0.35);
-    g.fillRect(r.x, top, r.w, face);
-    g.fillStyle(0xffffff, 0.5);
-    g.fillRect(r.x, top + 3, r.w, 1.5);
-    g.fillStyle(0x7d8a93, 1);
-    g.fillRect(r.x, top + face - 2, r.w, 2);
-    for (let px = r.x; px <= r.x + r.w + 0.5; px += TILE * 2) {
-      g.fillRect(Math.min(px, r.x + r.w - 2), r.y, 2, thickness + face);
-    }
-  }
-  const cap = isHorizontal(wall) ? { ...r, h: thickness } : r;
   g.fillStyle(0xbcdde8, 0.75);
   g.fillRect(cap.x, cap.y, cap.w, cap.h);
   g.fillStyle(0x7d8a93, 1);

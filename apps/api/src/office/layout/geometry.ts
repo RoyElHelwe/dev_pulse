@@ -2,7 +2,7 @@ import type { Furniture, FurnitureKind, OfficeLayout, Wall } from './types';
 
 // Same numbers as the game (apps/web/game): keep in sync.
 export const TILE = 32;
-const WALL = { solid: { thickness: 10, face: 34 }, glass: { thickness: 6, face: 18 } };
+const WALL = { solid: { thickness: 10 }, glass: { thickness: 6 } };
 
 /** Furniture you can't walk through (rugs, chairs, lamps... you can). */
 export const SOLID: Record<FurnitureKind, boolean> = {
@@ -44,15 +44,15 @@ export function itemBounds(item: Furniture): Rect {
   return { x: item.x - w / 2, y: item.y - h / 2, w, h };
 }
 
-/** What blocks the player for a wall, in pixels (the wall and its visible face). */
+/** What blocks the player for a wall, in pixels: its footprint (the tall face is only drawn). */
 export function wallRect(wall: Wall): Rect {
-  const { thickness, face } = WALL[wall.kind];
+  const { thickness } = WALL[wall.kind];
   if (wall.y1 === wall.y2) {
     return {
       x: Math.min(wall.x1, wall.x2) * TILE,
       y: wall.y1 * TILE - thickness / 2,
       w: Math.abs(wall.x2 - wall.x1) * TILE,
-      h: thickness + (wall.face === false ? 0 : face),
+      h: thickness,
     };
   }
   return {

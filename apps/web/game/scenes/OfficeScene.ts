@@ -19,7 +19,8 @@ import { drawFloor } from '../render/floors';
 import { FURNITURE } from '../render/furniture';
 import { legoArt } from '../render/legoArt';
 import { ensureFurnitureTexture, ensureShadowTexture, setDeskOwners, setDeskPapers, textureScale } from '../render/sprites';
-import { drawWall, wallCollider } from '../render/walls';
+import { WallFaces } from '../render/wallFaces';
+import { wallCollider } from '../render/walls';
 
 /** Someone else in the office, as the network describes them. */
 export interface PlayerState {
@@ -79,6 +80,9 @@ export const DEPTH = { floor: 0, rug: 1, shadow: 2, sorted: 10, badges: 20, hint
 
 const ZOOM_MIN = 0.6;
 const ZOOM_MAX = 1.5;
+/** The camera can go this far (px) past the office: tall wall faces, room names and bubbles of the back rooms stick out above it. */
+const VIEW_MARGIN_TOP = 140;
+const VIEW_MARGIN_BOTTOM = 40;
 /** Send the local position at most every 50 ms (20 per second) while walking. */
 const SEND_INTERVAL_MS = 50;
 const SIT_DWELL_MS = 500;
@@ -121,6 +125,8 @@ export class OfficeScene extends Phaser.Scene {
   private badges!: RoomBadges;
   private remoteZones = new Map<string, string | null>();
   private badgesDirty = true;
+  private wallFaces!: WallFaces;
+  private readonly crowd: Array<{ x: number; y: number }> = [];
   /** Virtual joystick (touch screens), -1..1 on each axis. */
   private joystick = { x: 0, y: 0 };
   private seats: Seat[] = [];
@@ -188,6 +194,9 @@ export class OfficeScene extends Phaser.Scene {
         this.addCollider(solids, b.x + 2, b.y + 2, b.w - 4, b.h - 4);
       }
     }
+    this.wallFaces.setFurnitureBehind(
+      layout.furniture.filter((f) => FURNITURE[f.kind].solid && FURNITURE[f.kind].layer !== 'wall').map((f) => pixels(itemBounds(f))),
+    );
 
     // Local player, at its previous place if it's still free, else near the entrance.
     const start =
@@ -242,7 +251,7 @@ export class OfficeScene extends Phaser.Scene {
 
     const cam = this.cameras.main;
     cam.setBackgroundColor('#e4e0da');
-    cam.setBounds(0, 0, worldW, worldH);
+    cam.setBounds(0, -VIEW_MARGIN_TOP, worldW, worldH + VIEW_MARGIN_TOP + VIEW_MARGIN_BOTTOM);
     cam.startFollow(this.player, true, 0.12, 0.12);
     cam.setZoom(this.targetZoom());
     cam.centerOn(this.player.x, this.player.y);
@@ -256,6 +265,7 @@ export class OfficeScene extends Phaser.Scene {
     });
     this.events.once('shutdown', () => {
       unsubLego();
+      this.wallFaces.destroy();
       this.editMode?.destroy();
       this.editMode = null;
       this.proximity.clear();
@@ -349,6 +359,10 @@ export class OfficeScene extends Phaser.Scene {
 
     this.player.setDepth(this.peopleDepth(this.player.x, this.player.y, this.player.seated));
     for (const remote of this.remotes.values()) remote.update(delta);
+    this.crowd.length = 0;
+    this.crowd.push(this.player);
+    for (const remote of this.remotes.values()) this.crowd.push(remote.avatar);
+    this.wallFaces.update(delta, this.crowd);
     this.maybeSend(time, body.velocity.x !== 0 || body.velocity.y !== 0);
     this.updateZone();
     this.interactions.update(this.player.x, this.player.y, !this.editMode);
@@ -746,17 +760,20 @@ export class OfficeScene extends Phaser.Scene {
     layout.rooms.forEach((room) => drawFloor(floor, room));
     scenery.push(floor);
 
-    // Vertical walls under horizontal ones; horizontal ones from north to south.
-    const walls = [...layout.walls].sort((a, b) => Number(a.y1 === a.y2) - Number(b.y1 === b.y2) || a.y1 - b.y1);
-    for (const wall of walls) {
-      const g = this.add.graphics();
-      drawWall(g, wall);
-      scenery.push(g);
+    // Walls are y-sorted images (render/wallFaces.ts); here only their colliders (the footprint).
+    for (const wall of layout.walls) {
       const r = wallCollider(wall);
       this.addCollider(solids, r.x, r.y, r.w, r.h);
     }
+    this.wallFaces = new WallFaces(this, layout.walls, {
+      scale: Math.min(3, this.opts.dpr * 1.5, Math.sqrt(16e6 / (worldW * worldH))),
+      depthOf: (base) => DEPTH.sorted + base / 100000,
+      labels: deriveLabels(layout),
+      fontFamily: this.opts.fontFamily,
+      resolution: this.opts.dpr * 2,
+    });
 
-    for (const label of deriveLabels(layout)) {
+    for (const label of this.wallFaces.leftover) {
       scenery.push(
         this.add
           .text(label.x * TILE, label.y * TILE, label.text, {
@@ -802,7 +819,7 @@ export class OfficeScene extends Phaser.Scene {
     const cam = this.cameras.main;
     const base = Phaser.Math.Clamp(cam.width / dpr / (26 * TILE), 0.75, 1.5);
     // Never zoom out further than the office itself (no empty space around it).
-    const cover = Math.max(cam.width / (layout.width * TILE), cam.height / (layout.height * TILE));
+    const cover = Math.max(cam.width / (layout.width * TILE), cam.height / (layout.height * TILE + VIEW_MARGIN_TOP + VIEW_MARGIN_BOTTOM));
     return Math.max(base * this.userZoom * dpr, cover);
   }
 

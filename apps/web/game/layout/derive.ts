@@ -55,7 +55,11 @@ export function deriveLabels(layout: OfficeLayout) {
     .map((r) => ({
       text: r.name.toUpperCase(),
       x: r.x + r.w / 2,
-      y: r.y + r.h - 1.1,
+      // Hung on the wall above the room (render/wallFaces.ts); on the floor near its top when there is no such wall.
+      y: r.y + 2.2,
+      x0: r.x,
+      x1: r.x + r.w,
+      top: r.y,
       tone: r.floor === 'terrazzo' ? ('dark' as const) : ('light' as const),
     }));
 }

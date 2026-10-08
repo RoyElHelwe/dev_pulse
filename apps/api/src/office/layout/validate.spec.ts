@@ -24,7 +24,7 @@ describe('validateLayout', () => {
 
   it('rejects a blocked door (meeting room unreachable)', () => {
     // Atlas' door is between x 8.5 and 11.5 on the wall at y 12.
-    const blocked = withFurniture([{ id: 'b', kind: 'bookshelf', x: 10, y: 13.3, w: 3.4, h: 0.8 }]);
+    const blocked = withFurniture([{ id: 'b', kind: 'bookshelf', x: 10, y: 12.6, w: 3.4, h: 0.8 }]);
     expect(validateLayout(blocked)).toContainEqual(expect.objectContaining({ code: 'ROOM_UNREACHABLE', message: 'Nobody can walk into Atlas.' }));
   });
 
