@@ -1,5 +1,5 @@
 import { expect, type Page, test } from '@playwright/test';
-import { closeContexts, inOffice, invite, openPage, register, workspace } from './helpers';
+import { closeContexts, inOffice, invite, openPage, register, shotPath, workspace } from './helpers';
 import { position, walkTo } from './nav';
 
 test.describe.configure({ mode: 'serial' });
@@ -89,11 +89,13 @@ test('2 players join office, walk to Uno table, start game and take turn', async
 
   // User A is host: once Bob joins, start button becomes enabled
   await expect(org.getByTestId('uno-start')).toBeEnabled({ timeout: 10_000 });
+  await org.screenshot({ path: shotPath('uno-lobby.png') });
   await org.getByTestId('uno-start').click();
 
   // Assert both see their own hand (7 cards)
   await expect(org.locator('[data-testid^="uno-card-"]')).toHaveCount(7, { timeout: 10_000 });
   await expect(staff.locator('[data-testid^="uno-card-"]')).toHaveCount(7, { timeout: 10_000 });
+  await org.screenshot({ path: shotPath('uno-playing.png') });
 
   // Assert turn indicator (uno-turn) shows on exactly one of them
   const orgTurn = org.getByTestId('uno-turn');
@@ -123,4 +125,8 @@ test('2 players join office, walk to Uno table, start game and take turn', async
 
   // Assert waiting player only sees their own 7 cards and never sees the active player's cards
   await expect(waitingPage.locator('[data-testid^="uno-card-"]')).toHaveCount(7);
+});
+
+test('the browser console stayed clean', () => {
+  expect(problems.flat()).toEqual([]);
 });

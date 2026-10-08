@@ -109,7 +109,7 @@ export function FoosballCanvas({ view, activeRod, youSide, onRematch }: Foosball
       <canvas ref={canvasRef} width={CANVAS_W} height={CANVAS_H} className="block w-full h-auto aspect-[7/4]" />
 
       {/* Top Score Banner */}
-      <div className="pointer-events-none absolute top-2 inset-x-0 flex justify-center">
+      <div data-testid="foosball-score" className="pointer-events-none absolute top-2 inset-x-0 flex justify-center">
         <div className="flex items-center gap-3 rounded-full bg-zinc-900/85 px-4 py-1 text-xs font-semibold backdrop-blur-xs shadow-md border border-zinc-700/60">
           <span className="flex items-center gap-1.5 text-blue-400"><span className="size-2 rounded-full bg-blue-500" />Left</span>
           <span className="font-mono text-base font-bold text-white tracking-wider">{view.score.A} - {view.score.B}</span>
@@ -143,7 +143,7 @@ export function FoosballCanvas({ view, activeRod, youSide, onRematch }: Foosball
 
       {/* Winner overlay */}
       {view.phase === 'ended' && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
+        <div data-testid="foosball-ended-overlay" className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
           <div className="flex flex-col items-center rounded-xl border border-zinc-700 bg-zinc-900/95 p-5 text-center shadow-2xl">
             <div className="text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-1">Match Ended</div>
             <div className="text-xl font-bold text-white mb-1">{view.winner === 'A' ? 'Team Left (Blue)' : view.winner === 'B' ? 'Team Right (Red)' : 'Draw'} Won!</div>

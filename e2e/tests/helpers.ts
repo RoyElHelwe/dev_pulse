@@ -1,4 +1,15 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import { type Browser, type BrowserContext, type BrowserContextOptions, expect, type Page } from '@playwright/test';
+
+export function shotPath(name: string): string {
+  // Screenshots for looking at (not asserted on): SHOTS_DIR, else test-results/shots next to the tests.
+  const dir = process.env.SHOTS_DIR || path.resolve(__dirname, '..', 'test-results', 'shots');
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+  } catch {}
+  return path.join(dir, name);
+}
 
 export interface Layout {
   width: number;
@@ -9,12 +20,15 @@ export interface Layout {
 }
 
 export interface Workspace {
+  id?: string;
   templateId: string;
   layout: Layout;
   layoutVersion: number;
   character: string;
   deskId: string | null;
   desks: { deskId: string; userId: string; name: string }[];
+  canExpand?: boolean;
+  canAddChill?: boolean;
 }
 
 /** A browser page that remembers its console errors (the app must keep the console clean). */
