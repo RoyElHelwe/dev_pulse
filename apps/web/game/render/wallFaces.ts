@@ -65,13 +65,21 @@ export class WallFaces {
   constructor(
     private readonly scene: Phaser.Scene,
     walls: Wall[],
-    o: { scale: number; depthOf: (base: number) => number; labels: FaceLabel[]; fontFamily: string; resolution: number },
+    o: {
+      scale: number;
+      depthOf: (base: number) => number;
+      labels: FaceLabel[];
+      /** Tile x-ranges taken by boards and screens hung on the faces: names go beside them. */
+      avoid: Array<{ x0: number; x1: number }>;
+      fontFamily: string;
+      resolution: number;
+    },
   ) {
     // Quarter steps keep the one-tile columns on whole texture pixels.
     this.scale = Math.max(1, Math.round(o.scale * 4) / 4);
     const hung = new Map<Wall, Array<{ text: string; x: number; tone: 'dark' | 'light' }>>();
     for (const label of o.labels) {
-      const spot = faceFor(walls, label);
+      const spot = faceFor(walls, label, o.avoid);
       if (!spot) {
         this.leftover.push(label);
         continue;
@@ -217,14 +225,22 @@ export class WallFaces {
 }
 
 /** The solid wall face above a room's top edge with room for its name, and where on it to hang the name (tiles). */
-function faceFor(walls: Wall[], label: FaceLabel) {
+function faceFor(walls: Wall[], label: FaceLabel, avoid: Array<{ x0: number; x1: number }>) {
   const need = (label.text.length * 18 + 12) / TILE;
-  let best: { wall: Wall; x: number; room: number } | null = null;
+  const half = need / 2;
+  let best: { wall: Wall; x: number; distance: number } | null = null;
   for (const wall of walls) {
     if (!isHorizontal(wall) || wall.kind !== 'solid' || wallHeight(wall) === 0 || Math.abs(wall.y1 - label.top) > 0.01) continue;
     const a = Math.max(Math.min(wall.x1, wall.x2), label.x0);
     const z = Math.min(Math.max(wall.x1, wall.x2), label.x1);
-    if (z - a >= need && (!best || z - a > best.room)) best = { wall, x: (a + z) / 2, room: z - a };
+    if (z - a < need) continue;
+    // Centred on the room if free, else beside the boards and screens hanging there.
+    const spots = [label.x, (a + z) / 2, ...avoid.flatMap((r) => [r.x0 - half - 0.2, r.x1 + half + 0.2])];
+    for (const x of spots) {
+      if (x - half < a || x + half > z || avoid.some((r) => x + half > r.x0 && x - half < r.x1)) continue;
+      const distance = Math.abs(x - label.x);
+      if (!best || distance < best.distance) best = { wall, x, distance };
+    }
   }
   return best;
 }

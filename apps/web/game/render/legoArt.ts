@@ -131,12 +131,13 @@ export function drawLegoWall(g: Phaser.GameObjects.Graphics, w: number, h: numbe
 
   // Stud grid across the baseplate
   const studSpacing = 4;
-  const startX = bx + 2.5;
-  const endX = bx + bw - 2.5;
-  const rows = [-3, 0, 3];
-  for (let sx = startX; sx <= endX; sx += studSpacing) {
-    for (const sy of rows) {
-      circle(g, sx, sy, 0.8, 0x22c55e, 0.5);
+  const cols = Math.floor((bw - 4) / studSpacing);
+  const rows = Math.floor((bh - 4) / studSpacing);
+  const ox = bx + (bw - cols * studSpacing) / 2;
+  const oy = by + (bh - rows * studSpacing) / 2;
+  for (let c = 0; c <= cols; c++) {
+    for (let r = 0; r <= rows; r++) {
+      circle(g, ox + c * studSpacing, oy + r * studSpacing, 0.8, 0x22c55e, 0.5);
     }
   }
 

@@ -76,7 +76,7 @@ export class Interactions {
         return {
           type: 'foosball',
           id: f.id,
-          name: 'Foosball table',
+          name: 'Baby foot table',
           spot: { x: f.x, y: f.y },
           area: { x: b.x - 1.2, y: b.y - 1.2, w: b.w + 2.4, h: b.h + 2.4 },
           anchor: { x: f.x * TILE, y: b.y * TILE - 6 },
@@ -165,7 +165,7 @@ export class Interactions {
   }
 
   private label(t: Target) {
-    if (t.type === 'foosball') return 'Play foosball';
+    if (t.type === 'foosball') return 'Play Baby foot';
     if (t.type === 'uno') return 'Play Uno';
     if (t.type === 'lego') return 'Build with Lego';
     if (t.type === 'board') return 'Use the screen';

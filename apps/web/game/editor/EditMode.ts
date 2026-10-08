@@ -1,9 +1,10 @@
 import * as Phaser from 'phaser';
 import { TILE } from '../constants';
 import { itemBounds } from '../layout/derive';
+import { isWallMounted, snapToWall } from '../layout/mount';
 import type { Furniture } from '../layout/types';
 import { FURNITURE } from '../render/furniture';
-import { ensureFurnitureTexture, ensureShadowTexture } from '../render/sprites';
+import { ensureFurnitureTexture, ensureShadowTexture, furnitureCenter } from '../render/sprites';
 import type { LayoutEditor } from './LayoutEditor';
 import { PROBLEM_TEXT, type PlacementProblem } from './rules';
 
@@ -210,19 +211,23 @@ export class EditMode {
         sprite.key = key;
       }
       sprite.image.setData('furnitureId', item.id);
+      const pos = furnitureCenter(item);
       sprite.image
-        .setPosition(item.x * TILE, item.y * TILE)
-        .setRotation(Phaser.Math.DegToRad(item.rotation ?? 0))
+        .setPosition(pos.x, pos.y)
+        .setRotation(isWallMounted(item.kind) ? 0 : Phaser.Math.DegToRad(item.rotation ?? 0))
         .setDepth(this.host.depthOf(item));
       const bad = this.editor.problemOf(item) || state.flagged.includes(item.id);
       if (bad) sprite.image.setTint(0xff9a9a);
       else sprite.image.clearTint();
 
-      if (FURNITURE[item.kind].solid) {
+      if (FURNITURE[item.kind].solid && !isWallMounted(item.kind)) {
         const b = itemBounds(item);
         const shadowKey = ensureShadowTexture(scene, item, textureScale);
         sprite.shadow ??= scene.add.image(0, 0, shadowKey).setOrigin(0).setScale(1 / textureScale).setDepth(this.host.shadowDepth);
         sprite.shadow.setTexture(shadowKey).setPosition(b.x * TILE + 1, b.y * TILE + 4);
+      } else if (sprite.shadow) {
+        sprite.shadow.destroy();
+        delete sprite.shadow;
       }
     }
     for (const [id, sprite] of sprites) {
@@ -255,7 +260,7 @@ export class EditMode {
 
   private updateGhost(pointer: Phaser.Input.Pointer) {
     const placing = this.editor.getState().placing!;
-    const item: Furniture = {
+    let item: Furniture = {
       id: 'ghost',
       kind: placing.kind,
       x: Math.round((pointer.worldX / TILE) * 4) / 4,
@@ -264,9 +269,14 @@ export class EditMode {
       h: placing.h,
       color: placing.color,
     };
+    if (isWallMounted(item.kind)) {
+      const snapped = snapToWall(item, this.editor.layout.walls, 4);
+      if (snapped) item = snapped;
+    }
     const key = ensureFurnitureTexture(this.scene, item, this.host.textureScale);
+    const pos = furnitureCenter(item);
     this.ghost ??= this.scene.add.image(0, 0, key).setScale(1 / this.host.textureScale).setDepth(999).setAlpha(0.75);
-    this.ghost.setTexture(key).setPosition(item.x * TILE, item.y * TILE);
+    this.ghost.setTexture(key).setPosition(pos.x, pos.y);
     this.ghost.setTint(this.editor.problemOf(item) ? 0xff8a8a : 0x9be7c4);
   }
 

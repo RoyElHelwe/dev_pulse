@@ -1,4 +1,4 @@
-import type { Furniture, OfficeLayout } from '../layout/types';
+import type { Furniture, FurnitureKind, OfficeLayout } from '../layout/types';
 
 type NewItem = Omit<Furniture, 'id'>;
 
@@ -11,6 +11,16 @@ export class LayoutBuilder {
 
   add(item: NewItem) {
     this.furniture.push({ id: `${this.prefix}${item.kind}-${this.next++}`, ...item });
+  }
+
+  /** Wall-mounted item (tv, board, legoBoard) at canonical y flush against a solid horizontal wall at wallY. */
+  wallBoard(kind: FurnitureKind, x: number, wallY: number, w: number, h: number, id?: string) {
+    const y = wallY + 5 / 32 + h / 2;
+    if (id) {
+      this.furniture.push({ id, kind, x, y, w, h });
+    } else {
+      this.add({ kind, x, y, w, h });
+    }
   }
 
   /** Four desks facing each other in pairs, a divider, and a plant at the end (6 × 5 tiles). */
@@ -28,7 +38,7 @@ export class LayoutBuilder {
   /** Screen, table and chairs for a meeting room spanning x .. x + w (rooms start at y 0, 12 deep). */
   meetingRoom(x: number, w: number, tableW: number, oy = 0) {
     const cx = x + w / 2;
-    this.add({ kind: 'tv', x: cx, y: oy + 0.7, w: Math.min(3.6, w - 4), h: 0.28 });
+    this.wallBoard('tv', cx, oy, Math.min(3.6, w - 4), 0.28);
     this.add({ kind: 'meetingTable', x: cx, y: oy + 6.3, w: tableW, h: 2.4 });
     const seats = Math.max(1, Math.floor(tableW / 2));
     for (let i = 0; i < seats; i++) {
@@ -102,7 +112,7 @@ export class LayoutBuilder {
     if (rh >= 18 && rw <= 14) {
       // Tall room (e.g. vertical wing)
       const cx = rx + rw / 2;
-      this.add({ kind: 'legoBoard', x: cx, y: ry + 0.45, w: 4, h: 0.5 });
+      this.wallBoard('legoBoard', cx, ry, 3, 0.5);
       this.add({ kind: 'foosball', x: cx, y: ry + 4.5, w: 3, h: 1.6 });
       this.add({ kind: 'rug', x: cx, y: ry + 10.5, w: 4.5, h: 4.5, color: 0xd9cdbb });
       this.cardTableWithSeats(cx, ry + 10.5);
@@ -111,15 +121,16 @@ export class LayoutBuilder {
       // Wide room (e.g. bottom wing)
       const cx = rx + rw / 2;
       const cy = ry + rh / 2;
-      this.add({ kind: 'legoBoard', x: cx, y: ry + rh - 0.45, w: 4, h: 0.5 });
+      this.wallBoard('legoBoard', rx + 6, ry, 3, 0.5);
       this.add({ kind: 'foosball', x: cx - 5.5, y: cy, w: 3, h: 1.6 });
       this.add({ kind: 'rug', x: cx + 3.5, y: cy, w: 4.5, h: 4.5, color: 0xd9cdbb });
       this.cardTableWithSeats(cx + 3.5, cy);
       this.add({ kind: 'plant', x: cx - 9.5, y: cy, w: 1, h: 1 });
     } else {
       // Compact room (e.g. loft 11 × 12)
-      const legoX = rx + rw / 2;
-      this.add({ kind: 'legoBoard', x: legoX, y: ry + 0.45, w: 4, h: 0.5 });
+      // Off to the right: the room's name hangs on the wall to its left.
+      const legoX = rx + rw - 2.4;
+      this.wallBoard('legoBoard', legoX, ry, 3, 0.5);
       this.add({ kind: 'foosball', x: rx + 3.2, y: ry + 4.5, w: 3, h: 1.6 });
       const tableX = rx + rw - 3.2;
       const tableY = ry + 6.5;

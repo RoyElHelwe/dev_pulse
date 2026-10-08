@@ -90,7 +90,7 @@ export function generatedOffice(teamSize: number, seed: string): OfficeLayout {
 
   // 2. Open space: desk clusters in a centred grid, sometimes a plant between them.
   rooms.push({ id: 'open', name: 'Open space', kind: 'open', x: 0, y: BAND, w: width, h: height - BAND, floor: 'oak' });
-  b.add({ kind: 'board', x: (x + 7 + width - 10) / 2, y: BAND + 0.75, w: 3, h: 0.5 });
+  b.wallBoard('board', (x + 7 + width - 10) / 2, BAND, 3, 0.5);
   const left = Math.round(width - (COL * (cols - 1) + CLUSTER_W)) / 2;
   for (let i = 0; i < clusters; i++) {
     const ox = left + (i % cols) * COL;

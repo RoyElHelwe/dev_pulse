@@ -4,6 +4,7 @@ import { phaserPen } from '../art/pen';
 import { recipeOf } from '../art/recipe';
 import { TILE } from '../constants';
 import { itemBounds } from '../layout/derive';
+import { isWallMounted } from '../layout/mount';
 import type { Furniture } from '../layout/types';
 import { rr, seededRandom } from './draw';
 import { FURNITURE } from './furniture';
@@ -58,13 +59,40 @@ export function textureScale(dpr: number) {
   return Math.min(3, dpr * 1.5);
 }
 
+export function wallArtSize(item: Furniture): { w: number; h: number } {
+  if (item.kind === 'legoBoard') {
+    const h = Math.min(64, (item.w * 32 * 2) / 3);
+    return { w: h * 1.5, h };
+  }
+  if (item.kind === 'board') {
+    const w = item.w * 32;
+    return { w, h: Math.min(60, w * 0.6) };
+  }
+  if (item.kind === 'tv') {
+    const w0 = item.w * 32;
+    const h = Math.min(60, (w0 * 9) / 16);
+    return { w: Math.min(w0, (h * 16) / 9), h };
+  }
+  return { w: item.w * 32, h: item.h * 32 };
+}
+
+export function furnitureCenter(item: Furniture): { x: number; y: number } {
+  if (isWallMounted(item.kind)) {
+    const art = wallArtSize(item);
+    return {
+      x: item.x * 32,
+      y: (item.y - item.h / 2) * 32 - 8 - art.h / 2,
+    };
+  }
+  return { x: item.x * 32, y: item.y * 32 };
+}
+
 export function ensureFurnitureTexture(scene: Phaser.Scene, item: Furniture, scale: number) {
   const owner = deskOwner(scene, item);
   const papers = owner ? Math.min(9, deskPapers(scene, item)) : 0;
   const key = furnitureTextureKey(item, owner, papers);
   if (scene.textures.exists(key)) return key;
-  const w = item.w * TILE;
-  const h = item.h * TILE;
+  const { w, h } = isWallMounted(item.kind) ? wallArtSize(item) : { w: item.w * TILE, h: item.h * TILE };
   const g = scene.make.graphics({}, false);
   const lego = item.kind === 'legoBoard' ? legoArt.get(item.id) : undefined;
   if (item.kind === 'desk') drawDesk(phaserPen(g), w, h, { seed: item.id, owner: owner ? recipeOf(owner) : null, wear: DESK_WEAR, papers });
