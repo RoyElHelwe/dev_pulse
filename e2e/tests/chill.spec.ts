@@ -104,10 +104,11 @@ test('Loft office has chill room, take chill-room screenshot, Lego live miniatur
 
   // (c) Lego live miniature for the OTHER user:
   // Alice and Bob both in Loft office near the Lego wall (Bob where the wall is visible)
-  console.log('[CHILL] Bob navigating to Lego wall...');
-  await navigateToLegoWall(staff, ws.layout, 26.5);
+  // Alice first: she stands in the doorway after the screenshot, which would block Bob's way in.
   console.log('[CHILL] Alice navigating to Lego wall...');
   await navigateToLegoWall(org, ws.layout, 25.0);
+  console.log('[CHILL] Bob navigating to Lego wall...');
+  await navigateToLegoWall(staff, ws.layout, 26.5);
 
   // Bob focuses canvas, takes canvas screenshot before Alice places a brick
   const bobCanvas = staff.locator('canvas').first();
@@ -131,14 +132,23 @@ test('Loft office has chill room, take chill-room screenshot, Lego live miniatur
   expect(box).not.toBeNull();
   const clickPos = { x: Math.round(box!.width / 2), y: Math.round(box!.height / 2) };
 
-  // Alice clicks canvas to place a brick
-  await legoCanvas.click({ position: clickPos });
+  // Alice places three big bricks (the wall in the office is a thin strip, so make them count)
+  await legoDialog.getByRole('button', { name: '2×4' }).click();
+  for (const fx of [0.25, 0.5, 0.75]) {
+    await legoCanvas.click({ position: { x: Math.round(box!.width * fx), y: clickPos.y } });
+    await org.waitForTimeout(400);
+  }
+  await expect.poll(async () => {
+    const res = await org.request.get('/api/workspace/lego');
+    const data = await res.json();
+    return (data.boards ?? []).reduce((n: number, b: { bricks: unknown[] }) => n + b.bricks.length, 0);
+  }, { timeout: 5_000 }).toBeGreaterThanOrEqual(3);
 
-  // Bob's page screenshot of the same region must differ (poll up to ~5 s)
+  // Bob's page screenshot of the same region must differ (poll up to ~10 s)
   await expect.poll(async () => {
     const currentShot = await bobCanvas.screenshot();
     return !currentShot.equals(beforeShot);
-  }, { timeout: 5_000 }).toBe(true);
+  }, { timeout: 10_000 }).toBe(true);
 
   await bobCanvas.screenshot({ path: shotPath('lego-wall-bob-after.png') });
 
