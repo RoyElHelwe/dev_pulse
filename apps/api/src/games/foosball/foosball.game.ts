@@ -1,6 +1,7 @@
 import type { GameContext, GameInstance, GamePlayerRef } from '../game.types';
 import { GameError } from '../game.types';
 import {
+  clampRodOffset,
   createInitialWorld,
   FIELD_L,
   FIELD_W,
@@ -223,6 +224,7 @@ export function createFoosballGame(
         for (const side of ['A', 'B'] as const) {
           for (const r of world.rods[side]) {
             r.dir = 0;
+            r.target = null;
           }
         }
 
@@ -416,6 +418,36 @@ export function createFoosballGame(
           break;
         }
 
+        case 'aim': {
+          // Rate limiting: the gateway already limits to 60 msgs/s per socket
+          // and motion speed is capped by ROD_AIM_SPEED, so flooding aims has no extra effect.
+          const side = getPlayerSide(userId);
+          if (!side) {
+            throw new GameError('NOT_SEATED', 'Only seated players can aim rods');
+          }
+          const rod = act.rod;
+          if (typeof rod !== 'number' || rod < 0 || rod > 3 || !Number.isInteger(rod)) {
+            throw new GameError('BAD_ACTION', 'Invalid rod index');
+          }
+          const y = act.y;
+          if (typeof y !== 'number' || !Number.isFinite(y)) {
+            throw new GameError('BAD_ACTION', 'Invalid y');
+          }
+
+          const owned = getPlayerOwnedRods(side, userId);
+          if (!owned.includes(rod)) {
+            throw new GameError('NOT_YOUR_ROD', 'Not your rod');
+          }
+
+          if (phase !== 'playing') {
+            return;
+          }
+
+          world.rods[side][rod].target = clampRodOffset(rod, y);
+          world.rods[side][rod].dir = 0;
+          break;
+        }
+
         case 'move': {
           const side = getPlayerSide(userId);
           if (!side) {
@@ -440,6 +472,7 @@ export function createFoosballGame(
           }
 
           world.rods[side][rod].dir = dir;
+          world.rods[side][rod].target = null;
           break;
         }
 
@@ -462,7 +495,15 @@ export function createFoosballGame(
             throw new GameError('BAD_PHASE', 'Can only kick during playing phase');
           }
 
-          if (triggerKick(world, side, rod)) {
+          let strength = 1;
+          if (act.strength !== undefined) {
+            if (typeof act.strength !== 'number' || !Number.isFinite(act.strength)) {
+              throw new GameError('BAD_ACTION', 'Invalid strength');
+            }
+            strength = act.strength;
+          }
+
+          if (triggerKick(world, side, rod, strength)) {
             ctx.emitEvent('kick', { side, rod });
           }
           break;

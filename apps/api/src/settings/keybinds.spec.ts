@@ -6,6 +6,7 @@ import {
   applyKeybindChanges,
   DEFAULT_KEYBINDS,
   friendlyKeyName,
+  LEGACY_ACTIONS,
   RESERVED,
   resolveKeybinds,
 } from './keybinds';
@@ -55,6 +56,20 @@ describe('keybinds', () => {
       expect(resolved.deafen).toBe(DEFAULT_KEYBINDS.deafen);
       expect((resolved as any).unknownAction).toBeUndefined();
     });
+
+    it('ignores legacy foosKick and foosSwitch stored keys and does not return them', () => {
+      const stored = {
+        foosKick: 'Space',
+        foosSwitch: 'KeyQ',
+        chat: 'KeyJ',
+      };
+      const resolved = resolveKeybinds(stored, 'KeyV');
+      expect(resolved.chat).toBe('KeyJ');
+      expect((resolved as any).foosKick).toBeUndefined();
+      expect((resolved as any).foosSwitch).toBeUndefined();
+      expect(Object.keys(resolved)).not.toContain('foosKick');
+      expect(Object.keys(resolved)).not.toContain('foosSwitch');
+    });
   });
 
   describe('PTT overlay', () => {
@@ -100,6 +115,25 @@ describe('keybinds', () => {
       });
       expect(next.chat).toBe('KeyB');
       expect(next.board).toBe('KeyC');
+    });
+
+    it('silently ignores legacy actions foosKick and foosSwitch without error', () => {
+      const next = applyKeybindChanges(DEFAULT_KEYBINDS, {
+        foosKick: 'Space',
+        foosSwitch: 'KeyQ',
+        interact: 'KeyF',
+      });
+      expect(next.interact).toBe('KeyF');
+      expect((next as any).foosKick).toBeUndefined();
+      expect((next as any).foosSwitch).toBeUndefined();
+    });
+
+    it('silently ignores legacy actions when they are the only keys submitted', () => {
+      const next = applyKeybindChanges(DEFAULT_KEYBINDS, {
+        foosKick: 'Space',
+        foosSwitch: 'KeyQ',
+      });
+      expect(next).toEqual(DEFAULT_KEYBINDS);
     });
   });
 
