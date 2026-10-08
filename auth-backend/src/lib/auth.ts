@@ -1,14 +1,29 @@
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { twoFactor, organization, genericOAuth } from "better-auth/plugins";
-import { createAuthMiddleware } from "better-auth/api";
+import { createAuthMiddleware, APIError } from "better-auth/api";
 import { deleteSessionCookie } from "better-auth/cookies";
 import { createHmac, randomBytes } from "node:crypto";
+import { z } from "zod";
 import { prisma } from "./prisma.js";
 import { sendEmail } from "./email.js";
 
 const FRONTEND_URL = process.env.FRONTEND_URL ?? "http://localhost:3000";
 const TWO_FACTOR_COOKIE_MAX_AGE = 60 * 10; // the user has 10 minutes to type the code
+
+// Backend validation for sign-up.
+// The browser can be skipped (Postman, curl), so we check again here before the user is created.
+// Keep these rules the SAME as the frontend Zod schema.
+const signUpSchema = z.object({
+  name: z.string().trim().min(2, "Name must be at least 2 characters").max(50, "Name is too long"),
+  email: z.email("Invalid email"),
+  password: z
+	.string()
+	.min(8, "Password must be at least 8 characters")
+	.max(128, "Password is too long")
+	.regex(/[A-Za-z]/, "Password needs a letter")
+	.regex(/[0-9]/, "Password needs a number"),
+});
 
 export const auth = betterAuth({
   appName: "Transcendence", // shown in authenticator apps (Google Authenticator)
@@ -33,6 +48,7 @@ export const auth = betterAuth({
 	sendOnSignUp: true, // send the email right after register
 	autoSignInAfterVerification: true, // log in when the link is clicked
 	sendVerificationEmail: async ({ user, url }) => {
+	  const safeName = user.name.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 	  void sendEmail(
 		user.email,
 		"Verify your email",
@@ -130,13 +146,24 @@ export const auth = betterAuth({
 	}),
   ],
 
-  // Better Auth only asks for the 2FA code after email + password login.
-  // This hook does the same after Google / GitHub / 42 logins:
-  // if the user has 2FA on, we cancel the session that was just created
-  // and send them to /two-factor to type the code first.
   hooks: {
+	// Runs BEFORE Better Auth handles the request.
+	// On sign-up: check the data, and stop with 400 if it's wrong (no user is created).
+	before: createAuthMiddleware(async (ctx) => {
+	  if (ctx.path !== "/sign-up/email") return;
+
+	  const result = signUpSchema.safeParse(ctx.body);
+	  if (!result.success) {
+		throw new APIError("BAD_REQUEST", { message: result.error.issues[0].message });
+	  }
+	}),
+
+	// Better Auth only asks for the 2FA code after email + password login.
+	// This hook does the same after Google / GitHub / 42 logins:
+	// if the user has 2FA on, we cancel the session that was just created
+	// and send them to /two-factor to type the code first.
 	after: createAuthMiddleware(async (ctx) => {
-	  if (!ctx.path.startsWith("/callback")) return; // only OAuth logins
+	  if (!ctx.path.startsWith("/callback")) return; // only OAuth logins (google, github, fortytwo)
 
 	  const data = ctx.context.newSession;
 	  if (!data) return; // login failed, or it was only linking an account
@@ -190,5 +217,5 @@ export const auth = betterAuth({
 	}),
   },
 
-  trustedOrigins: ["http://localhost:3000"],
+  trustedOrigins: [FRONTEND_URL],
 });

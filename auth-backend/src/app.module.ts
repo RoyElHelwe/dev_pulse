@@ -6,6 +6,7 @@ import { auth } from "./lib/auth.js";//the better auth config
 import { AuthGuard } from "./common/auth/auth.guard.js";//for guard
 import { AppController } from "./app.controller.js";
 import { AppService } from "./app.service.js";
+import { MeController } from "./auth/me.controller.js";//GET /auth/me
 
 export const { ObserveModule, ObserveInstrument } = createObserveModule();
 
@@ -20,7 +21,7 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
 	// We turn off its built-in guard because we use our own AuthGuard below.
 	AuthModule.forRoot({ auth, disableGlobalAuthGuard: true }),//connect the vetter auth conf to nestjs
   ],
-  controllers: [AppController],
+  controllers: [AppController, MeController],
   providers: [
 	AppService,
 	//our AuthGuard runs before EVERY route. Open routes use @Public().
@@ -31,5 +32,6 @@ export class AppModule {}
 
 /**This is the root module,the place where we tell Nest what our app is made of
  * In imports it plugs in two external modules: Observe (monitoring) and Better Auth (which automatically serves the /api/auth/* routes like sign-in and sign-up)
+ * In controllers it registers AppController and MeController (GET /auth/me)
  * In providers it registers AppService and sets my own AuthGuard as a global guard via APP_GUARD,
  * meaning every request passes through that guard before reaching any route. */

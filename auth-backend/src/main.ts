@@ -10,9 +10,9 @@ async function bootstrap() {//start the app
   });
 
   app.enableCors({
-    origin: "http://localhost:3000",//allow the request from frontend
-    credentials: true,
-  });
+  origin: process.env.FRONTEND_URL ?? "http://localhost:3000",
+  credentials: true,
+});
 
   await app.listen(process.env.PORT ?? 4000);//start the backend
 }
