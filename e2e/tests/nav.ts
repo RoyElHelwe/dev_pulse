@@ -10,7 +10,7 @@ const SOLID = new Set([
   'plant', 'bookshelf', 'counter', 'fridge', 'barTable', 'beanbag', 'board',
   'foosball', 'cardTable', 'legoBoard',
 ]);
-const WALL = { solid: { t: 10, face: 34 }, glass: { t: 6, face: 18 } };
+const WALL = { solid: { t: 10 }, glass: { t: 6 } };
 const TILE = 32;
 const STEP = 0.25;
 const INFLATE = 9;
@@ -36,14 +36,14 @@ function obstacles(layout: Layout, tx?: number, ty?: number, extra: Rect[] = [])
     });
   }
   for (const wall of layout.walls) {
-    const { t, face } = WALL[wall.kind];
+    const { t } = WALL[wall.kind];
     if (wall.y1 === wall.y2) {
       const x = Math.min(wall.x1, wall.x2) * TILE;
       rects.push({
         x: x - INFLATE,
         y: wall.y1 * TILE - t / 2 - INFLATE,
         w: Math.abs(wall.x2 - wall.x1) * TILE + INFLATE * 2,
-        h: t + (wall.face === false ? 0 : face) + INFLATE * 2,
+        h: t + INFLATE * 2,
       });
     } else {
       rects.push({
