@@ -1,5 +1,5 @@
 import { expect, type Page, test } from '@playwright/test';
-import { closeContexts, inOffice, openPage, workspace, type Workspace, type Layout } from './helpers';
+import { closeContexts, inOffice, openPage, shotPath, workspace, type Workspace, type Layout } from './helpers';
 import { position, walkTo } from './nav';
 
 test.describe.configure({ mode: 'serial' });
@@ -81,7 +81,7 @@ test('dev-login as owner, walk to Lego wall, place and erase brick', async () =>
     const wsRes = await page.request.get('/api/workspace');
     if (!wsRes.ok()) continue;
     const ws = await wsRes.json();
-    if (ws.layout?.furniture?.some((f: { kind: string }) => f.kind === 'legoBoard')) {
+    if (ws.templateId === 'loft' && (!ws.wings || ws.wings.length === 0) && ws.layout?.furniture?.some((f: { kind: string }) => f.kind === 'legoBoard')) {
       selectedOwnerId = o.id;
       break;
     }
@@ -126,6 +126,8 @@ test('dev-login as owner, walk to Lego wall, place and erase brick', async () =>
 
   const legoCanvas = dialog.locator('canvas');
   await expect(legoCanvas).toBeVisible();
+  await page.waitForTimeout(500);
+  await page.screenshot({ path: shotPath('lego-panel.png') });
 
   // Pick a free cell to place a brick (stud 24, 16 is near the center)
   const box = await legoCanvas.boundingBox();
@@ -180,4 +182,8 @@ test('dev-login as owner, walk to Lego wall, place and erase brick', async () =>
   const closeFinalBtn = dialog.getByRole('button', { name: 'Close game' });
   await closeFinalBtn.click();
   await expect(dialog).toBeHidden();
+});
+
+test('the browser console stayed clean', () => {
+  expect(problems.flat()).toEqual([]);
 });

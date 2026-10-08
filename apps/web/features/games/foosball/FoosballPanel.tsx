@@ -82,7 +82,13 @@ function TeamBox({ side, players, myId, isLobby, isMySide, canSit, onSit, onStan
         {isMySide ? (
           <Button variant="secondary" size="sm" disabled={!isLobby} onClick={onStand}>Stand up</Button>
         ) : (
-          <Button variant="secondary" size="sm" disabled={!isLobby || !canSit} onClick={() => onSit(side)}>
+          <Button
+            variant="secondary"
+            size="sm"
+            data-testid={`foosball-sit-${side}`}
+            disabled={!isLobby || !canSit}
+            onClick={() => onSit(side)}
+          >
             {isA ? 'Sit Left' : 'Sit Right'}
           </Button>
         )}
@@ -132,7 +138,12 @@ export default function FoosballPanel({ objectId, name, socket, me, onClose }: G
   }
 
   return (
-    <div data-captures-keys="" className="flex flex-col gap-4 text-left">
+    <div
+      data-captures-keys=""
+      data-testid="foosball-panel"
+      data-phase={view.phase}
+      className="flex flex-col gap-4 text-left"
+    >
       <div className="flex items-center justify-between border-b border-zinc-200/80 pb-3">
         <div className="flex items-center gap-2">
           <span className="text-sm font-semibold text-zinc-900">{name}</span>
@@ -172,7 +183,15 @@ export default function FoosballPanel({ objectId, name, socket, me, onClose }: G
 
       {view.phase === 'lobby' && (
         <div className="flex flex-col items-center gap-1 py-1">
-          <Button variant="primary" size="sm" disabled={!canStart} onClick={() => send({ type: 'start' })}>Start match</Button>
+          <Button
+            variant="primary"
+            size="sm"
+            data-testid="foosball-start"
+            disabled={!canStart}
+            onClick={() => send({ type: 'start' })}
+          >
+            Start match
+          </Button>
           {startHint && <span className="text-xs text-zinc-500">{startHint}</span>}
         </div>
       )}
@@ -199,6 +218,7 @@ export default function FoosballPanel({ objectId, name, socket, me, onClose }: G
                 <button
                   key={rod}
                   type="button"
+                  data-testid={`foosball-rod-${rod}`}
                   onClick={() => selectRod(rod)}
                   className={cn(
                     'rounded-md px-2 py-0.5 font-medium transition cursor-pointer',
@@ -211,6 +231,11 @@ export default function FoosballPanel({ objectId, name, socket, me, onClose }: G
                 </button>
               ))}
             </div>
+            <span
+              data-testid="active-rod-pos"
+              data-y={view.rods[view.you.side]?.[activeRod]?.y ?? 0}
+              className="hidden"
+            />
           </div>
 
           <div className="flex items-center gap-3 text-zinc-500 text-[11px]">

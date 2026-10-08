@@ -240,7 +240,7 @@ async function along(
   let stuckCount = 0;
   let noProgressCount = 0;
 
-  for (let i = 0; i < 25; i++) {
+  for (let i = 0; i < 45; i++) {
     const at = await position(page);
 
     // If destination is a seat and we are already seated near it, we have arrived!
@@ -303,7 +303,7 @@ async function along(
 
     const key = axis === 'x' ? (d < 0 ? 'ArrowLeft' : 'ArrowRight') : d < 0 ? 'ArrowUp' : 'ArrowDown';
     const dist = Math.abs(d);
-    const pressTime = Math.max(40, Math.min(140, Math.round(dist * 120)));
+    const pressTime = Math.max(40, Math.min(200, Math.round(dist * 120)));
 
     await page.keyboard.down(key);
     await page.waitForTimeout(pressTime);
@@ -321,13 +321,16 @@ async function along(
   }
 
   // If blocked, back off slightly before returning
-  const lastD = axis === 'x' ? target.x - endAt.x : target.y - endAt.y;
-  const backKey = axis === 'x' ? (lastD < 0 ? 'ArrowRight' : 'ArrowLeft') : (lastD < 0 ? 'ArrowDown' : 'ArrowUp');
-  await page.keyboard.down(backKey);
-  await page.waitForTimeout(200);
-  await page.keyboard.up(backKey);
-  await settled(page);
-  return 'blocked';
+  if (noProgressCount >= 2) {
+    const lastD = axis === 'x' ? target.x - endAt.x : target.y - endAt.y;
+    const backKey = axis === 'x' ? (lastD < 0 ? 'ArrowRight' : 'ArrowLeft') : (lastD < 0 ? 'ArrowDown' : 'ArrowUp');
+    await page.keyboard.down(backKey);
+    await page.waitForTimeout(200);
+    await page.keyboard.up(backKey);
+    await settled(page);
+    return 'blocked';
+  }
+  return 'reached';
 }
 
 /** Walks to (tx, ty), or the closest free spot. Returns where the player ended. */
