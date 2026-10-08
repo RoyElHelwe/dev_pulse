@@ -1,10 +1,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { type Browser, type BrowserContext, type BrowserContextOptions, expect, type Page } from '@playwright/test';
 
 export function shotPath(name: string): string {
   // Screenshots for looking at (not asserted on): SHOTS_DIR, else test-results/shots next to the tests.
-  const dir = process.env.SHOTS_DIR || path.resolve(__dirname, '..', 'test-results', 'shots');
+  const dir = process.env.SHOTS_DIR || fileURLToPath(new URL('../test-results/shots', import.meta.url));
   try {
     fs.mkdirSync(dir, { recursive: true });
   } catch {}
