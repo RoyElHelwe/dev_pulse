@@ -10,6 +10,13 @@ import { sendEmail } from "./email.js";
 
 const FRONTEND_URL = process.env.FRONTEND_URL ?? "http://localhost:3000";
 const TWO_FACTOR_COOKIE_MAX_AGE = 60 * 10; // the user has 10 minutes to type the code
+const INVITATION_EXPIRES_IN = 60 * 60 * 48; // an invite link works for 48 hours
+const IS_DEV = process.env.NODE_ENV !== "production";
+
+// Names come from users, so escape them before putting them in an email (blocks HTML injection).
+function escapeHtml(text: string) {
+  return text.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+}
 
 // Backend validation for sign-up.
 // The browser can be skipped (Postman, curl), so we check again here before the user is created.
@@ -23,6 +30,12 @@ const signUpSchema = z.object({
 	.max(128, "Password is too long")
 	.regex(/[A-Za-z]/, "Password needs a letter")
 	.regex(/[0-9]/, "Password needs a number"),
+});
+
+// Backend validation for creating a workspace (onboarding).
+// Same rule as the frontend: 2 to 50 characters.
+const workspaceSchema = z.object({
+  name: z.string().trim().min(2, "Name must be at least 2 characters").max(50, "Name is too long"),
 });
 
 export const auth = betterAuth({
@@ -48,12 +61,12 @@ export const auth = betterAuth({
 	sendOnSignUp: true, // send the email right after register
 	autoSignInAfterVerification: true, // log in when the link is clicked
 	sendVerificationEmail: async ({ user, url }) => {
-	  const safeName = user.name.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+	  const safeName = escapeHtml(user.name);
 	  void sendEmail(
 		user.email,
 		"Verify your email",
 		`
-		  <h2>Welcome to Transcendence, ${user.name}!</h2>
+		  <h2>Welcome to Transcendence, ${safeName}!</h2>
 		  <p>Click the button to verify your email:</p>
 		  <a href="${url}" style="background:#4f46e5;color:white;padding:10px 20px;border-radius:6px;text-decoration:none;">
 			Verify my email
@@ -113,6 +126,44 @@ export const auth = betterAuth({
 		  fields: { organizationId: "workspaceId" },
 		},
 	  },
+
+	  //invitations
+	  invitationExpiresIn: INVITATION_EXPIRES_IN,
+	  cancelPendingInvitationsOnReInvite: true, //inviting the same email again replaces the old link
+	  requireEmailVerificationOnInvitation: true, //only a verified account can accept
+
+	  // Called by Better Auth every time someone is invited.
+	  // The invitation is already saved in the db; we only send the link.
+	  sendInvitationEmail: async (data) => {
+		const link = `${FRONTEND_URL}/invite/${data.id}`;
+
+		// Dev only: print the link, so we can test with fake emails (bob@test.com...)
+		// Never in production: anyone reading the logs could join the workspace.
+		if (IS_DEV) console.log(`[invite] ${data.email} -> ${link}`);
+
+		const inviter = escapeHtml(data.inviter.user.name);
+		const workspace = escapeHtml(data.organization.name);
+		const role = escapeHtml(data.role);
+
+		try {
+		  await sendEmail(
+			data.email,
+			`${data.inviter.user.name} invited you to ${data.organization.name}`,
+			`
+			  <h2>You're invited to ${workspace}</h2>
+			  <p><b>${inviter}</b> invited you to join <b>${workspace}</b> as <b>${role}</b>.</p>
+			  <a href="${link}" style="background:#4f46e5;color:white;padding:10px 20px;border-radius:6px;text-decoration:none;">
+				Join ${workspace}
+			  </a>
+			  <p>This link works for 48 hours.</p>
+			  <p>If you don't know ${inviter}, ignore this email.</p>
+			`,
+		  );
+		} catch (err) {
+		  // Don't fail the invite: it's saved, and the owner can still copy the link.
+		  console.error(`[invite] email to ${data.email} failed:`, err);
+		}
+	  },
 	}),
 
 	// Login with 42 intra.
@@ -148,8 +199,18 @@ export const auth = betterAuth({
 
   hooks: {
 	// Runs BEFORE Better Auth handles the request.
-	// On sign-up: check the data, and stop with 400 if it's wrong (no user is created).
+	// On sign-up and workspace creation: check the data, and stop with 400 if it's wrong.
 	before: createAuthMiddleware(async (ctx) => {
+	  // Onboarding: check the workspace name (no workspace is created if it's wrong)
+	  if (ctx.path === "/organization/create") {
+		const result = workspaceSchema.safeParse(ctx.body);
+		if (!result.success) {
+		  throw new APIError("BAD_REQUEST", { message: result.error.issues[0].message });
+		}
+		return;
+	  }
+
+	  // Sign-up: check name, email and password (no user is created if it's wrong)
 	  if (ctx.path !== "/sign-up/email") return;
 
 	  const result = signUpSchema.safeParse(ctx.body);
