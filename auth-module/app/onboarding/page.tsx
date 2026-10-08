@@ -8,7 +8,6 @@ import { AuthShell, FloatingInput, FormMessage, btnPrimary, btnText } from "@/co
 
 const workspaceSchema = z.string().trim().min(2, "Name must be at least 2 characters").max(50, "Name is too long");
 
-// "my team!" -> "my-team-4f2a" (the random end keeps slugs unique)
 function makeSlug(name: string) {
   const base = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
   return `${base || "workspace"}-${Math.random().toString(36).slice(2, 6)}`;

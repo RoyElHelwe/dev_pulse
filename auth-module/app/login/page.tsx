@@ -70,7 +70,7 @@ export default function LoginPage() {
       return;
     }
 
-    // Logged in: /after-login decides dashboard or onboarding
+    //logged in: /after-login decides dashboard or onboarding
     router.push("/after-login");
   }
 

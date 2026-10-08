@@ -7,12 +7,9 @@ import { FloatingInput, FormMessage, btnPrimary } from "@/components/auth-shell"
 
 // Same email rule as register. The backend checks again.
 const emailSchema = z.email("Invalid email");
-
-// Only these two: nobody can be invited as owner (the owner is whoever created the workspace).
 type InviteRole = "member" | "admin";
 
-// M4 step 2: invite someone to this workspace by email.
-// Show it only to owner and admin (the page decides). The backend refuses members anyway.
+//invite someone to this workspace by email.
 export function InviteForm({ workspaceId, onInvited }: { workspaceId: string; onInvited?: () => void }) {
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<InviteRole>("member");
@@ -37,7 +34,7 @@ export function InviteForm({ workspaceId, onInvited }: { workspaceId: string; on
     const { error } = await authClient.organization.inviteMember({
       email: check.data,
       role,
-      organizationId: workspaceId, // the plugin still calls it organizationId in the API
+      organizationId: workspaceId,
     });
     setLoading(false);
 

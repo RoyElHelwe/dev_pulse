@@ -8,7 +8,6 @@ import { InviteForm } from "@/components/invite-form";
 type MyWorkspace = { id: string; name: string; role: string };
 
 // /workspaces/[workspaceId]/members
-// M4: invite form (step 2) + pending invites (step 4). M5 adds the members list here.
 export default function MembersPage() {
   const router = useRouter();
   const { workspaceId } = useParams<{ workspaceId: string }>();

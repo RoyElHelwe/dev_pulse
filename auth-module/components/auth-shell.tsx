@@ -88,7 +88,6 @@ export function FloatingInput({
   );
 }
 
-// The card: brand + title on the left, the form on the right
 export function AuthShell({
   title,
   subtitle,

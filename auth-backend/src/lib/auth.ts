@@ -17,7 +17,6 @@ const IS_DEV = process.env.NODE_ENV !== "production";
 function escapeHtml(text: string) {
   return text.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 }
-
 // Backend validation for sign-up.
 // The browser can be skipped (Postman, curl), so we check again here before the user is created.
 // Keep these rules the SAME as the frontend Zod schema.
@@ -50,7 +49,7 @@ export const auth = betterAuth({
 	requireEmailVerification: true,
   },
 
-  //one session cookie does everything (no JWTno refresh token)
+  //one session cookie does everything
   //the session is a row in the db so we can delete it to sign a device out at once
   session: {
 	expiresIn: 60 * 15, // 15 min: signed out after 15 minutes of doing nothing
@@ -244,8 +243,6 @@ export const auth = betterAuth({
 		  if (record && record.value === user.id && record.expiresAt > new Date()) return;
 		}
 	  }
-
-	  // cancel the session: the user is NOT logged in until the code is correct
 	  deleteSessionCookie(ctx, true);
 	  await ctx.context.internalAdapter.deleteSession(data.session.token);
 	  ctx.context.setNewSession(null);

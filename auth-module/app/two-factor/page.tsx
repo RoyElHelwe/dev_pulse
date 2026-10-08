@@ -43,8 +43,6 @@ export default function TwoFactorPage() {
       }
       return;
     }
-
-    // Code correct: /after-login decides dashboard or onboarding
      window.location.href = "/after-login";
   }
 
