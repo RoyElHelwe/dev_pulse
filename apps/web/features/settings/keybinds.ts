@@ -9,7 +9,7 @@ import { keyName } from '@/features/voice/settings';
 // chat / board / rooms / people toggles) reads it, the Keybinds modal and
 // /settings/voice write it. Saved per user on the server (`/settings`).
 
-export const KEYBIND_ACTIONS = ['interact', 'mute', 'deafen', 'pushToTalk', 'chat', 'board', 'rooms', 'people', 'foosKick', 'foosSwitch'] as const;
+export const KEYBIND_ACTIONS = ['interact', 'mute', 'deafen', 'pushToTalk', 'chat', 'board', 'rooms', 'people'] as const;
 export type KeybindAction = (typeof KEYBIND_ACTIONS)[number];
 export type Keybinds = Record<KeybindAction, string>;
 
@@ -23,8 +23,6 @@ export const DEFAULT_KEYBINDS: Keybinds = {
   board: 'KeyB',
   rooms: 'KeyT',
   people: 'KeyP',
-  foosKick: 'Space',
-  foosSwitch: 'KeyQ',
 };
 
 export const KEYBIND_LABELS: Record<KeybindAction, { label: string; hint: string }> = {
@@ -36,8 +34,6 @@ export const KEYBIND_LABELS: Record<KeybindAction, { label: string; hint: string
   board: { label: 'Task board', hint: 'Drop the Kanban board down or up' },
   rooms: { label: 'Rooms & timetable', hint: 'Open or close the meeting rooms' },
   people: { label: 'People list', hint: 'Open or close who is here' },
-  foosKick: { label: 'Foosball: kick', hint: 'Kick with the selected rod (move rods with W/S or ↑/↓)' },
-  foosSwitch: { label: 'Foosball: switch rod', hint: 'Cycle through the rods you control' },
 };
 
 /** Keys that walk, close or confirm: never bindable. */

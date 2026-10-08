@@ -9,11 +9,15 @@ export const ACTIONS = [
   'board',
   'rooms',
   'people',
-  'foosKick',
-  'foosSwitch',
 ] as const;
 
 export type Action = (typeof ACTIONS)[number];
+
+/**
+ * Legacy keybind actions that have been removed. We silently drop them
+ * in applyKeybindChanges so older clients don't encounter errors.
+ */
+export const LEGACY_ACTIONS = ['foosKick', 'foosSwitch'] as const;
 
 export const DEFAULT_KEYBINDS: Record<Action, string> = {
   interact: 'KeyE',
@@ -24,8 +28,6 @@ export const DEFAULT_KEYBINDS: Record<Action, string> = {
   board: 'KeyB',
   rooms: 'KeyT',
   people: 'KeyP',
-  foosKick: 'Space',
-  foosSwitch: 'KeyQ',
 };
 
 export const ACTION_LABELS: Record<Action, string> = {
@@ -37,8 +39,6 @@ export const ACTION_LABELS: Record<Action, string> = {
   board: 'Task board',
   rooms: 'Rooms & timetable',
   people: 'People list',
-  foosKick: 'Foosball: kick',
-  foosSwitch: 'Foosball: switch rod',
 };
 
 export const RESERVED = [
@@ -104,7 +104,14 @@ export function applyKeybindChanges(
     throw new FormError('INVALID_KEYBINDS', 'Keybind changes must be an object.', 'keybinds');
   }
 
+  // Silently drop legacy actions before the UNKNOWN_ACTION check so old clients don't error.
+  const filteredChanges: Record<string, unknown> = {};
   for (const [action, value] of Object.entries(changes)) {
+    if ((LEGACY_ACTIONS as readonly string[]).includes(action)) continue;
+    filteredChanges[action] = value;
+  }
+
+  for (const [action, value] of Object.entries(filteredChanges)) {
     if (!ACTIONS.includes(action as Action)) {
       throw new FormError('UNKNOWN_ACTION', `Unknown action: ${action}`, 'keybinds');
     }
@@ -121,12 +128,12 @@ export function applyKeybindChanges(
   }
 
   const next: Record<Action, string> = { ...current };
-  for (const [action, value] of Object.entries(changes) as [Action, string][]) {
+  for (const [action, value] of Object.entries(filteredChanges) as [Action, string][]) {
     next[action] = value;
   }
 
   // Check if any changed action conflicts with another action
-  for (const [actionStr, code] of Object.entries(changes) as [Action, string][]) {
+  for (const [actionStr, code] of Object.entries(filteredChanges) as [Action, string][]) {
     const action = actionStr as Action;
     const other = ACTIONS.find((a) => a !== action && next[a] === code);
     if (other) {

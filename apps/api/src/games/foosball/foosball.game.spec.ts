@@ -386,4 +386,146 @@ describe('Foosball Game', () => {
 
     game.dispose();
   });
+
+  it('aim action: validates seats, parameters, ownership, phase, and cancels move', () => {
+    const game = createFoosballGame(ctx);
+
+    // 1. Spectator aim throws NOT_SEATED
+    expect(() => {
+      game.onAction(spectator.userId, { type: 'aim', rod: 0, y: 10 });
+    }).toThrow(GameError);
+    try {
+      game.onAction(spectator.userId, { type: 'aim', rod: 0, y: 10 });
+    } catch (e: any) {
+      expect(e.code).toBe('NOT_SEATED');
+    }
+
+    // Sit players in 2v2 setup
+    game.onAction(pA1.userId, { type: 'sit', side: 'A' });
+    game.onAction(pA2.userId, { type: 'sit', side: 'A' });
+    game.onAction(pB1.userId, { type: 'sit', side: 'B' });
+    game.onAction(pB2.userId, { type: 'sit', side: 'B' });
+
+    // 2. Aim in lobby is silently ignored (no throw, no target set)
+    expect(() => {
+      game.onAction(pA1.userId, { type: 'aim', rod: 0, y: 10 });
+    }).not.toThrow();
+    expect(game._world.rods.A[0].target).toBeNull();
+
+    // Start match and enter playing phase
+    game.onAction(pA1.userId, { type: 'start' });
+    vi.advanceTimersByTime(3000);
+    expect((game.view(pA1.userId) as FoosballView).phase).toBe('playing');
+
+    // 3. Bad rod index throws BAD_ACTION
+    for (const badRod of [-1, 4, 1.5, '0']) {
+      try {
+        game.onAction(pA1.userId, { type: 'aim', rod: badRod, y: 5 });
+        expect.fail(`Should throw BAD_ACTION for rod: ${badRod}`);
+      } catch (e: any) {
+        expect(e.code).toBe('BAD_ACTION');
+      }
+    }
+
+    // 4. Bad y throws BAD_ACTION
+    for (const badY of [NaN, Infinity, -Infinity, '10']) {
+      try {
+        game.onAction(pA1.userId, { type: 'aim', rod: 0, y: badY });
+        expect.fail(`Should throw BAD_ACTION for y: ${badY}`);
+      } catch (e: any) {
+        expect(e.code).toBe('BAD_ACTION');
+      }
+    }
+
+    // 5. Aim for rod you do not own throws NOT_YOUR_ROD (pA1 owns [0, 1], rod 2 is pA2's)
+    try {
+      game.onAction(pA1.userId, { type: 'aim', rod: 2, y: 5 });
+      expect.fail('Should throw NOT_YOUR_ROD');
+    } catch (e: any) {
+      expect(e.code).toBe('NOT_YOUR_ROD');
+    }
+
+    // 6. Valid aim sets target clamped and clears dir to 0
+    game._world.rods.A[0].dir = 1;
+    game.onAction(pA1.userId, { type: 'aim', rod: 0, y: 10 });
+    expect(game._world.rods.A[0].target).toBe(10);
+    expect(game._world.rods.A[0].dir).toBe(0);
+
+    // 7. Move cancels aim (sets target to null)
+    game.onAction(pA1.userId, { type: 'move', rod: 0, dir: -1 });
+    expect(game._world.rods.A[0].target).toBeNull();
+    expect(game._world.rods.A[0].dir).toBe(-1);
+
+    game.dispose();
+  });
+
+  it('kick action: handles optional strength, validates finite numbers, and clamps', () => {
+    const game = createFoosballGame(ctx);
+
+    game.onAction(pA1.userId, { type: 'sit', side: 'A' });
+    game.onAction(pB1.userId, { type: 'sit', side: 'B' });
+    game.onAction(pA1.userId, { type: 'start' });
+    vi.advanceTimersByTime(3000);
+
+    // 1. Non-finite strength throws BAD_ACTION
+    for (const badStrength of [NaN, Infinity, -Infinity, 'hard']) {
+      try {
+        game.onAction(pA1.userId, { type: 'kick', rod: 0, strength: badStrength });
+        expect.fail(`Should throw BAD_ACTION for strength: ${badStrength}`);
+      } catch (e: any) {
+        expect(e.code).toBe('BAD_ACTION');
+      }
+    }
+
+    // 2. Default strength (omitted) defaults to 1
+    game.onAction(pA1.userId, { type: 'kick', rod: 0 });
+    expect(game._world.rods.A[0].kickPower).toBe(1);
+
+    // 3. Valid strength passes to triggerKick and clamps
+    game._world.rods.A[1].kickCooldown = 0;
+    game.onAction(pA1.userId, { type: 'kick', rod: 1, strength: 0 }); // clamped to KICK_MIN_STRENGTH = 0.25
+    expect(game._world.rods.A[1].kickPower).toBe(0.25);
+
+    game._world.rods.A[2].kickCooldown = 0;
+    game.onAction(pA1.userId, { type: 'kick', rod: 2, strength: 5 }); // clamped to 1
+    expect(game._world.rods.A[2].kickPower).toBe(1);
+
+    game._world.rods.A[3].kickCooldown = 0;
+    game.onAction(pA1.userId, { type: 'kick', rod: 3, strength: 0.75 });
+    expect(game._world.rods.A[3].kickPower).toBeCloseTo(0.75);
+
+    game.dispose();
+  });
+
+  it('goal resets every rod dir to 0 and target to null', () => {
+    const game = createFoosballGame(ctx);
+
+    game.onAction(pA1.userId, { type: 'sit', side: 'A' });
+    game.onAction(pB1.userId, { type: 'sit', side: 'B' });
+    game.onAction(pA1.userId, { type: 'start' });
+    vi.advanceTimersByTime(3000);
+
+    // Set aim target and dir on rods
+    game.onAction(pA1.userId, { type: 'aim', rod: 0, y: 10 });
+    game.onAction(pA1.userId, { type: 'move', rod: 1, dir: 1 });
+    expect(game._world.rods.A[0].target).toBe(10);
+    expect(game._world.rods.A[1].dir).toBe(1);
+
+    // Ball scores a goal for A (ball x > 120, y in opening)
+    game._world.ball = { x: 119, y: 32, vx: 50, vy: 0 };
+    vi.advanceTimersByTime(35);
+
+    const view = game.view(pA1.userId) as FoosballView;
+    expect(view.phase).toBe('goal');
+    for (const r of game._world.rods.A) {
+      expect(r.dir).toBe(0);
+      expect(r.target).toBeNull();
+    }
+    for (const r of game._world.rods.B) {
+      expect(r.dir).toBe(0);
+      expect(r.target).toBeNull();
+    }
+
+    game.dispose();
+  });
 });

@@ -9,9 +9,11 @@ import {
   GOAL_Y_MIN,
   KICK_BALL_SPEED,
   KICK_COOLDOWN,
+  KICK_MIN_STRENGTH,
   MAN_R,
   manYs,
   MAX_BALL_SPEED,
+  ROD_AIM_SPEED,
   ROD_TRAVEL_LIMITS,
   ROD_X,
   step,
@@ -147,5 +149,77 @@ describe('Foosball Physics', () => {
     step(world, 0.01);
     const speed = Math.hypot(world.ball.vx, world.ball.vy);
     expect(speed).toBeLessThanOrEqual(MAX_BALL_SPEED + 1e-4);
+  });
+
+  it('aim moves the rod toward target at <= ROD_AIM_SPEED, reaches target without overshooting, and clamps to travel limit', () => {
+    const world = createInitialWorld();
+    world.rods.A[0].y = 0;
+    world.rods.A[0].target = 10;
+
+    // dt = 0.05s -> max movement is ROD_AIM_SPEED * 0.05 = 140 * 0.05 = 7
+    step(world, 0.05);
+    expect(world.rods.A[0].y).toBeCloseTo(7, 2);
+    expect(world.rods.A[0].vel).toBeCloseTo(ROD_AIM_SPEED, 1);
+
+    // Another dt = 0.05s -> remaining distance to 10 is 3, max step is 7.
+    // It should reach 10 exactly and not overshoot to 14.
+    step(world, 0.05);
+    expect(world.rods.A[0].y).toBe(10);
+    // After reaching target, next step should stay at target and vel becomes 0
+    step(world, 0.05);
+    expect(world.rods.A[0].y).toBe(10);
+    expect(world.rods.A[0].vel).toBe(0);
+
+    // Target exceeding positive travel limit (limit for rod 0 is 16)
+    world.rods.A[0].target = 50;
+    step(world, 0.5);
+    expect(world.rods.A[0].y).toBe(ROD_TRAVEL_LIMITS[0]);
+
+    // Target exceeding negative travel limit
+    world.rods.A[0].target = -50;
+    step(world, 0.5);
+    expect(world.rods.A[0].y).toBe(-ROD_TRAVEL_LIMITS[0]);
+  });
+
+  it('kick strength: weak kick gives lower ball speed than full kick and strength is clamped', () => {
+    const rodX = ROD_X.A[2];
+    const manY = manYs(2, 0)[2];
+
+    // 1. Full kick (strength = 1)
+    const worldFull = createInitialWorld();
+    worldFull.ball = { x: rodX + 3, y: manY, vx: 0, vy: 0 };
+    expect(triggerKick(worldFull, 'A', 2, 1)).toBe(true);
+    expect(worldFull.rods.A[2].kickPower).toBe(1);
+    step(worldFull, 0.05);
+    const speedFull = Math.hypot(worldFull.ball.vx, worldFull.ball.vy);
+
+    // 2. Weak kick (strength = KICK_MIN_STRENGTH = 0.25)
+    const worldWeak = createInitialWorld();
+    worldWeak.ball = { x: rodX + 3, y: manY, vx: 0, vy: 0 };
+    expect(triggerKick(worldWeak, 'A', 2, KICK_MIN_STRENGTH)).toBe(true);
+    expect(worldWeak.rods.A[2].kickPower).toBe(KICK_MIN_STRENGTH);
+    step(worldWeak, 0.05);
+    const speedWeak = Math.hypot(worldWeak.ball.vx, worldWeak.ball.vy);
+
+    expect(speedWeak).toBeLessThan(speedFull);
+    expect(speedFull).toBeCloseTo(KICK_BALL_SPEED, -1);
+    expect(speedWeak).toBeCloseTo(KICK_BALL_SPEED * (0.4 + 0.6 * KICK_MIN_STRENGTH), -1);
+
+    // 3. Clamping test: strength = 0 clamps to KICK_MIN_STRENGTH, strength = 5 clamps to 1
+    const worldClamp = createInitialWorld();
+    triggerKick(worldClamp, 'A', 0, 0);
+    expect(worldClamp.rods.A[0].kickPower).toBe(KICK_MIN_STRENGTH);
+
+    worldClamp.rods.A[1].kickCooldown = 0;
+    triggerKick(worldClamp, 'A', 1, 5);
+    expect(worldClamp.rods.A[1].kickPower).toBe(1);
+  });
+
+  it('move input with dir clears target', () => {
+    const world = createInitialWorld();
+    world.rods.A[1].target = 10;
+    step(world, 0.01, { moves: { A: { 1: 1 } } });
+    expect(world.rods.A[1].target).toBeNull();
+    expect(world.rods.A[1].dir).toBe(1);
   });
 });

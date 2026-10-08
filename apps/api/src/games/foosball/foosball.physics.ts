@@ -20,6 +20,8 @@ export const ROD_X = {
 export const MEN_COUNT = [1, 2, 5, 3] as const;
 
 export const ROD_SPEED = 70; // units/s
+export const ROD_AIM_SPEED = 140; // units/s max speed when following a target
+export const KICK_MIN_STRENGTH = 0.25;
 export const KICK_DURATION = 0.18; // s
 export const KICK_COOLDOWN = 0.35; // s
 export const KICK_REACH = 5; // max units reached forward during kick
@@ -67,6 +69,9 @@ export interface RodState {
   kick: number; // 0..1
   kickTimer: number; // remaining duration in kick animation
   kickCooldown: number; // remaining cooldown
+  target: number | null;
+  kickPower: number;
+  vel: number;
 }
 
 export interface BallState {
@@ -115,17 +120,36 @@ export function createInitialWorld(): PhysicsWorld {
       vy: 0,
     },
     rods: {
-      A: [0, 1, 2, 3].map(() => ({ y: 0, dir: 0, kick: 0, kickTimer: 0, kickCooldown: 0 })),
-      B: [0, 1, 2, 3].map(() => ({ y: 0, dir: 0, kick: 0, kickTimer: 0, kickCooldown: 0 })),
+      A: [0, 1, 2, 3].map(() => ({
+        y: 0,
+        dir: 0,
+        kick: 0,
+        kickTimer: 0,
+        kickCooldown: 0,
+        target: null,
+        kickPower: 1,
+        vel: 0,
+      })),
+      B: [0, 1, 2, 3].map(() => ({
+        y: 0,
+        dir: 0,
+        kick: 0,
+        kickTimer: 0,
+        kickCooldown: 0,
+        target: null,
+        kickPower: 1,
+        vel: 0,
+      })),
     },
     stuckTimer: 0,
   };
 }
 
-export function triggerKick(world: PhysicsWorld, side: 'A' | 'B', rod: number): boolean {
+export function triggerKick(world: PhysicsWorld, side: 'A' | 'B', rod: number, strength = 1): boolean {
   const r = world.rods[side]?.[rod];
   if (!r) return false;
   if (r.kickCooldown > 0) return false;
+  r.kickPower = Math.max(KICK_MIN_STRENGTH, Math.min(1, strength));
   r.kickTimer = KICK_DURATION;
   r.kickCooldown = KICK_COOLDOWN;
   return true;
@@ -139,13 +163,19 @@ export function step(world: PhysicsWorld, dt: number, inputs?: PhysicsInputs): S
   if (inputs?.moves?.A) {
     for (const [rStr, dir] of Object.entries(inputs.moves.A)) {
       const r = Number(rStr);
-      if (world.rods.A[r] && dir !== undefined) world.rods.A[r].dir = dir;
+      if (world.rods.A[r] && dir !== undefined) {
+        world.rods.A[r].dir = dir;
+        world.rods.A[r].target = null;
+      }
     }
   }
   if (inputs?.moves?.B) {
     for (const [rStr, dir] of Object.entries(inputs.moves.B)) {
       const r = Number(rStr);
-      if (world.rods.B[r] && dir !== undefined) world.rods.B[r].dir = dir;
+      if (world.rods.B[r] && dir !== undefined) {
+        world.rods.B[r].dir = dir;
+        world.rods.B[r].target = null;
+      }
     }
   }
   if (inputs?.kicks?.A) {
@@ -171,7 +201,22 @@ export function step(world: PhysicsWorld, dt: number, inputs?: PhysicsInputs): S
       for (let r = 0; r < 4; r++) {
         const rod = world.rods[side][r];
         // Move rod
-        rod.y = clampRodOffset(r, rod.y + rod.dir * ROD_SPEED * subDt);
+        const oldY = rod.y;
+        let newY = oldY;
+        if (rod.target !== null) {
+          const diff = rod.target - oldY;
+          const maxStep = ROD_AIM_SPEED * subDt;
+          if (Math.abs(diff) <= maxStep) {
+            newY = rod.target;
+          } else {
+            newY = oldY + Math.sign(diff) * maxStep;
+          }
+          newY = clampRodOffset(r, newY);
+        } else {
+          newY = clampRodOffset(r, oldY + rod.dir * ROD_SPEED * subDt);
+        }
+        rod.y = newY;
+        rod.vel = subDt > 0 ? (newY - oldY) / subDt : 0;
 
         // Update kick animation
         if (rod.kickTimer > 0) {
@@ -277,12 +322,13 @@ export function step(world: PhysicsWorld, dt: number, inputs?: PhysicsInputs): S
               // Kick impulse: toward opponent + deflection from contact offset
               const offsetFactor = Math.max(-1, Math.min(1, (world.ball.y - manY) / collisionDist));
               const deflectionAngle = offsetFactor * (Math.PI / 4);
-              world.ball.vx = dirX * KICK_BALL_SPEED * Math.cos(deflectionAngle);
-              world.ball.vy = KICK_BALL_SPEED * Math.sin(deflectionAngle);
+              const kickSpeed = KICK_BALL_SPEED * (0.4 + 0.6 * rod.kickPower);
+              world.ball.vx = dirX * kickSpeed * Math.cos(deflectionAngle);
+              world.ball.vy = kickSpeed * Math.sin(deflectionAngle);
               events.push({ type: 'bounce' });
             } else {
               // Plain bounce
-              const rodVy = rod.dir * ROD_SPEED;
+              const rodVy = rod.vel;
               const relVx = world.ball.vx;
               const relVy = world.ball.vy - rodVy;
               const vn = relVx * nx + relVy * ny;
