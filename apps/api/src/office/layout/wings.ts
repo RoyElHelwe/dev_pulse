@@ -227,11 +227,11 @@ export function addWing(
         floor: 'terrazzo',
       });
 
-      extraSpanAlongShared = { start: 0, end: 0 };
-      wingOpenSpanAlongShared = { start: 1, end: origW - 1 };
-      wingOpenAisle = { start: 1, end: origW - 1 };
+      extraSpanAlongShared = { start: 0, end: 12 };
+      wingOpenSpanAlongShared = { start: 12, end: origW - 1 };
+      wingOpenAisle = { start: 12, end: origW - 1 };
 
-      b.chillRoom(0, origH + 4, origW, 13);
+      b.chillRoom(0, origH, origW, depth);
       wingWalls.push(
         { x1: 0, y1: origH, x2: 0, y2: origH + depth, kind: 'solid' },
         { x1: origW, y1: origH, x2: origW, y2: origH + depth, kind: 'solid' },

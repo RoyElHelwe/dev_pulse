@@ -1,4 +1,5 @@
 import { itemBounds } from '../layout/derive';
+import { isWallMounted, snapToWall } from '../layout/mount';
 import type { Furniture, FurnitureKind, OfficeLayout } from '../layout/types';
 import { catalogEntry } from './catalog';
 import { placementProblem, type PlacementProblem } from './rules';
@@ -117,7 +118,11 @@ export class LayoutEditor {
   place(x: number, y: number): PlacementProblem | null {
     if (!this.placing) return null;
     const { kind, w, h, color } = this.placing;
-    const item: Furniture = { id: newId(kind), kind, x: snap(x), y: snap(y), w, h, ...(color !== undefined && { color }) };
+    let item: Furniture = { id: newId(kind), kind, x: snap(x), y: snap(y), w, h, ...(color !== undefined && { color }) };
+    if (isWallMounted(item.kind)) {
+      const snapped = snapToWall(item, this.layout.walls, 4);
+      if (snapped) item = snapped;
+    }
     const problem = this.problemOf(item);
     if (problem) return problem;
     this.record();
@@ -141,13 +146,30 @@ export class LayoutEditor {
     const sy = snap(dy);
     for (const [id, start] of this.dragStart) {
       const item = this.item(id);
-      if (item) Object.assign(item, { x: start.x + sx, y: start.y + sy });
+      if (item) {
+        let next: Furniture = { ...item, x: start.x + sx, y: start.y + sy };
+        if (isWallMounted(next.kind)) {
+          const snapped = snapToWall(next, this.layout.walls, 4);
+          if (snapped) next = snapped;
+        }
+        Object.assign(item, { x: next.x, y: next.y, rotation: next.rotation });
+      }
     }
     this.publish();
   }
 
   /** Drops the selection; if any piece doesn't fit, everything goes back. */
   endDrag(): PlacementProblem | null {
+    for (const item of this.selected()) {
+      if (isWallMounted(item.kind)) {
+        const snapped = snapToWall(item, this.layout.walls, 4);
+        if (snapped) {
+          item.x = snapped.x;
+          item.y = snapped.y;
+          item.rotation = 0;
+        }
+      }
+    }
     const problem = this.firstProblem(this.selected());
     const before = this.past[this.past.length - 1];
     const moved = before && JSON.stringify(before.furniture) !== JSON.stringify(this.furniture);
@@ -166,12 +188,23 @@ export class LayoutEditor {
   }
 
   nudge(dx: number, dy: number): PlacementProblem | null {
-    return this.changeSelected((f) => ({ x: snap(f.x + dx), y: snap(f.y + dy) }));
+    return this.changeSelected((f) => {
+      let next: Furniture = { ...f, x: snap(f.x + dx), y: snap(f.y + dy) };
+      if (isWallMounted(next.kind)) {
+        const snapped = snapToWall(next, this.layout.walls, 4);
+        if (snapped) next = snapped;
+      }
+      return { x: next.x, y: next.y, rotation: next.rotation };
+    });
   }
 
   /** Each selected piece turns in place. */
   rotate(clockwise = true): PlacementProblem | null {
-    return this.changeSelected((f) => ({ rotation: (((f.rotation ?? 0) + (clockwise ? 90 : 270)) % 360) as Furniture['rotation'] }));
+    if (this.selected().every((f) => isWallMounted(f.kind))) return null;
+    return this.changeSelected((f) => {
+      if (isWallMounted(f.kind)) return {};
+      return { rotation: (((f.rotation ?? 0) + (clockwise ? 90 : 270)) % 360) as Furniture['rotation'] };
+    });
   }
 
   setColor(id: string, color: number) {

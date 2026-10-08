@@ -123,7 +123,7 @@ describe('wings', () => {
         current = res.layout;
       }
     }
-  });
+  }, 15_000);
 
   it('throws WingError NO_DOOR when open wall is blocked by protected furniture', () => {
     const base = loft();

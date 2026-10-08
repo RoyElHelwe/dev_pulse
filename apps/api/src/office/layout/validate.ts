@@ -1,8 +1,9 @@
 import { itemBounds, numberedDesks, overlaps, type Rect, seatPoint, SOLID, TILE, toPixels, wallRect } from './geometry';
+import { isWallMounted, mountWall } from './mount';
 import type { OfficeLayout } from './types';
 
 export interface LayoutProblem {
-  code: 'OUTSIDE' | 'ON_WALL' | 'OVERLAP' | 'SPAWN_BLOCKED' | 'DESK_UNREACHABLE' | 'ROOM_UNREACHABLE';
+  code: 'OUTSIDE' | 'ON_WALL' | 'OVERLAP' | 'SPAWN_BLOCKED' | 'DESK_UNREACHABLE' | 'ROOM_UNREACHABLE' | 'NOT_ON_WALL';
   message: string;
   /** Furniture to highlight in the editor. */
   itemIds: string[];
@@ -38,10 +39,32 @@ export function validateLayout(layout: OfficeLayout): LayoutProblem[] {
     }
   }
 
+  for (const item of layout.furniture) {
+    if (isWallMounted(item.kind) && mountWall(item, layout.walls) === null) {
+      problems.push({
+        code: 'NOT_ON_WALL',
+        message: 'Boards, screens and the Lego wall must hang flush on a tall wall.',
+        itemIds: [item.id],
+      });
+    }
+  }
+
   for (let i = 0; i < solids.length; i++) {
     for (let j = i + 1; j < solids.length; j++) {
       if (overlaps(itemBounds(solids[i]), itemBounds(solids[j]), OVERLAP_TOLERANCE)) {
         problems.push({ code: 'OVERLAP', message: 'Two pieces of furniture overlap.', itemIds: [solids[i].id, solids[j].id] });
+      }
+    }
+  }
+
+  const wallMounted = layout.furniture.filter((f) => isWallMounted(f.kind));
+  for (let i = 0; i < wallMounted.length; i++) {
+    for (let j = i + 1; j < wallMounted.length; j++) {
+      const a = wallMounted[i];
+      const b = wallMounted[j];
+      if (SOLID[a.kind] && SOLID[b.kind]) continue;
+      if (overlaps(itemBounds(a), itemBounds(b), OVERLAP_TOLERANCE)) {
+        problems.push({ code: 'OVERLAP', message: 'Two pieces of furniture overlap.', itemIds: [a.id, b.id] });
       }
     }
   }

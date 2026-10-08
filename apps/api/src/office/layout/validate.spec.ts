@@ -46,19 +46,46 @@ describe('validateLayout', () => {
 
   it('allows a board overlapping a wall but rejects two overlapping boards', () => {
     const base = { ...studio(), furniture: studio().furniture.filter((f) => f.kind !== 'board') };
-    const board1: Furniture = { id: 'board-1', kind: 'board', x: 32, y: 12, w: 3, h: 0.5 };
+    const board1: Furniture = { id: 'board-1', kind: 'board', x: 32, y: 12.40625, w: 3, h: 0.5 };
     expect(codes(withFurniture([board1], base))).toEqual([]);
 
-    const board2: Furniture = { id: 'board-2', kind: 'board', x: 33, y: 12, w: 3, h: 0.5 };
+    const board2: Furniture = { id: 'board-2', kind: 'board', x: 33, y: 12.40625, w: 3, h: 0.5 };
     expect(codes(withFurniture([board1, board2], base))).toContain('OVERLAP');
   });
 
   it('allows a legoBoard overlapping a wall but rejects two overlapping legoBoards', () => {
-    const base = studio();
-    const lego1: Furniture = { id: 'lego-1', kind: 'legoBoard', x: 32, y: 12, w: 4, h: 0.5 };
+    const base = { ...studio(), furniture: studio().furniture.filter((f) => f.kind !== 'board') };
+    const lego1: Furniture = { id: 'lego-1', kind: 'legoBoard', x: 32, y: 12.40625, w: 3, h: 0.5 };
     expect(codes(withFurniture([lego1], base))).toEqual([]);
 
-    const lego2: Furniture = { id: 'lego-2', kind: 'legoBoard', x: 33, y: 12, w: 4, h: 0.5 };
+    const lego2: Furniture = { id: 'lego-2', kind: 'legoBoard', x: 33, y: 12.40625, w: 3, h: 0.5 };
     expect(codes(withFurniture([lego1, lego2], base))).toContain('OVERLAP');
+  });
+
+  it('rejects a board in the middle of a room', () => {
+    const board: Furniture = { id: 'b-mid', kind: 'board', x: 20, y: 20, w: 3, h: 0.5 };
+    expect(codes(withFurniture([board]))).toContain('NOT_ON_WALL');
+  });
+
+  it('rejects a legoBoard with rotation 90', () => {
+    const lego: Furniture = { id: 'lego-rot', kind: 'legoBoard', x: 32, y: 12.40625, w: 3, h: 0.5, rotation: 90 };
+    expect(codes(withFurniture([lego]))).toContain('NOT_ON_WALL');
+  });
+
+  it('rejects a board straddling a door gap', () => {
+    // Wall gap at y=12 between x 25 and 29 in studio
+    const board: Furniture = { id: 'b-gap', kind: 'board', x: 27, y: 12.40625, w: 3, h: 0.5 };
+    expect(codes(withFurniture([board]))).toContain('NOT_ON_WALL');
+  });
+
+  it('allows a tv on a wall', () => {
+    const tv: Furniture = { id: 'tv-test', kind: 'tv', x: 30, y: 0.29625, w: 2, h: 0.28 };
+    expect(codes(withFurniture([tv]))).toEqual([]);
+  });
+
+  it('rejects two overlapping tvs', () => {
+    const tv1: Furniture = { id: 'tv-1', kind: 'tv', x: 30, y: 0.29625, w: 2, h: 0.28 };
+    const tv2: Furniture = { id: 'tv-2', kind: 'tv', x: 31, y: 0.29625, w: 2, h: 0.28 };
+    expect(codes(withFurniture([tv1, tv2]))).toContain('OVERLAP');
   });
 });

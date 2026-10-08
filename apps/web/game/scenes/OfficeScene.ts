@@ -18,9 +18,18 @@ import { roomFinder } from '../systems/rooms';
 import { drawFloor } from '../render/floors';
 import { FURNITURE } from '../render/furniture';
 import { legoArt } from '../render/legoArt';
-import { ensureFurnitureTexture, ensureShadowTexture, setDeskOwners, setDeskPapers, textureScale } from '../render/sprites';
+import {
+  ensureFurnitureTexture,
+  ensureShadowTexture,
+  furnitureCenter,
+  setDeskOwners,
+  setDeskPapers,
+  textureScale,
+  wallArtSize,
+} from '../render/sprites';
 import { WallFaces } from '../render/wallFaces';
 import { wallCollider } from '../render/walls';
+import { faceBase, isWallMounted, mountWall } from '../layout/mount';
 
 /** Someone else in the office, as the network describes them. */
 export interface PlayerState {
@@ -117,6 +126,7 @@ export class OfficeScene extends Phaser.Scene {
   private desks: DeskOwner[] = [];
   private taskCounts: ReadonlyMap<string, number> = new Map();
   private sprites = new Map<string, { image: Phaser.GameObjects.Image; shadow?: Phaser.GameObjects.Image; key: string }>();
+  private wallMounted: Array<{ image: Phaser.GameObjects.Image; xa: number; xb: number; basePx: number }> = [];
   private editMode: EditMode | null = null;
   private proximity!: Proximity;
   private roomAt!: (x: number, y: number) => string | null;
@@ -146,6 +156,7 @@ export class OfficeScene extends Phaser.Scene {
     this.remotes = new Map();
     this.desks = [];
     this.sprites = new Map();
+    this.wallMounted = [];
     this.editMode = null;
     this.remoteZones = new Map();
     this.badgesDirty = true;
@@ -266,6 +277,7 @@ export class OfficeScene extends Phaser.Scene {
     this.events.once('shutdown', () => {
       unsubLego();
       this.wallFaces.destroy();
+      this.wallMounted = [];
       this.editMode?.destroy();
       this.editMode = null;
       this.proximity.clear();
@@ -363,6 +375,9 @@ export class OfficeScene extends Phaser.Scene {
     this.crowd.push(this.player);
     for (const remote of this.remotes.values()) this.crowd.push(remote.avatar);
     this.wallFaces.update(delta, this.crowd);
+    for (const m of this.wallMounted) {
+      m.image.setAlpha(this.wallFaces.alphaFor(m.xa, m.xb, m.basePx));
+    }
     this.maybeSend(time, body.velocity.x !== 0 || body.velocity.y !== 0);
     this.updateZone();
     this.interactions.update(this.player.x, this.player.y, !this.editMode);
@@ -456,6 +471,8 @@ export class OfficeScene extends Phaser.Scene {
       const sprite = this.sprites.get(item.id);
       if (!sprite) continue;
       const key = ensureFurnitureTexture(this, item, scale);
+      const pos = furnitureCenter(item);
+      sprite.image.setPosition(pos.x, pos.y);
       if (key === sprite.key) continue;
       const old = sprite.key;
       sprite.image.setTexture(key);
@@ -690,8 +707,9 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   private addFurniture(item: Furniture, scale: number) {
+    const isWall = isWallMounted(item.kind);
     const b = pixels(itemBounds(item));
-    const shadow = FURNITURE[item.kind].solid
+    const shadow = FURNITURE[item.kind].solid && !isWall
       ? this.add
           .image(b.x + 1, b.y + 4, ensureShadowTexture(this, item, scale))
           .setOrigin(0)
@@ -699,17 +717,33 @@ export class OfficeScene extends Phaser.Scene {
           .setDepth(DEPTH.shadow)
       : undefined;
     const key = ensureFurnitureTexture(this, item, scale);
+    const pos = furnitureCenter(item);
     const image = this.add
-      .image(item.x * TILE, item.y * TILE, key)
+      .image(pos.x, pos.y, key)
       .setScale(1 / scale)
-      .setRotation(Phaser.Math.DegToRad(item.rotation ?? 0))
+      .setRotation(isWall ? 0 : Phaser.Math.DegToRad(item.rotation ?? 0))
       .setDepth(this.furnitureDepth(item))
       .setData('furnitureId', item.id);
     this.sprites.set(item.id, { image, shadow, key });
+    if (isWall) {
+      const art = wallArtSize(item);
+      const wall = mountWall(item, this.opts.layout.walls);
+      const base = wall ? faceBase(wall) : null;
+      const basePx = (base ?? (item.y - item.h / 2)) * TILE;
+      const xa = item.x * TILE - art.w / 2;
+      const xb = item.x * TILE + art.w / 2;
+      this.wallMounted.push({ image, xa, xb, basePx });
+    }
   }
 
   /** Rugs on the floor, the rest sorted by their bottom edge (things lower on screen are in front). */
   private furnitureDepth(item: Furniture) {
+    if (isWallMounted(item.kind)) {
+      const wall = mountWall(item, this.opts.layout.walls);
+      const base = wall ? faceBase(wall) : null;
+      const basePx = (base ?? (item.y - item.h / 2)) * TILE;
+      return DEPTH.sorted + basePx / 100000 + 1e-7;
+    }
     const spec = FURNITURE[item.kind];
     const b = pixels(itemBounds(item));
     return spec.layer === 'floor' ? DEPTH.rug : DEPTH.sorted + (b.y + b.h) / 100000;
@@ -769,6 +803,9 @@ export class OfficeScene extends Phaser.Scene {
       scale: Math.min(3, this.opts.dpr * 1.5, Math.sqrt(16e6 / (worldW * worldH))),
       depthOf: (base) => DEPTH.sorted + base / 100000,
       labels: deriveLabels(layout),
+      avoid: layout.furniture
+        .filter((f) => isWallMounted(f.kind))
+        .map((f) => ({ x0: f.x - wallArtSize(f).w / TILE / 2, x1: f.x + wallArtSize(f).w / TILE / 2 })),
       fontFamily: this.opts.fontFamily,
       resolution: this.opts.dpr * 2,
     });

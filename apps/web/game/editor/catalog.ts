@@ -22,7 +22,7 @@ export const CATALOG: CatalogItem[] = [
   { kind: 'bookshelf', label: 'Bookshelf', w: 4, h: 0.8, group: 'Work' },
   { kind: 'board', label: 'Kanban board', w: 3, h: 0.5, group: 'Work' },
   { kind: 'meetingTable', label: 'Meeting table', w: 5, h: 2.4, group: 'Meetings' },
-  { kind: 'tv', label: 'Screen', w: 3, h: 0.28, group: 'Meetings' },
+  { kind: 'tv', label: 'Screen', w: 3, h: 0.3, group: 'Meetings' },
   { kind: 'sofa', label: 'Sofa', w: 4.5, h: 1.5, group: 'Lounge', colors: FABRIC },
   { kind: 'armchair', label: 'Armchair', w: 1.5, h: 1.4, group: 'Lounge', colors: FABRIC },
   { kind: 'coffeeTable', label: 'Coffee table', w: 2.4, h: 1.2, group: 'Lounge' },
@@ -37,7 +37,7 @@ export const CATALOG: CatalogItem[] = [
   { kind: 'plant', label: 'Big plant', w: 1.3, h: 1.3, group: 'Plants' },
   { kind: 'foosball', label: 'Foosball table', w: 3, h: 1.6, group: 'Games' },
   { kind: 'cardTable', label: 'Card table', w: 2.2, h: 2.2, group: 'Games' },
-  { kind: 'legoBoard', label: 'Lego wall', w: 4, h: 0.5, group: 'Games' },
+  { kind: 'legoBoard', label: 'Lego wall', w: 3, h: 0.5, group: 'Games' },
 ];
 
 export function catalogEntry(kind: FurnitureKind) {

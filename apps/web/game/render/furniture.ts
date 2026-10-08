@@ -87,29 +87,66 @@ const meetingTable: DrawFn = (g, w, h, random) => {
 };
 
 const tv: DrawFn = (g, w, h) => {
+  // Dark bezel
   rr(g, -w / 2, -h / 2, w, h, 2, 0x111417);
-  g.fillStyle(0x3b4b58, 1);
-  g.fillRect(-w / 2 + 3, -h / 2 + 2, w - 6, 1.5);
+  // Slightly lighter screen
+  const sw = w - 4;
+  const sh = h - 4;
+  const sx = -w / 2 + 2;
+  const sy = -h / 2 + 2;
+  rr(g, sx, sy, sw, sh, 1, 0x1e232a);
+  // Soft diagonal gloss
+  g.fillStyle(0xffffff, 0.06);
+  g.fillTriangle(sx, sy, sx + sw * 0.65, sy, sx, sy + sh * 0.65);
+  // Tiny LED
+  circle(g, w / 2 - 5, h / 2 - 2, 0.8, 0x22c55e, 0.85);
 };
 
 const board: DrawFn = (g, w, h, random) => {
+  // Metal frame
   rr(g, -w / 2, -h / 2, w, h, 2, METAL_DARK);
-  rr(g, -w / 2 + 1, -h / 2 + 1, w - 2, h - 2, 1, 0xffffff);
-  g.fillStyle(0xd0d5dd, 1);
-  g.fillRect(-w / 2 + 1, -h / 2 + 1, w - 2, 2.5);
 
-  const colW = (w - 2) / 3;
+  const frameW = 2;
+  const trayH = 3;
+  const bw = w - frameW * 2;
+  const bh = h - frameW * 2 - trayH;
+  const bx = -w / 2 + frameW;
+  const by = -h / 2 + frameW;
+
+  // Whiteboard surface
+  rr(g, bx, by, bw, bh, 1, 0xffffff);
+
+  // Marker tray strip at the bottom
+  const trayY = by + bh;
+  rr(g, -w / 2 + 1, trayY, w - 2, trayH, 1, 0x94a3b8);
+  g.fillStyle(0xd0d5dd, 1);
+  g.fillRect(-w / 2 + 2, trayY, w - 4, 1);
+  rr(g, -w / 2 + 10, trayY + 0.5, 6, 1.5, 0.5, 0xef4444);
+  rr(g, -w / 2 + 18, trayY + 0.5, 6, 1.5, 0.5, 0x2563eb);
+  rr(g, -w / 2 + 26, trayY + 0.5, 5, 1.5, 0.5, 0x1e293b);
+
+  // 3 kanban columns
+  const colW = bw / 3;
   g.fillStyle(0xe4e7ec, 1);
-  g.fillRect(-w / 2 + 1 + colW, -h / 2 + 3.5, 1, h - 4.5);
-  g.fillRect(-w / 2 + 1 + colW * 2, -h / 2 + 3.5, 1, h - 4.5);
+  g.fillRect(bx + colW, by + 1, 1, bh - 2);
+  g.fillRect(bx + colW * 2, by + 1, 1, bh - 2);
+
+  const cardW = Math.min(10, colW - 6);
+  const cardH = 7;
+  const maxNotes = Math.max(1, Math.floor((bh - 12) / (cardH + 3)));
 
   for (let col = 0; col < 3; col++) {
-    const colLeft = -w / 2 + 1 + col * colW;
-    const count = 1 + Math.floor(random() * 3);
+    const colLeft = bx + col * colW;
+    // Header strip
+    g.fillStyle(0xd0d5dd, 1);
+    g.fillRect(colLeft + 2, by + 2, colW - 4, 2.5);
+
+    // Sticky notes scaled to height
+    const count = 1 + Math.floor(random() * Math.min(3, maxNotes));
     for (let i = 0; i < count; i++) {
-      const cx = colLeft + 3 + i * 8;
-      const cy = -h / 2 + 5 + (i % 2) * 2;
-      rr(g, cx, cy, 6, 4, 1, pick(random, CARD_COLORS));
+      const cx = colLeft + 3 + (i % 2) * (colW - cardW - 6);
+      const cy = by + 7 + i * (cardH + 3);
+      rr(g, cx, cy, cardW, cardH, 1, pick(random, CARD_COLORS));
     }
   }
 };
@@ -404,53 +441,61 @@ const legoBoard: DrawFn = (g, w, h) => {
 
   // Stud grid across the baseplate
   const studSpacing = 4;
-  const startX = bx + 2.5;
-  const endX = bx + bw - 2.5;
-  const rows = [-3, 0, 3];
-  for (let sx = startX; sx <= endX; sx += studSpacing) {
-    for (const sy of rows) {
-      circle(g, sx, sy, 0.8, 0x22c55e, 0.5);
+  const cols = Math.floor((bw - 4) / studSpacing);
+  const rows = Math.floor((bh - 4) / studSpacing);
+  const ox = bx + (bw - cols * studSpacing) / 2;
+  const oy = by + (bh - rows * studSpacing) / 2;
+  for (let c = 0; c <= cols; c++) {
+    for (let r = 0; r <= rows; r++) {
+      circle(g, ox + c * studSpacing, oy + r * studSpacing, 0.8, 0x22c55e, 0.5);
     }
   }
 
-  // Tiny Lego pixel art builds on the board:
-  // 1. Tiny smiley face (yellow bricks, black eyes and smile) around x = -28
-  const smX = -28;
-  rr(g, smX - 4, -4.5, 8, 9, 1.5, 0xfacc15);
+  // Tidy decorative bricks positioned by fractions of the baseplate
+  const sx = w / 128;
+  const sy = h / ((w * 2) / 3);
+
+  // 1. Smiley face (yellow bricks, black eyes and smile)
+  const smX = bx + bw * 0.28;
+  const smY = by + bh * 0.5;
+  rr(g, smX - 4 * sx, smY - 4.5 * sy, 8 * sx, 9 * sy, 1.5, 0xfacc15);
   g.fillStyle(0xffffff, 0.35);
-  g.fillRect(smX - 4, -4.5, 8, 1);
-  circle(g, smX - 2, -2, 0.8, 0x1e293b);
-  circle(g, smX + 2, -2, 0.8, 0x1e293b);
+  g.fillRect(smX - 4 * sx, smY - 4.5 * sy, 8 * sx, 1 * sy);
+  circle(g, smX - 2 * sx, smY - 2 * sy, 0.8 * sx, 0x1e293b);
+  circle(g, smX + 2 * sx, smY - 2 * sy, 0.8 * sx, 0x1e293b);
   g.fillStyle(0x1e293b, 1);
-  g.fillRect(smX - 2, 1.5, 4, 1);
-  g.fillRect(smX - 3, 0.5, 1, 1);
-  g.fillRect(smX + 2, 0.5, 1, 1);
+  g.fillRect(smX - 2 * sx, smY + 1.5 * sy, 4 * sx, 1 * sy);
+  g.fillRect(smX - 3 * sx, smY + 0.5 * sy, 1 * sx, 1 * sy);
+  g.fillRect(smX + 2 * sx, smY + 0.5 * sy, 1 * sx, 1 * sy);
 
-  // 2. Tiny house (red roof, blue walls, white window, yellow door) around x = 2
-  const hx = 2;
-  rr(g, hx - 2, -5, 4, 2, 0.5, 0xef4444);
-  rr(g, hx - 5, -3.2, 10, 2, 0.5, 0xef4444);
-  rr(g, hx - 4, -1.2, 8, 5.5, 0.5, 0x2563eb);
-  rr(g, hx - 3, 0, 2, 2, 0.5, 0xffffff);
-  rr(g, hx, 0.5, 2.5, 3.8, 0.5, 0xfacc15);
+  // 2. Tiny house (red roof, blue walls, white window, yellow door)
+  const hx = bx + bw * 0.52;
+  const hy = by + bh * 0.5;
+  rr(g, hx - 2 * sx, hy - 5 * sy, 4 * sx, 2 * sy, 0.5, 0xef4444);
+  rr(g, hx - 5 * sx, hy - 3.2 * sy, 10 * sx, 2 * sy, 0.5, 0xef4444);
+  rr(g, hx - 4 * sx, hy - 1.2 * sy, 8 * sx, 5.5 * sy, 0.5, 0x2563eb);
+  rr(g, hx - 3 * sx, hy, 2 * sx, 2 * sy, 0.5, 0xffffff);
+  rr(g, hx, hy + 0.5 * sy, 2.5 * sx, 3.8 * sy, 0.5, 0xfacc15);
 
-  // 3. Tiny heart (red bricks) around x = 30
-  const htx = 30;
-  rr(g, htx - 4, -3.5, 3.5, 3, 1, 0xef4444);
-  rr(g, htx + 0.5, -3.5, 3.5, 3, 1, 0xef4444);
-  rr(g, htx - 4.5, -1.5, 9, 3.5, 1, 0xef4444);
-  rr(g, htx - 2.5, 2, 5, 2.5, 1, 0xef4444);
+  // 3. Tiny heart (red bricks)
+  const htx = bx + bw * 0.74;
+  const hty = by + bh * 0.5;
+  rr(g, htx - 4 * sx, hty - 3.5 * sy, 3.5 * sx, 3 * sy, 1, 0xef4444);
+  rr(g, htx + 0.5 * sx, hty - 3.5 * sy, 3.5 * sx, 3 * sy, 1, 0xef4444);
+  rr(g, htx - 4.5 * sx, hty - 1.5 * sy, 9 * sx, 3.5 * sy, 1, 0xef4444);
+  rr(g, htx - 2.5 * sx, hty + 2 * sy, 5 * sx, 2.5 * sy, 1, 0xef4444);
 
   // A few colorful loose bricks placed elsewhere on the grid
-  rr(g, -52, -2.5, 7, 5, 0.8, 0x3b82f6);
-  circle(g, -50, 0, 0.9, 0x60a5fa);
-  circle(g, -47, 0, 0.9, 0x60a5fa);
+  const b1x = bx + bw * 0.1;
+  const b1y = by + bh * 0.45;
+  rr(g, b1x - 3.5 * sx, b1y - 2.5 * sy, 7 * sx, 5 * sy, 0.8, 0x3b82f6);
+  circle(g, b1x - 1.5 * sx, b1y, 0.9 * sx, 0x60a5fa);
+  circle(g, b1x + 1.5 * sx, b1y, 0.9 * sx, 0x60a5fa);
 
-  rr(g, -43, -2.5, 5, 5, 0.8, 0xef4444);
-  circle(g, -40.5, 0, 0.9, 0xf87171);
-
-  rr(g, 46, -2.5, 6, 5, 0.8, 0xf97316);
-  circle(g, 49, 0, 0.9, 0xfb923c);
+  const b2x = bx + bw * 0.9;
+  const b2y = by + bh * 0.45;
+  rr(g, b2x - 3 * sx, b2y - 2.5 * sy, 6 * sx, 5 * sy, 0.8, 0xf97316);
+  circle(g, b2x, b2y, 0.9 * sx, 0xfb923c);
 };
 
 export const FURNITURE: Record<FurnitureKind, FurnitureSpec> = {
