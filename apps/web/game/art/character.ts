@@ -68,6 +68,10 @@ export function drawCharacter(pen: Pen, recipe: Recipe, pose: Pose) {
   const ty = -30 - lx - bob;
   const hy = ty - 9;
 
+  // Seated: the figure is lowered 7px; feet rest on the floor (a little lower on screen from the front, as they are closer to us).
+  const SEAT_FOOT = 0;
+  const SEAT_FOOT_SIDE = 0;
+
   if (pose.shadow) pen.ellipse(0, 0, 24 + build * 2, 8, 0x000000, 0.16);
 
   // Shapes lit from the top left: shadow tone, base tone nudged up-left.
@@ -101,11 +105,18 @@ export function drawCharacter(pen: Pen, recipe: Recipe, pose: Pose) {
 
     // Legs, then shoes.
     if (pose.seated) {
+      // Seen from the front the shins and shoes go behind the body; the thighs
+      // (toward the camera) are drawn over its hem, see seatedThighs(). From
+      // behind only the back of the thighs shows under the body.
       for (const s of [-1, 1]) {
-        const x = s < 0 ? -legW - 1 : 1;
-        leg(x, legTop, legW, 7, s > 0);
-        pen.rect(x - 0.5, legTop + 6, legW + 1, 4, 2, c.shoes.shadow);
-        pen.rect(x - 0.5, legTop + 6, legW, 3.2, 2, c.shoes.base);
+        const x = s < 0 ? -legW - 1.5 : 1.5;
+        if (front) {
+          const top = legTop + 4.5;
+          const shin = (recipe.bottom === 'trousers' ? c.bottom : c.skin);
+          blob(x + 0.6, top, legW - 1.2, SEAT_FOOT - 3 - top, 2, { ...shin, base: shin.shadow, shadow: shin.deep });
+          pen.rect(x - 0.7, SEAT_FOOT - 4, legW + 1.6, 4.2, 2, c.shoes.shadow);
+          pen.rect(x - 0.7, SEAT_FOOT - 4, legW + 0.8, 3.4, 2, c.shoes.base);
+        } else leg(x, legTop, legW, 5, s > 0);
       }
     } else {
       for (const s of [-1, 1]) {
@@ -116,7 +127,7 @@ export function drawCharacter(pen: Pen, recipe: Recipe, pose: Pose) {
         pen.rect(x - 0.5, -4 + dy, legW, 3.2, 2, c.shoes.base);
       }
     }
-    if (recipe.bottom === 'skirt') {
+    if (recipe.bottom === 'skirt' && !(pose.seated && front)) {
       pen.poly([-half + 1, legTop - 3, half - 1, legTop - 3, half + 1.5, legTop + 8, -half - 1.5, legTop + 8], c.bottom.shadow);
       pen.poly([-half + 1, legTop - 3, half - 2, legTop - 3, half, legTop + 7, -half - 1.5, legTop + 7], c.bottom.base);
     }
@@ -128,6 +139,7 @@ export function drawCharacter(pen: Pen, recipe: Recipe, pose: Pose) {
     pattern(-half, bw, front);
     if (front) frontDetails();
     else if (recipe.top === 'hoodie') blob(-6, ty - 1, 12, 8, 4, { ...c.top, base: c.top.shadow, shadow: c.top.deep });
+    if (pose.seated && front) seatedThighs();
 
     // Arms and hands; the right hand may hold a mug.
     const arm = isMoving ? swing * 2 : 0;
@@ -152,6 +164,44 @@ export function drawCharacter(pen: Pen, recipe: Recipe, pose: Pose) {
     hairPass(front ? 'down' : 'up', 'front');
     hat(front ? 'down' : 'up');
     headset(front ? 'down' : 'up');
+  }
+
+  /** Seated, from the front: the thighs come toward us over the hem of the body, knees at the bottom. */
+  function seatedThighs() {
+    const cloth = recipe.bottom === 'trousers' || recipe.bottom === 'shorts' ? c.bottom : c.skin;
+    for (const s of [-1, 1]) {
+      const x = s < 0 ? -legW - 1.5 : 1.5;
+      blob(x - 0.2, legTop + 0.3, legW + 0.4, 6.2, 3, cloth);
+      pen.rect(x + 0.8, legTop + 5.3, legW - 1.8, 0.9, 0.4, cloth.light, 0.6);
+    }
+    if (recipe.bottom === 'skirt') {
+      const y = legTop + 0.2;
+      pen.poly([-half + 1.5, y, half - 1.5, y, half + 0.5, y + 6.8, -half - 0.5, y + 6.8], c.bottom.shadow);
+      pen.poly([-half + 1.5, y, half - 2, y, half - 0.5, y + 6, -half - 0.5, y + 6], c.bottom.base);
+    }
+  }
+
+  /** Seated, side view: thigh forward from the hip, knee bent, shin straight down, foot flat on the floor. */
+  function seatedSideLeg(far: boolean, sh: number) {
+    const dx = far ? 2 : 0;
+    const bk = far ? { ...c.bottom, base: c.bottom.shadow, shadow: c.bottom.deep } : c.bottom;
+    const sk = far ? { ...c.skin, base: c.skin.shadow, shadow: c.skin.deep } : c.skin;
+    const shoe = far ? { ...c.shoes, base: c.shoes.shadow, shadow: c.shoes.deep } : c.shoes;
+    const hipX = -sh + 1;
+    const kneeX = sh + 3 + dx;
+    const top = legTop + 0.4;
+    const th = legW + 0.2;
+    const cloth = recipe.bottom === 'trousers' ? bk : sk;
+    const shinX = kneeX - legW + 0.6;
+    blob(shinX, top + 2, legW - 0.6, SEAT_FOOT_SIDE - 3 - top - 2, 2, cloth);
+    blob(hipX, top, kneeX - hipX, th, 2.8, cloth);
+    if (recipe.bottom === 'shorts') blob(hipX - 0.3, top - 0.3, (kneeX - hipX) * 0.68, th + 0.8, 2.5, bk);
+    pen.rect(shinX - 0.4, SEAT_FOOT_SIDE - 4, legW + 3.4, 4, 2, shoe.shadow);
+    pen.rect(shinX - 0.4, SEAT_FOOT_SIDE - 4, legW + 2.6, 3.2, 2, shoe.base);
+    if (recipe.bottom === 'skirt' && !far) {
+      pen.poly([hipX - 3, top - 3, sh, top - 3, kneeX - 1, top + 0.5, kneeX - 1, top + th - 0.5, hipX - 3, top + th + 1.2], c.bottom.shadow);
+      pen.poly([hipX - 3, top - 3, sh - 0.5, top - 3, kneeX - 1.8, top + 0.2, kneeX - 1.8, top + th - 1.4, hipX - 3, top + th - 0.2], c.bottom.base);
+    }
   }
 
   function leg(x: number, y: number, w: number, h: number, shaded: boolean) {
@@ -306,27 +356,8 @@ export function drawCharacter(pen: Pen, recipe: Recipe, pose: Pose) {
     hairPass('side', 'behind');
 
     if (pose.seated) {
-      const hx = -2;
-      const tw = sh + 5;
-      const hy = legTop + 1.5;
-      const th = 5;
-      if (recipe.bottom === 'trousers') {
-        pen.rect(hx, hy, tw, th, 2.5, c.bottom.shadow);
-        pen.rect(hx, hy, tw - 0.5, th - 1, 2, c.bottom.base);
-      } else {
-        pen.rect(hx, hy, tw, th, 2.5, c.skin.shadow);
-        pen.rect(hx, hy, tw - 0.5, th - 1, 2, c.skin.base);
-        if (recipe.bottom === 'shorts') {
-          pen.rect(hx - 0.3, hy - 0.5, tw * 0.55, th + 1, 2, c.bottom.shadow);
-          pen.rect(hx - 0.3, hy - 0.5, tw * 0.55 - 0.5, th, 2, c.bottom.base);
-        }
-      }
-      pen.rect(hx + tw - 1, hy + 0.5, 4.5, 4, 2, c.shoes.shadow);
-      pen.rect(hx + tw - 1, hy + 0.5, 4, 3.2, 2, c.shoes.base);
-      if (recipe.bottom === 'skirt') {
-        pen.poly([-sh + 1, legTop - 3, sh - 1, legTop - 3, sh + 2.5, legTop + 8, -sh - 2.5, legTop + 8], c.bottom.base);
-        pen.poly([-sh - 2.5, legTop + 6.5, sh + 2.5, legTop + 6.5, sh + 2.5, legTop + 8, -sh - 2.5, legTop + 8], c.bottom.shadow);
-      }
+      seatedSideLeg(true, sh);
+      seatedSideLeg(false, sh);
     } else {
       const back = -swing * 3.5;
       const fore = swing * 3.5;
