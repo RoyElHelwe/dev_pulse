@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Plus, X } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
@@ -26,19 +26,34 @@ function rankBetween(before: number | null, after: number | null): number {
   return (before + after) / 2;
 }
 
-function computeInsertionIndex(container: HTMLElement, clientY: number, currentDragId: string | null): number {
-  const cardEls = Array.from(container.querySelectorAll<HTMLElement>('[data-task-id]')).filter(
-    (el) => el.getAttribute('data-task-id') !== currentDragId,
-  );
+/** Card midpoints of one column in its scroller's content coordinates (so they survive scrolling). */
+interface ColumnMids {
+  scroller: HTMLElement;
+  mids: number[];
+}
 
-  for (let i = 0; i < cardEls.length; i++) {
-    const rect = cardEls[i].getBoundingClientRect();
-    const midY = rect.top + rect.height / 2;
-    if (clientY < midY) {
-      return i;
-    }
+function measureColumn(container: HTMLElement, currentDragId: string | null): ColumnMids {
+  const scroller = container.querySelector<HTMLElement>('[data-column-scroll]') ?? container;
+  const origin = scroller.getBoundingClientRect().top - scroller.scrollTop;
+  const mids = Array.from(container.querySelectorAll<HTMLElement>('[data-task-id]'))
+    .filter((el) => el.getAttribute('data-task-id') !== currentDragId)
+    .map((el) => {
+      const rect = el.getBoundingClientRect();
+      return rect.top + rect.height / 2 - origin;
+    });
+  return { scroller, mids };
+}
+
+function insertionIndexAt({ scroller, mids }: ColumnMids, clientY: number): number {
+  const y = clientY - (scroller.getBoundingClientRect().top - scroller.scrollTop);
+  for (let i = 0; i < mids.length; i++) {
+    if (y < mids[i]) return i;
   }
-  return cardEls.length;
+  return mids.length;
+}
+
+function computeInsertionIndex(container: HTMLElement, clientY: number, currentDragId: string | null): number {
+  return insertionIndexAt(measureColumn(container, currentDragId), clientY);
 }
 
 function InsertionLine() {
@@ -54,7 +69,8 @@ interface ColumnProps {
   myId: string;
   memberMap: Map<string, BoardMember>;
   dragId: string | null;
-  dropTarget: { status: TaskStatus; index: number } | null;
+  /** Where the drop line goes in THIS column while it is hovered, otherwise null. */
+  dropIndex: number | null;
   onOpenTask(id: string): void;
   onCreate(mode: DialogMode): void;
   onDragStart(id: string): void;
@@ -64,7 +80,7 @@ interface ColumnProps {
   onDrop(e: React.DragEvent<HTMLElement>, status: TaskStatus): void;
 }
 
-function Column({
+const Column = memo(function Column({
   status,
   cards,
   totalCount,
@@ -73,7 +89,7 @@ function Column({
   myId,
   memberMap,
   dragId,
-  dropTarget,
+  dropIndex,
   onOpenTask,
   onCreate,
   onDragStart,
@@ -82,7 +98,7 @@ function Column({
   onDragLeave,
   onDrop,
 }: ColumnProps) {
-  const isHovered = dropTarget?.status === status;
+  const isHovered = dropIndex !== null;
   const visibleCards = cards.filter((c) => c.id !== dragId);
 
   return (
@@ -104,7 +120,7 @@ function Column({
         </span>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-2 py-1 min-h-0 space-y-2">
+      <div data-column-scroll="" className="flex-1 overflow-y-auto px-2 py-1 min-h-0 space-y-2">
         {cards.length === 0 ? (
           <div className="flex h-32 flex-col items-center justify-center p-4 gap-2 text-xs font-medium text-zinc-400">
             {isHovered && <InsertionLine />}
@@ -115,7 +131,7 @@ function Column({
             {cards.map((task) => {
               const isDragged = task.id === dragId;
               const visibleIdx = visibleCards.indexOf(task);
-              const showLineBefore = isHovered && !isDragged && dropTarget.index === visibleIdx;
+              const showLineBefore = isHovered && !isDragged && dropIndex === visibleIdx;
 
               return (
                 <Fragment key={task.id}>
@@ -137,7 +153,7 @@ function Column({
                 </Fragment>
               );
             })}
-            {isHovered && dropTarget.index === visibleCards.length && <InsertionLine />}
+            {isHovered && dropIndex === visibleCards.length && <InsertionLine />}
           </>
         )}
       </div>
@@ -161,7 +177,7 @@ function Column({
       </div>
     </div>
   );
-}
+});
 
 interface HeaderProps {
   prefix: string;
@@ -309,58 +325,108 @@ export function TaskBoard({
     return map;
   }, [tasks]);
 
-  const handleDragOver = (e: React.DragEvent<HTMLElement>, status: TaskStatus) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-    const index = computeInsertionIndex(e.currentTarget, e.clientY, dragId);
-    setDropTarget((prev) => {
-      if (prev?.status === status && prev.index === index) return prev;
-      return { status, index };
-    });
-  };
+  // Latest values for the (stable) drag handlers below, so the columns don't re-render for them.
+  const live = useRef({ dragId, tasks, tasksByStatus });
+  live.current = { dragId, tasks, tasksByStatus };
+  const openTask = useCallback((id: string) => setDialogMode({ kind: 'edit', taskId: id }), []);
 
-  const handleDragLeave = (e: React.DragEvent<HTMLElement>, status: TaskStatus) => {
-    if (e.relatedTarget && e.currentTarget.contains(e.relatedTarget as Node)) return;
-    setDropTarget((prev) => (prev?.status === status ? null : prev));
-  };
+  // Card positions are measured once per column per drag (not on every dragover), and the hover
+  // state is updated at most once per frame.
+  const columnCache = useRef(new Map<HTMLElement, ColumnMids>());
+  const pendingOver = useRef<{ status: TaskStatus; y: number; el: HTMLElement } | null>(null);
+  const overFrame = useRef(0);
+  const cancelOver = useCallback(() => {
+    cancelAnimationFrame(overFrame.current);
+    overFrame.current = 0;
+    pendingOver.current = null;
+  }, []);
+  useEffect(() => cancelOver, [cancelOver]);
+  // Tasks changing under a drag (live updates) moves the cards: measure again.
+  useEffect(() => columnCache.current.clear(), [tasks, filter]);
 
-  const handleDragEnd = () => {
+  const flushOver = useCallback(() => {
+    overFrame.current = 0;
+    const p = pendingOver.current;
+    pendingOver.current = null;
+    if (!p) return;
+    let cols = columnCache.current.get(p.el);
+    if (!cols) {
+      cols = measureColumn(p.el, live.current.dragId);
+      columnCache.current.set(p.el, cols);
+    }
+    const index = insertionIndexAt(cols, p.y);
+    setDropTarget((prev) => (prev?.status === p.status && prev.index === index ? prev : { status: p.status, index }));
+  }, []);
+
+  const handleDragStart = useCallback((id: string) => {
+    columnCache.current.clear();
+    setDragId(id);
+  }, []);
+
+  const handleDragOver = useCallback(
+    (e: React.DragEvent<HTMLElement>, status: TaskStatus) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      pendingOver.current = { status, y: e.clientY, el: e.currentTarget };
+      if (!overFrame.current) overFrame.current = requestAnimationFrame(flushOver);
+    },
+    [flushOver],
+  );
+
+  const handleDragLeave = useCallback(
+    (e: React.DragEvent<HTMLElement>, status: TaskStatus) => {
+      if (e.relatedTarget && e.currentTarget.contains(e.relatedTarget as Node)) return;
+      if (pendingOver.current?.status === status) cancelOver();
+      setDropTarget((prev) => (prev?.status === status ? null : prev));
+    },
+    [cancelOver],
+  );
+
+  const handleDragEnd = useCallback(() => {
+    cancelOver();
+    columnCache.current.clear();
     setDragId(null);
     setDropTarget(null);
-  };
+  }, [cancelOver]);
 
-  const handleDrop = async (e: React.DragEvent<HTMLElement>, status: TaskStatus) => {
-    e.preventDefault();
-    const id = e.dataTransfer.getData('text/plain') || dragId;
-    const container = e.currentTarget;
-    setDropTarget(null);
-    setDragId(null);
-    if (!id) return;
+  const handleDrop = useCallback(
+    async (e: React.DragEvent<HTMLElement>, status: TaskStatus) => {
+      e.preventDefault();
+      const { dragId: draggedId, tasks, tasksByStatus } = live.current;
+      const id = e.dataTransfer.getData('text/plain') || draggedId;
+      const container = e.currentTarget;
+      cancelOver();
+      columnCache.current.clear();
+      setDropTarget(null);
+      setDragId(null);
+      if (!id) return;
 
-    const task = tasks.find((t) => t.id === id);
-    if (!task) return;
+      const task = tasks.find((t) => t.id === id);
+      if (!task) return;
 
-    const columnCards = tasksByStatus[status];
-    const visibleCards = columnCards.filter((c) => c.id !== id);
-    const insertIndex = computeInsertionIndex(container, e.clientY, id);
+      const columnCards = tasksByStatus[status];
+      const visibleCards = columnCards.filter((c) => c.id !== id);
+      const insertIndex = computeInsertionIndex(container, e.clientY, id);
 
-    const originalIndex = columnCards.findIndex((c) => c.id === id);
-    if (task.status === status && originalIndex !== -1 && originalIndex === insertIndex) {
-      return;
-    }
+      const originalIndex = columnCards.findIndex((c) => c.id === id);
+      if (task.status === status && originalIndex !== -1 && originalIndex === insertIndex) {
+        return;
+      }
 
-    const before = insertIndex > 0 ? visibleCards[insertIndex - 1] : null;
-    const after = insertIndex < visibleCards.length ? visibleCards[insertIndex] : null;
-    const rank = rankBetween(before ? before.rank : null, after ? after.rank : null);
+      const before = insertIndex > 0 ? visibleCards[insertIndex - 1] : null;
+      const after = insertIndex < visibleCards.length ? visibleCards[insertIndex] : null;
+      const rank = rankBetween(before ? before.rank : null, after ? after.rank : null);
 
-    try {
-      await taskActions.move(id, status, rank);
-    } catch (err) {
-      const message =
-        err instanceof ApiError ? err.message : err instanceof Error ? err.message : 'Failed to move task';
-      setError(message);
-    }
-  };
+      try {
+        await taskActions.move(id, status, rank);
+      } catch (err) {
+        const message =
+          err instanceof ApiError ? err.message : err instanceof Error ? err.message : 'Failed to move task';
+        setError(message);
+      }
+    },
+    [cancelOver],
+  );
 
   return (
     <>
@@ -423,10 +489,10 @@ export function TaskBoard({
                     myId={myId}
                     memberMap={memberMap}
                     dragId={dragId}
-                    dropTarget={dropTarget}
-                    onOpenTask={(id) => setDialogMode({ kind: 'edit', taskId: id })}
-                    onCreate={(mode) => setDialogMode(mode)}
-                    onDragStart={setDragId}
+                    dropIndex={dropTarget?.status === status ? dropTarget.index : null}
+                    onOpenTask={openTask}
+                    onCreate={setDialogMode}
+                    onDragStart={handleDragStart}
                     onDragEnd={handleDragEnd}
                     onDragOver={handleDragOver}
                     onDragLeave={handleDragLeave}

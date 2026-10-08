@@ -49,6 +49,9 @@ export function BoardDrawer({
   const travel = width + gap; // how far the handle (and a drag) moves
   const push = width + 2 * gap; // how far the office is pushed: the board's width plus a gap each side
   const hasDrawer = !!drawer;
+  // The board is only rendered while it can be seen: open, being dragged, or still sliding shut.
+  const [lingering, setLingering] = useState(false);
+  const showBoard = open || dragging || lingering;
 
   const office = useRef<HTMLDivElement>(null);
   const panel = useRef<HTMLElement>(null);
@@ -105,6 +108,15 @@ export function BoardDrawer({
       }
     }
   }, [releaseOffscreen]);
+
+  useEffect(() => {
+    if (open || dragging) {
+      setLingering(true);
+      return;
+    }
+    const timer = setTimeout(() => setLingering(false), MS + 150);
+    return () => clearTimeout(timer);
+  }, [open, dragging]);
 
   useLayoutEffect(() => {
     if (!drag.current) place(open && hasDrawer ? 1 : 0, true);
@@ -173,7 +185,7 @@ export function BoardDrawer({
 
   return (
     <>
-      <div ref={office} className="absolute inset-0 will-change-transform">
+      <div ref={office} className="absolute inset-0">
         {children}
       </div>
 
@@ -182,12 +194,12 @@ export function BoardDrawer({
           <aside
             ref={panel}
             aria-label="Task board drawer"
-            className="absolute z-30 overflow-hidden rounded-2xl border border-zinc-200/80 bg-white/95 shadow-2xl shadow-zinc-900/25 backdrop-blur will-change-transform"
+            className="absolute z-30 overflow-hidden rounded-2xl border border-zinc-200/80 bg-white/95 shadow-2xl shadow-zinc-900/25"
             style={{ top: gap, right: gap, bottom: gap, width, transform: `translate3d(${travel + SHADOW}px,0,0)` }}
             inert={!open && !dragging ? true : undefined}
             aria-hidden={!open && !dragging}
           >
-            {drawer}
+            {showBoard ? drawer : null}
           </aside>
 
           {/* The grab handle: on the screen edge while closed, riding the board's left edge while open. */}
@@ -210,7 +222,7 @@ export function BoardDrawer({
             }}
             className={cn(
               'absolute top-1/2 right-0 z-40 flex h-20 w-5 -translate-y-1/2 cursor-grab touch-none items-center justify-center',
-              'rounded-l-xl border border-r-0 border-zinc-200 bg-white/95 text-zinc-500 shadow-md backdrop-blur select-none',
+              'rounded-l-xl border border-r-0 border-zinc-200 bg-white/95 text-zinc-500 shadow-md select-none',
               'hover:bg-white hover:text-zinc-900 focus-visible:outline-2 focus-visible:outline-emerald-500 active:cursor-grabbing',
             )}
           >

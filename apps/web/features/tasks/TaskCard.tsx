@@ -1,6 +1,6 @@
 'use client';
 
-import type { ComponentProps, KeyboardEvent, MouseEvent } from 'react';
+import { memo, type ComponentProps, type KeyboardEvent, type MouseEvent } from 'react';
 import { Calendar } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { AssigneeAvatar, PriorityIcon, TypeIcon } from './TaskIcons';
@@ -14,7 +14,11 @@ export interface TaskCardProps
   dragging?: boolean;
 }
 
-export function TaskCard({
+/**
+ * Re-renders only when its data changes. The callbacks are per-card closures made by the column, but they only
+ * capture the task id and stable column handlers, so they are deliberately left out of the comparison.
+ */
+export const TaskCard = memo(function TaskCard({
   task,
   assignee,
   onOpen,
@@ -96,4 +100,4 @@ export function TaskCard({
       </div>
     </div>
   );
-}
+}, (a, b) => a.task === b.task && a.assignee === b.assignee && a.dragging === b.dragging && a.className === b.className);
