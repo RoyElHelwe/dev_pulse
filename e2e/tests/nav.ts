@@ -220,6 +220,28 @@ async function settled(page: Page) {
   return last;
 }
 
+/** Holds an arrow key until the player is within `stopAt` tiles of the target line (or stops moving). */
+async function holdToward(page: Page, key: string, axis: 'x' | 'y', target: { x: number; y: number }, stopAt: number) {
+  const sign = key === 'ArrowRight' || key === 'ArrowDown' ? 1 : -1;
+  const started = Date.now();
+  let last = await position(page);
+  let lastMoveAt = started;
+  await page.keyboard.down(key);
+  try {
+    while (Date.now() - started < 5000) {
+      await page.waitForTimeout(30);
+      const p = await position(page);
+      const remaining = (axis === 'x' ? target.x - p.x : target.y - p.y) * sign;
+      if (remaining <= stopAt) break;
+      if (Math.hypot(p.x - last.x, p.y - last.y) >= 0.02) lastMoveAt = Date.now();
+      else if (Date.now() - lastMoveAt > 700) break;
+      last = p;
+    }
+  } finally {
+    await page.keyboard.up(key);
+  }
+}
+
 function isNearSeat(layout: Layout, at: { x: number; y: number }): boolean {
   return layout.furniture.some(
     (f) => (f.kind === 'chair' || f.kind === 'stool' || f.kind === 'armchair') && Math.hypot(f.x - at.x, f.y - at.y) < 0.65,
@@ -303,7 +325,18 @@ async function along(
 
     const key = axis === 'x' ? (d < 0 ? 'ArrowLeft' : 'ArrowRight') : d < 0 ? 'ArrowUp' : 'ArrowDown';
     const dist = Math.abs(d);
-    const pressTime = Math.max(40, Math.min(200, Math.round(dist * 120)));
+
+    // Far from the target: hold the key and watch the minimap, instead of timed taps. On a loaded
+    // machine the game renders only a few frames a second and a short tap can fall between two of them.
+    if (dist > 1.6 && !seated) {
+      await holdToward(page, key, axis, target, 1.0);
+      await settled(page);
+      continue;
+    }
+
+    // Close in: short taps, longer after each tap that moved nothing.
+    const base = Math.max(40, Math.min(200, Math.round(dist * 120)));
+    const pressTime = Math.min(700, base * (1 + noProgressCount));
 
     await page.keyboard.down(key);
     await page.waitForTimeout(pressTime);
@@ -389,6 +422,7 @@ export async function walkTo(page: Page, layout: Layout, tx: number, ty: number)
     }
     plannedGoal = planRes.goal;
     const route = planRes.route;
+    if (process.env.WALK_DEBUG) console.log(`walk attempt ${attempt} from ${at.x},${at.y} route ${JSON.stringify(route.map((r) => [r.x, r.y]))}`);
 
     let blocked = false;
     for (let i = 0; i < route.length; i++) {
