@@ -25,6 +25,9 @@ function obstacles(layout: Layout, tx?: number, ty?: number, extra: Rect[] = [],
     const isSolid = SOLID.has(f.kind);
     const isSeat = f.kind === 'chair' || f.kind === 'stool' || f.kind === 'armchair';
     if (!isSolid && !isSeat) continue;
+    // Chairs are only avoided by the planner (so nobody sits down by accident); they do not block, which
+    // matters when a player spawns on one (inflate 0 is the "real obstacles" set used to walk out of margins).
+    if (INFLATE === 0 && isSeat && !isSolid) continue;
     const turned = f.rotation === 90 || f.rotation === 270;
     const w = turned ? f.h : f.w;
     const h = turned ? f.w : f.h;
