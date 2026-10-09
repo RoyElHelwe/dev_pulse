@@ -16,6 +16,7 @@ import { TokensService } from '../auth/tokens.service';
 import { authenticateSocket } from '../common/auth/socket-auth';
 import { PrismaService } from '../prisma/prisma.service';
 import { type WorkspaceEvent, WorkspaceEvents } from '../workspace/workspace-events';
+import { AppConfig } from '../config/app-config';
 import { TILE } from './layout/geometry';
 import type { OfficeLayout, Room } from './layout/types';
 import { Budget, claimOffice, limitMove, TAB_ID, ZONE_ID } from './rules';
@@ -77,6 +78,7 @@ export class OfficeGateway implements OnGatewayInit, OnGatewayConnection, OnGate
     private readonly prisma: PrismaService,
     private readonly workspaceEvents: WorkspaceEvents,
     private readonly sessionEvents: SessionEvents,
+    private readonly config: AppConfig,
   ) {}
 
   afterInit(namespace: Namespace) {
@@ -204,6 +206,28 @@ export class OfficeGateway implements OnGatewayInit, OnGatewayConnection, OnGate
     player.dir = dir === 1 || dir === 2 || dir === 3 ? dir : 0;
     player.moving = moving === 1 || moving === true;
     player.seated = body[4] === 1 || body[4] === true;
+    socket
+      .to(wsRoom(data.workspaceId))
+      .except(userRoom(data.userId))
+      .volatile.emit('office:moved', [player.id, player.x, player.y, player.dir, player.moving ? 1 : 0, player.seated ? 1 : 0]);
+  }
+
+  /**
+   * Dev-only teleport: [x, y] in pixels. Accepted only when DEV_LOGIN is enabled
+   * outside production. Clamps to office bounds, resets speed baseline.
+   */
+  @SubscribeMessage('dev:teleport')
+  teleport(@ConnectedSocket() socket: Socket, @MessageBody() body: unknown) {
+    if (!this.config.devLogin) return;
+    const data = socket.data as SocketData;
+    if (!Array.isArray(body) || body.length !== 2 || !data?.budget?.allow()) return;
+    const [x, y] = body as [unknown, unknown];
+    const office = this.offices.get(data.workspaceId);
+    const player = office?.players.get(data.userId);
+    if (!office || !player || !player.sockets.has(socket.id) || typeof x !== 'number' || typeof y !== 'number' || !Number.isFinite(x) || !Number.isFinite(y)) return;
+    player.x = Math.round(Math.min(Math.max(x, 0), office.layout.width * TILE));
+    player.y = Math.round(Math.min(Math.max(y, 0), office.layout.height * TILE));
+    player.movedAt = 0;
     socket
       .to(wsRoom(data.workspaceId))
       .except(userRoom(data.userId))
