@@ -50,7 +50,7 @@ export function Leaderboard({ game, socket, className }: LeaderboardProps) {
   }, [socket, fetchLeaderboard]);
 
   return (
-    <div className={cn('rounded-xl border border-zinc-200/80 bg-zinc-50/70 p-4', className)}>
+    <div className={cn('rounded-xl border border-zinc-200/80 bg-white p-4 shadow-xl', className)}>
       <div className="mb-2.5 flex items-center justify-between">
         <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
           Top players this week

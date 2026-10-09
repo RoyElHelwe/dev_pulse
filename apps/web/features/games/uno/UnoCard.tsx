@@ -50,20 +50,20 @@ export function UnoCard({
 
   const sizeClasses = {
     sm: 'w-11 h-16 rounded-lg text-xs p-1',
-    md: 'w-14 h-20 sm:w-16 sm:h-24 rounded-xl text-sm p-1.5',
-    lg: 'w-20 h-28 sm:w-24 sm:h-34 rounded-2xl text-base p-2',
+    md: 'w-[clamp(3.5rem,min(5.5vw,9.5vh),6.5rem)] h-[clamp(5.25rem,min(8vw,14vh),9.5rem)] rounded-xl text-sm p-1.5',
+    lg: 'w-[clamp(5rem,min(8vw,14vh),8.5rem)] h-[clamp(7.5rem,min(11.5vw,20vh),12.75rem)] rounded-2xl text-base p-2',
   }[size];
 
   const centerTextSize = {
     sm: 'text-base font-black',
-    md: 'text-xl sm:text-2xl font-black',
-    lg: 'text-3xl sm:text-4xl font-black',
+    md: 'text-[clamp(1.25rem,min(2.2vw,4vh),2.5rem)] font-black',
+    lg: 'text-[clamp(2rem,min(3.4vw,6vh),3.75rem)] font-black',
   }[size];
 
   const cornerTextSize = {
     sm: 'text-[9px] font-bold',
-    md: 'text-[11px] font-bold',
-    lg: 'text-xs font-bold',
+    md: 'text-[clamp(10px,min(1.1vw,1.8vh),14px)] font-bold',
+    lg: 'text-[clamp(12px,min(1.3vw,2.2vh),17px)] font-bold',
   }[size];
 
   const content = (
