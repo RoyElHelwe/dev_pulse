@@ -106,9 +106,10 @@ test('Loft office has chill room, take chill-room screenshot, Lego live miniatur
   // Alice and Bob both in Loft office near the Lego wall (Bob where the wall is visible)
   // Alice first: she stands in the doorway after the screenshot, which would block Bob's way in.
   console.log('[CHILL] Alice navigating to Lego wall...');
-  await navigateToLegoWall(org, ws.layout, 25.0);
+  const legoBoard = ws.layout.furniture.find((f) => f.kind === 'legoBoard')!;
+  await navigateToLegoWall(org, ws.layout, legoBoard.x - 0.5);
   console.log('[CHILL] Bob navigating to Lego wall...');
-  await navigateToLegoWall(staff, ws.layout, 26.5);
+  await navigateToLegoWall(staff, ws.layout, legoBoard.x + 0.3);
 
   // Bob focuses canvas, takes canvas screenshot before Alice places a brick
   const bobCanvas = staff.locator('canvas').first();
@@ -194,6 +195,8 @@ test('Create office with Studio template without chill room, add chill room via 
 
   // The card disappears once the (only) chill room is there (one per office, Studio can't add desk wings).
   await expect(owner.getByRole('button', { name: 'Add chill room' })).toBeHidden({ timeout: 15_000 });
+  // ...but the user still gets a confirmation after the card is gone.
+  await expect(owner.getByTestId('chill-added')).toBeVisible();
 
   // Verify workspace().layout now has a chill room with the three furniture kinds, and canAddChill false
   const updatedWs = await workspace(owner);
