@@ -5,6 +5,7 @@
   "packageManager": "pnpm@10.26.2",
   "scripts": {
     "test": "playwright test",
+    "test:full": "E2E_WORKERS=3 playwright test",
     "serve": "node serve.mjs"
   },
   "devDependencies": {

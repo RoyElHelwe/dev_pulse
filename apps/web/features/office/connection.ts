@@ -180,6 +180,10 @@ export function connectOffice(controller: () => OfficeController | null, handler
       zone = z;
       if (socket.connected) socket.emit('zone', z);
     },
+    /** Dev-only test hook: emit dev:teleport [x, y]. */
+    teleport(x: number, y: number) {
+      socket.emit('dev:teleport', [x, y]);
+    },
     disconnect() {
       window.removeEventListener('offline', offline);
       window.removeEventListener('online', online);

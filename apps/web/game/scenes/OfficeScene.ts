@@ -568,6 +568,19 @@ export class OfficeScene extends Phaser.Scene {
     return { x: this.player.x, y: this.player.y };
   }
 
+  /** Dev-only test hook: teleport the local player to pixel coordinates. */
+  teleportTo(x: number, y: number) {
+    if (this.seat) this.standUp(true);
+    const body = this.player.body as Phaser.Physics.Arcade.Body;
+    body.setVelocity(0, 0);
+    body.reset(x, y);
+    this.player.setPosition(x, y);
+    this.player.animate(0, 0, 0);
+    this.cameras.main.centerOn(x, y);
+    this.sendPosition();
+    this.updateZone();
+  }
+
   // ---- editing -----------------------------------------------------------------
 
   /** Organisers: switch to editing (the player stops, the camera is free). */
