@@ -102,7 +102,7 @@ Loft only. When a team outgrows the initial 8 desks, owners and admins can expan
   - `BOTTOM`: Moves spawn/entrance to the new outer wall.
 - **Validation & State**: The resulting layout is validated (`validateLayout`). Bumps `layoutVersion` and emits live `office:layout` and `office:desks` socket events.
 - **Storage**: Recorded in the `OfficeWing` table (`workspaceId`, `side`, `seed`, `x`, `y`, `w`, `h`, `deskCount`). Switching template deletes wings.
-- **Chill room wing** (`POST /api/workspace/wings/chill`): Any office template can add a dedicated chill room wing (`side: 'LEFT' | 'RIGHT' | 'BOTTOM'`). Unlike regular wings, it adds a dedicated games room with 0 desks. Allowed once per office (refused with `CHILL_EXISTS` if a chill room already exists). `GET /api/workspace` returns `canAddChill: true` when caller is OWNER/ADMIN and the office has no chill room yet.
+- **Chill room wing** (`POST /api/workspace/wings/chill`): Any office template can add a dedicated chill room wing (`side: 'LEFT' | 'RIGHT' | 'BOTTOM'`). Unlike regular wings, it adds a dedicated games room with 0 desks. Allowed once per office (refused with `CHILL_EXISTS` if a chill room already exists). `GET /api/workspace` returns `canAddChill: true` when caller is OWNER/ADMIN and the office has no chill room yet. Team page shows a persistent "Chill room added" status (data-testid `chill-added`) after adding a chill room.
 - **Code**: Lives in `apps/api/src/office/layout/wings.ts`. Web mirrors nothing, layout is data.
 
 ### Live presence without lag
@@ -150,7 +150,7 @@ Web: `features/office/connection.ts`, `tabLockStore.ts` (store), `tabLockStore.t
 | **Nearby** | Another person within 3 tiles **in the same room** (walls, even glass, separate people) → `player:near`, then `player:distance` up to 5×/s, `player:far` past 3.5 tiles. The people list tags them "Nearby". | `game/systems/Proximity.ts` |
 | **Your desk** | Each member gets a free desk on joining (joining order), with their name on it (yours in green). Desks follow the office: after an edit people keep their desk if it still exists. Owners and admins move people from the Team page (swaps with whoever sat there). | `workspace/desks.service.ts`, `game/objects/DeskPlates.ts` |
 | **Moving desks** | Any member can move to another free desk (`PUT /api/workspace/me/desk`). Desk art follows the owner. Refused if taken (`DESK_TAKEN`). Emits `office:desks`. | `workspace/desks.service.ts` |
-| **E to use** | At a desk, screen, task board, or games piece (foosball, card table, Lego wall), a hint appears ("Your desk", "Play foosball", "Play Uno", "Build with Lego"); **E** (or tapping the hint) emits `object:interact`. | `game/systems/Interactions.ts` |
+| **E to use** | At a desk, screen, task board, or games piece (Baby foot, card table, Lego wall), a hint appears ("Your desk", "Play Baby foot", "Play Uno", "Build with Lego"); **E** (or tapping the hint) emits `object:interact`. | `game/systems/Interactions.ts` |
 | **Who is where** | The game reports its zone; the server shares it (`office:zone`), for display only (access uses positions). The people list shows "Atlas · Meeting room", "At Mira’s desk"; meeting rooms with people inside show "In use · 2". | `office.gateway.ts`, `game/objects/RoomBadges.ts` |
 | **Status** | A short status in a bubble over the avatar ("Focusing", "On break ☕" or your own text), set from the user menu (top right → Status), stored on the membership. | `UserMenu.tsx`, `StatusSection.tsx` |
 | **Map** | Floor plan in the corner with everyone, and the part of the office on screen. | `Minimap.tsx` |
@@ -278,7 +278,7 @@ game (walking keys are ignored while you type).
   actions, bad codes, reserved keys (WASD, arrows, Esc, Enter, Tab) and duplicates (`settings/keybinds.ts`).
   Web: one store (`useKeybinds`, `getKeybinds`, `useKeybind(action, fn, enabled)`, `rebind`, `resetKeybinds`); every
   listener reads it (VoiceControls, OfficeScene E, chat/board/rooms/people toggles). /settings/voice rebinds PTT
-  through the same store. New shortcuts (e.g. game actions in foosball): add the action in both `keybinds.ts` files.
+  through the same store. New shortcuts: add the action in both `keybinds.ts` files (legacy Baby foot actions `foosKick` and `foosSwitch` were removed; stored values are ignored and `PATCH /settings` silently drops them).
 
 ## 6. The office editor
 
@@ -318,16 +318,16 @@ you see is exactly what everyone gets.
 ### Whiteboard (`board`)
 
 Wall-mounted Kanban whiteboard (3 × 0.5 tiles, solid obstacle).
-- Exempt from the `ON_WALL` collision check so it mounts flush on walls.
+- Wall-mounted: hangs flush against the south face of a solid horizontal wall (validated with `NOT_ON_WALL`).
 - Exactly one `board` is included in every office template.
 - Existing offices created before this furniture kind was added will not have one until a template reset or added via the editor.
 
 ### Games furniture (`foosball`, `cardTable`, `legoBoard`)
 
 Catalog group "Games" (`apps/web/game/editor/catalog.ts`):
-- `foosball`: Table football (3 × 1.6 tiles, solid obstacle).
+- `foosball`: Baby foot table (3 × 1.6 tiles, solid obstacle).
 - `cardTable`: Uno card table (2.2 × 2.2 tiles, round, solid obstacle). Surrounded by 6 sittable chairs.
-- `legoBoard`: Wall-mounted Lego board (4 × 0.5 tiles, solid obstacle). Like `board`, exempt from `ON_WALL` collision checks in `validateLayout` and `placementProblem`.
+- `legoBoard`: Wall-mounted Lego board (3 × 0.5 tiles, solid obstacle). Wall-mounted on a tall wall face like `board` and `tv` (validated with `NOT_ON_WALL`).
 
 ## 7. API
 
@@ -444,31 +444,34 @@ Interactive games and break room framework for casual multiplayer activities.
 
 - **Room kind `chill`**: Defined in `RoomKind` (`'open' | 'meeting' | 'lounge' | 'chill'`). Voice talk-rule (`withinEarshot`) treats `chill` rooms like lounges (earshot radius, not whole room).
 - **Furniture**:
-  - `foosball`: Table football (3 × 1.6 tiles, solid obstacle).
+  - `foosball`: Baby foot table (3 × 1.6 tiles, solid obstacle).
   - `cardTable`: Round card table for Uno (2.2 × 2.2 tiles, solid obstacle). Surrounded by 6 sittable chairs.
-  - `legoBoard`: Wall-mounted Lego building surface (4 × 0.5 tiles, solid obstacle). Exempt from `ON_WALL` collision checks in `validateLayout` and `placementProblem` (like `board`).
-- **Loft chill room**: Loft template includes a default 11 × 12 chill room (`id: 'chill'`, name "Chill room", terrazzo floor) equipped with 1 foosball table, 1 cardTable surrounded by 6 chairs, 1 legoBoard on the north wall, rug, and plant.
+  - `legoBoard`: Wall-mounted Lego building surface (3 × 0.5 tiles, solid obstacle). Wall-mounted on a tall wall face like `board` (validated with `NOT_ON_WALL`).
+- **Loft chill room**: Loft template includes a default 11 × 12 chill room (`id: 'chill'`, name "Chill room", terrazzo floor) equipped with 1 Baby foot table, 1 cardTable surrounded by 6 chairs, 1 legoBoard on the north wall (flush on its south face, off to the right beside the room name), rug, and plant.
 - **Chill room wing** (`POST /api/workspace/wings/chill`):
   - Owner or admin can add a chill room wing (`side: 'LEFT' | 'RIGHT' | 'BOTTOM'`) to **any** template (unlike regular desk wings which are Loft only).
   - Reuses wings machinery (shared wall door cut, layout validation), adding a chill room with `deskCount: 0`.
   - Maximum one chill room per office: rejected with error `CHILL_EXISTS` if any room already has kind `chill`.
   - `GET /api/workspace` returns `canAddChill: true` when caller is OWNER/ADMIN and the office has no chill room yet.
+  - Team page shows a persistent "Chill room added" status (data-testid `chill-added`) after adding a chill room.
 
 ### Interaction types and flow
 
 1. **Approach**: Walking near a games piece displays a contextual interaction hint:
-   - Foosball: "Play foosball"
+   - Baby foot: "Play Baby foot" (default dialog name "Baby foot table")
    - Card table: "Play Uno"
    - Lego wall: "Build with Lego"
 2. **Interact (E)**: Pressing **E** (or tapping hint) causes `Interactions.ts` to emit `object:interact` on `officeEvents`:
    - Payload: `{ type: 'foosball' | 'uno' | 'lego', id: string, name: string }` (where `id` is the furniture ID).
-3. **GameHost modal**:
-   - `GameHost` (mounted in `OfficeView.tsx`) catches the event and opens a portaled dialog modal (`z-[70]`).
-   - Dialog sets `data-captures-keys=""` and stops keyboard event propagation (`onKeyDown`/`onKeyUp` `stopPropagation`) so walking keys (WASD/arrows) do not move the avatar while playing.
-   - Registers `useEscape(!!activeGame, handleClose)` to close on Escape.
-   - Renders the lazy game panel (`registry.ts`) inside a `<Suspense>` boundary.
-   - Renders `<Leaderboard game={kind} socket={socket} />` under the game panel.
-4. **Close**: Clicking close (X), clicking backdrop, pressing Escape, or calling `onClose` emits `game:leave { id }` and unmounts the modal.
+3. **GameHost full-screen overlay**:
+   - Games open FULL SCREEN, not a centered modal: `GameHost` (mounted in `OfficeView.tsx`) catches the event and opens a fixed `inset-0 z-[70]` opaque overlay (`role="dialog"`, `aria-label` = game name, `data-captures-keys=""`, `onKeyDown`/`onKeyUp` `stopPropagation` so walking keys do not move the avatar).
+   - Slim top bar: game name, "N playing"/"N watching" pills fed by `useGameChromeInfo({players, spectators})` from `features/games/GameChrome.tsx` (panels call it every render), a Leaderboard toggle (floating card, `data-testid="game-leaderboard-toggle"`), a Leave button (`data-testid="game-leave"`) and the X (`aria-label="Close game"`).
+   - Both Leave and X emit `game:leave` and close; Esc closes through `useEscape`. No backdrop click-to-close.
+   - On open it requests the browser Fullscreen API (`document.documentElement.requestFullscreen`, ignored if refused; exits on close); the in-page full-viewport layout works without it.
+   - Panels fill `h-full w-full min-h-0` of the content area inside a `<Suspense>` boundary; Baby foot letterboxes the 7:4 table, Uno cards and the Lego grid scale with the area.
+   - Office HUD is covered underneath, the office keeps running (voice continues).
+   - *Note for tests*: browser fullscreen blocks `page.setViewportSize`, call `document.exitFullscreen()` first.
+4. **Close**: Clicking Leave (`data-testid="game-leave"`), close X (`aria-label="Close game"`), pressing Escape, or calling `onClose` emits `game:leave { id }`, exits fullscreen, and unmounts the overlay. No backdrop click-to-close.
 
 ### API framework
 
@@ -566,19 +569,21 @@ Interactive games and break room framework for casual multiplayer activities.
   - `GAME_PANELS: Record<GameKind, ComponentType<GamePanelProps>>` uses `next/dynamic` to lazily load `./foosball/FoosballPanel`, `./uno/UnoPanel`, and `./lego/LegoPanel`.
 - **`GameHost`** (`GameHost.tsx`):
   - Mounted once in `OfficeView.tsx`.
-  - Manages active game modal overlay, Escape handling with `useEscape`, and key-capture isolation via `data-captures-keys=""`.
+  - Manages active game full-screen overlay: fixed `inset-0 z-[70]` opaque overlay (`role="dialog"`, `aria-label` = game name, `data-captures-keys=""`, `onKeyDown`/`onKeyUp` `stopPropagation`).
+  - Top bar with game name, "N playing"/"N watching" pills (`useGameChromeInfo`), Leaderboard toggle (`data-testid="game-leaderboard-toggle"`), Leave button (`data-testid="game-leave"`), and close X (`aria-label="Close game"`).
+  - Requests browser Fullscreen API on open (`requestFullscreen`), exits on close. Esc layer handled via `useEscape`. Panels fill `h-full w-full min-h-0`.
 - **`Leaderboard`** (`Leaderboard.tsx`):
-  - Renders top players this week with rank, `CharacterFace`, player name, and `W / L` statistics.
+  - Floating card toggled from top bar (`data-testid="game-leaderboard-toggle"`), rendering top players this week with rank, `CharacterFace`, player name, and `W / L` statistics (e.g. Baby foot leaderboard).
   - Automatically re-fetches leaderboard on `game:ended` socket event.
 
 ### Keybind actions for games
 
-Rebindable key actions for games (such as foosball controls) must be declared on both sides:
+Rebindable key actions for games must be declared on both sides (Baby foot no longer has any key actions as its controls are mouse-only; legacy actions `foosKick` and `foosSwitch` were removed, stored values are ignored, and `PATCH /settings` silently drops them):
 - **Web** (`apps/web/features/settings/keybinds.ts`): add action to `KEYBIND_ACTIONS`, default key to `DEFAULT_KEYBINDS`, and description to `KEYBIND_LABELS`. Access in components via `useKeybind('<action>')` or `matchesKey(e, '<action>')`.
 - **API** (`apps/api/src/settings/keybinds.ts`): add action to `ACTIONS`, default key to `DEFAULT_KEYBINDS`, and label to `ACTION_LABELS`.
 - Reserved keys (`WASD`, arrow keys, `Escape`, `Enter`, `Tab`) cannot be rebound.
 
-### How to add a game (checklist for steps 12–14: Foosball, Uno, Lego)
+### How to add a game (checklist for steps 12–14: Baby foot, Uno, Lego)
 
 1. **Replace API stub module** (`apps/api/src/games/<game>/<game>.module.ts`):
    - Implement game state, turn flow, timers (`setInterval`), and rules inside a class or factory returning `GameInstance`.
@@ -598,20 +603,39 @@ Rebindable key actions for games (such as foosball controls) must be declared on
 
 **Code:** `apps/api/src/games/lego`, `apps/web/features/games/lego`, `apps/web/game/render/legoArt.ts`
 
-Unlike foosball/Uno the Lego wall is not a match: no GameResult, nothing is recorded or ended. It reuses the games framework only for join/leave, proximity and per-viewer game:state; the art itself outlives sessions.
+Unlike Baby foot/Uno the Lego wall is not a match: no GameResult, nothing is recorded or ended. It reuses the games framework only for join/leave, proximity and per-viewer game:state; the art itself outlives sessions.
 
 - **Board**: 48 × 32 studs per legoBoard furniture id. A brick is a tuple [x, y, w, h, c] (top-left stud, footprint after rotation, palette index 0–15). Footprints: 1×1, 1×2, 2×1, 2×2, 1×4, 4×1, 2×4, 4×2. Bricks never overlap and stay inside the board.
 - **Storage**: table LegoBoard { workspaceId, objectId, bricks Json, updatedAt }, unique on (workspaceId, objectId), cascade with the workspace. One JSON row per board (not a row per brick): a board has at most 1536 bricks (~25 KB), is always read and written whole, and is never queried per brick, so one read on first use and one debounced (400 ms) upsert per burst of edits beats thousands of tiny rows. parseBricks drops anything invalid/overlapping when loading. LegoService keeps the loaded boards in memory (single API process) and flushes on shutdown.
 - **Actions** (game:action): {type:'place',x,y,w,h,c}, {type:'remove',x,y} (removes the brick covering that stud), {type:'clear'} (OWNER/ADMIN only, else FORBIDDEN). Errors: INVALID_BRICK, LOADING, RATE_LIMIT (15 actions/s per user, on top of the gateway budget), BAD_REQUEST. View: { ready, w, h, bricks, canClear, players, version }.
-- **Live miniature**: /office broadcast lego:art { id, bricks } to the whole workspace (throttled, trailing 300 ms). GET /api/workspace/lego (member) returns { boards: [{ id, bricks }] } for the initial load; LegoSync (mounted in OfficeView) fetches it on connect and applies lego:art to the legoArt store. The wall object's texture key includes the art version, so OfficeScene swaps the texture on change (the wall is 4 × 0.5 tiles, so the 48 × 32 art is drawn squashed vertically). Until the first fetch lands the old decorative placeholder is shown.
+- **Live miniature**: /office broadcast lego:art { id, bricks } to the whole workspace (throttled, trailing 300 ms). GET /api/workspace/lego (member) returns { boards: [{ id, bricks }] } for the initial load; LegoSync (mounted in OfficeView) fetches it on connect and applies lego:art to the legoArt store. The wall object's texture key includes the art version, so OfficeScene swaps the texture on change (the footprint is 3 × 0.5 tiles, with the 48 × 32 art drawn on the 3:2 panel on the wall face above it). Until the first fetch lands the old decorative placeholder is shown.
 
-### Foosball (step 12)
+### Baby foot (step 12)
 
 **Code:** `apps/api/src/games/foosball/{foosball.physics,foosball.game}.ts`, `apps/web/features/games/foosball/*`.
 
-- Server-authoritative, 30 Hz tick (4 physics substeps), field 120 x 64 units, 4 rods per side (goalkeeper, defense, midfield, attack). First to 5 wins.
+- Server-authoritative, 30 Hz tick (4 physics substeps), field 120 x 64 units, 4 rods per side (goalkeeper, defense, midfield, attack). First to 5 wins. Table letterboxes to 7:4 aspect ratio.
 - Phases: `lobby` -> `countdown` -> `playing` <-> `goal` -> `ended` (rematch back to lobby). Join as spectator, then `sit`/`stand`; start needs equal teams (1v1 or 2v2).
-- Rods: 1v1 owner controls all 4, 2v2 each controls 2. Actions `move {rod,dir}`, `kick {rod}`. A teammate's absence hands his rods to the partner.
+- Rods: 1v1 owner controls all 4, 2v2 each controls 2. A teammate's absence hands their rods to the partner.
 - Leaving/disconnect during a match: if a side is fully absent for 10 s (`GRACE_MS`) it forfeits; result recorded once via `ctx.record`.
-- Keys: W/S or arrows move the rod (fixed), keybind actions `foosKick` (Space) and `foosSwitch` (Q; 1-4 select directly).
+- **Controls (MOUSE only)**:
+  - The canvas is the pointer surface. Cursor `y` over the table maps to the active rod's position (top edge = rod fully up, bottom edge = fully down, scaled to that rod's travel limit).
+  - Pointer lock is requested on the first click while playing (virtual cursor from relative movement), falling back to the plain in-table cursor position when lock is unavailable.
+  - Rod selection: clicking within 6 field units of another of your rods selects it (rod chips under the table also select).
+  - Kicking: a **FLICK** (vertical cursor speed ≥ 3.5 table-heights/s over ~50 ms) kicks with strength from speed (0.35..1). A **CLICK** that does not select a rod kicks with strength `max(0.6, speed strength)`. Kick cooldown is 0.35 s.
+  - Client sends `aim` at most every 33 ms.
+  - Keyboard actions `foosKick` and `foosSwitch` were REMOVED from both keybind lists (stored values are ignored; `PATCH /settings` silently drops those legacy names).
+- **Server protocol**:
+  - Action `{ type: 'aim', rod, y }`: target pattern offset in field units. Server clamps to the rod's travel limit, ignores outside the playing phase; rod follows at ≤ `ROD_AIM_SPEED = 140` units/s. Validated with `NOT_YOUR_ROD` / `BAD_ACTION` like `move`.
+  - Action `{ type: 'kick', rod, strength? }`: strength 0..1 (default 1, clamped to ≥ 0.25; ball speed = `KICK_BALL_SPEED * (0.4 + 0.6 * strength)`).
+  - `move { rod, dir }` still exists and cancels an aim target.
+  - Rate limiting is the gateway's 60 msgs/s budget plus the capped rod speed.
 - Tests: `foosball.physics.spec.ts`, `foosball.game.spec.ts`.
+
+## 11. 2.5D view and wall-mounted items
+
+- **Walls**: Solid thickness 10px, glass 6px; collider = footprint only (`apps/web/game/render/walls.ts` `wallCollider`, `apps/api/src/office/layout/geometry.ts` `wallRect`). Visible face is 80px (2.5 tiles) rising above the wall's base line (`y * 32 + thickness / 2`) with a dark cap on top; `face: false` on a horizontal wall makes it a low wall (cap only, used for the building's south wall). Vertical walls: long cap lifted by 80px + the south end face.
+- **Rendering**: `game/render/wallFaces.ts` bakes each wall into textures at scene start (8-tile pieces), one depth-sorted image per piece (`depth = DEPTH.sorted + base / 100000`), so people walk in front/behind. Tall solid faces are cut into 1-tile columns; a column fades to 0.35 alpha (soft, ~1.8 tiles wide, eased ~110ms) when a person stands behind it (feet between the face top and the base line); columns that hide furniture right behind them stay at 0.5. Glass faces are translucent and never fade. No per-frame redraws, only alpha changes. Room names hang on the wall face above their room (beside any hung board/tv), floor fallback near the room's top when no wall fits.
+- **Camera**: Bounds extend 140px above and 40px below the office (`VIEW_MARGIN_TOP` / `VIEW_MARGIN_BOTTOM` in `OfficeScene`) so the top rooms' faces, names, bubbles are fully visible; min zoom accounts for it.
+- **Wall-mounted kinds `tv`, `board`, `legoBoard`**: (`game/layout/mount.ts` == `api office/layout/mount.ts`): Flush against the south face of a solid horizontal wall with a face, rotation 0, inside one wall segment (not across a door gap); data box is a thin strip in front of the wall (top edge = base line, canonical `y = wall.y + 5/32 + h/2`; tolerance: top edge within 0.5 tile below the base line), art drawn on the face (`legoBoard` 3:2 panel max 64px tall, `board` `w * 32` × ≤60, `tv` 16:9 ≤60px tall; art bottom 8px above the base line; fades with the face behind it). API validation code `NOT_ON_WALL` (and `OVERLAP` between two wall-mounted items). Editor: snaps to the nearest face within 4 tiles, refuses elsewhere ("Hang it flush on a tall wall."), no rotating. Defaults: `legoBoard` 3 × 0.5, `board` 3 × 0.5, `tv` 3 × 0.3.
+- **Saved layouts**: Migrated once at API startup (`apps/api/src/workspace/layout-migration.service.ts` using `office/layout/migrate.ts`): each wall-mounted item that isn't valid is snapped to the nearest face wall within 8 tiles (same id, so Lego/board state survives) or dropped; persisted with `layoutVersion + 1`, idempotent.
