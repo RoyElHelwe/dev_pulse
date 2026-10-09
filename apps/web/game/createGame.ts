@@ -48,6 +48,8 @@ export interface OfficeController {
   setRoomBookings(bookings: RoomBooking[]): void;
   /** Where the local player is, to (re)announce it. */
   localPosition(): { x: number; y: number } | null;
+  /** Dev/test hook: teleport the local player to pixel coordinates. */
+  teleportTo(x: number, y: number): void;
   destroy(): void;
 }
 
@@ -199,6 +201,7 @@ export function createGame(parent: HTMLElement, options: GameOptions): OfficeCon
     },
     startEditing: (editor, onProblem) => scene()?.startEditing(editor, onProblem),
     localPosition: () => scene()?.localPosition() ?? null,
+    teleportTo: (x, y) => scene()?.teleportTo(x, y),
     destroy: () => {
       observer.disconnect();
       game.destroy(true);

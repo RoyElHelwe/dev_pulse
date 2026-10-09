@@ -5,9 +5,10 @@ import { defineConfig } from '@playwright/test';
 //   Docker: E2E_BASE_URL=https://localhost:8443 pnpm test (after `make`).
 export default defineConfig({
   testDir: './tests',
-  timeout: 240_000,
-  expect: { timeout: 20_000 },
-  workers: 1,
+  globalSetup: './global-setup.ts',
+  timeout: 120_000,
+  expect: { timeout: 15_000 },
+  workers: Number(process.env.E2E_WORKERS ?? 3),
   // Walking is done with real key presses on a software-rendered canvas, so a slow machine can
   // make a walk miss once. A retry reruns the whole serial story with fresh users.
   retries: 1,
@@ -17,8 +18,8 @@ export default defineConfig({
     baseURL: process.env.E2E_BASE_URL ?? 'http://localhost:8080',
     ignoreHTTPSErrors: true,
     viewport: { width: 1200, height: 760 },
-    trace: 'retain-on-failure',
-    screenshot: 'only-on-failure',
+    trace: 'on-first-retry',
+    screenshot: 'off',
     launchOptions: {
       executablePath: process.env.CHROMIUM_PATH || undefined,
       // WebGL without a GPU (CI machines, containers); a fake microphone for voice.
