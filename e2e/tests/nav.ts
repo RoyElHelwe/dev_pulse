@@ -13,11 +13,11 @@ const SOLID = new Set([
 const WALL = { solid: { t: 10 }, glass: { t: 6 } };
 const TILE = 32;
 const STEP = 0.25;
-const INFLATE = 9;
+const DEFAULT_INFLATE = 9;
 
 type Rect = { x: number; y: number; w: number; h: number };
 
-function obstacles(layout: Layout, tx?: number, ty?: number, extra: Rect[] = []): Rect[] {
+function obstacles(layout: Layout, tx?: number, ty?: number, extra: Rect[] = [], INFLATE = DEFAULT_INFLATE): Rect[] {
   const rects: Rect[] = [...extra];
   for (const f of layout.furniture) {
     const isGoal = tx !== undefined && ty !== undefined && Math.hypot(f.x - tx, f.y - ty) < 0.8;
@@ -59,6 +59,7 @@ function obstacles(layout: Layout, tx?: number, ty?: number, extra: Rect[] = [])
 
 function planner(layout: Layout, tx?: number, ty?: number, extra: Rect[] = []) {
   const rects = obstacles(layout, tx, ty, extra);
+  const trueRects = obstacles(layout, tx, ty, extra, 0);
   const free = (x: number, y: number) => {
     const b = { x: x * TILE - 9, y: y * TILE - 10, w: 18, h: 10 };
     if (b.x < 0 || b.y < 0 || b.x + b.w > layout.width * TILE || b.y + b.h > layout.height * TILE) return false;
@@ -87,20 +88,16 @@ function planner(layout: Layout, tx?: number, ty?: number, extra: Rect[] = []) {
       }
     }
     if (!goal) return null;
-    let sx = Math.round(fx / STEP);
-    let sy = Math.round(fy / STEP);
-    // Standing a bit too close to something: start from the nearest free cell.
-    if (!free(sx * STEP, sy * STEP)) {
-      let nd = Infinity;
-      for (let dy = -10; dy <= 10; dy++) {
-        for (let dx = -10; dx <= 10; dx++) {
-          if (free((sx + dx) * STEP, (sy + dy) * STEP) && Math.hypot(dx, dy) < nd) {
-            nd = Math.hypot(dx, dy);
-            [sx, sy] = [sx + dx, sy + dy];
-          }
-        }
-      }
-    }
+    const sx = Math.round(fx / STEP);
+    const sy = Math.round(fy / STEP);
+    // Standing inside the safety margin of something (e.g. spawned beside a plant): near the start,
+    // cells that clear the real obstacles count as free, so the path can walk out of the margin.
+    // (Snapping to the nearest free cell used to hop across walls.)
+    const escape = (x: number, y: number) => {
+      if (Math.hypot(x - sx * STEP, y - sy * STEP) > 3) return false;
+      const b = { x: x * TILE - 9, y: y * TILE - 10, w: 18, h: 10 };
+      return !trueRects.some((o) => b.x < o.x + o.w && o.x < b.x + b.w && b.y < o.y + o.h && o.y < b.y + b.h);
+    };
     interface PQNode {
       x: number;
       y: number;
@@ -164,7 +161,7 @@ function planner(layout: Layout, tx?: number, ty?: number, extra: Rect[] = []) {
       for (const [dx, dy, dirCode] of dirs) {
         const nx = curr.x + dx;
         const ny = curr.y + dy;
-        if (!free(nx * STEP, ny * STEP)) continue;
+        if (!free(nx * STEP, ny * STEP) && !escape(nx * STEP, ny * STEP)) continue;
         const turnCost = curr.dir !== 0 && curr.dir !== dirCode ? 4 : 0;
         const obsD = distToObs(nx * STEP * TILE, ny * STEP * TILE);
         const clearCost = obsD < 24 ? Math.round((24 - obsD) / 3) : 0;
@@ -271,12 +268,13 @@ async function along(
     }
 
     const d = axis === 'x' ? target.x - at.x : target.y - at.y;
-    const threshold = isFinal ? (isSeatTarget ? 0.6 : 0.35) : 0.45;
+    // Corners are tight: a leg that stops half a tile short runs the next one into a wall's edge.
+    const threshold = isFinal ? (isSeatTarget ? 0.6 : 0.35) : 0.3;
     if (Math.abs(d) <= threshold) return 'reached';
 
     // If we crossed the target line on an intermediate leg, or crossed close to final target, we reached it
     if (i > 0 && Math.sign(prevD) !== Math.sign(d)) {
-      if (Math.abs(d) <= (isSeatTarget ? 0.6 : 0.55)) {
+      if (Math.abs(d) <= (isSeatTarget ? 0.6 : isFinal ? 0.55 : 0.4)) {
         return 'reached';
       }
     }
@@ -329,7 +327,7 @@ async function along(
     // Far from the target: hold the key and watch the minimap, instead of timed taps. On a loaded
     // machine the game renders only a few frames a second and a short tap can fall between two of them.
     if (dist > 1.6 && !seated) {
-      await holdToward(page, key, axis, target, 1.0);
+      await holdToward(page, key, axis, target, 1.3);
       await settled(page);
       continue;
     }
@@ -438,6 +436,10 @@ export async function walkTo(page: Page, layout: Layout, tx: number, ty: number)
 
       const isFinal = i === route.length - 1;
       const res = await along(page, layout, route[i], route[i].axis, isFinal, isSeatTarget, { x: tx, y: ty });
+      if (process.env.WALK_DEBUG) {
+        const p = await position(page);
+        console.log(`  leg ${i} -> ${route[i].x},${route[i].y} ${res}; now ${p.x},${p.y}`);
+      }
       if (res === 'blocked') {
         const cur = await position(page);
         if (isNearSeat(layout, cur) && !isSeatTarget) {
