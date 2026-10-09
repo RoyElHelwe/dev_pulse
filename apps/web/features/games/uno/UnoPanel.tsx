@@ -5,19 +5,20 @@ import { Crown, RotateCcw, RotateCw } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { CharacterFace } from '@/features/workspace/CharacterPreview';
 import { cn } from '@/lib/cn';
+import { useGameChromeInfo } from '../GameChrome';
 import type { GamePanelProps } from '../types';
 import { useGameSession } from '../useGameSession';
 import { UnoCard } from './UnoCard';
 import type { Color, UnoView } from './types';
 
-export default function UnoPanel({ objectId, name, socket, me, onClose }: GamePanelProps) {
-  const { state, status, error, send, leave } = useGameSession<UnoView>(socket, 'uno', objectId);
+export default function UnoPanel({ objectId, socket, me }: GamePanelProps) {
+  const { state, status, error, send } = useGameSession<UnoView>(socket, 'uno', objectId);
   const [colorPickerCardId, setColorPickerCardId] = useState<number | null>(null);
 
-  const handleLeave = () => {
-    leave();
-    onClose();
-  };
+  useGameChromeInfo({
+    players: state ? state.players.length : null,
+    spectators: state?.spectators && state.spectators.length > 0 ? state.spectators.length : null,
+  });
 
   const isHost = Boolean(state?.hostId === me.id);
   const isMyTurn = Boolean(state?.phase === 'playing' && state?.turnId === me.id);
@@ -61,65 +62,45 @@ export default function UnoPanel({ objectId, name, socket, me, onClose }: GamePa
   return (
     <div
       data-captures-keys=""
-      className="flex flex-col gap-4 text-zinc-900"
+      className="flex h-full w-full min-h-0 flex-col p-3 sm:p-4 text-zinc-900 select-none overflow-hidden"
     >
-      {/* Header */}
-      <div className="flex items-center justify-between border-b border-zinc-200/80 pb-3">
-        <div className="flex items-center gap-2.5">
-          <h3 className="text-base font-semibold text-zinc-900">{name}</h3>
-          {state && (
-            <span
-              className={cn(
-                'rounded-full px-2.5 py-0.5 text-xs font-medium',
-                isSpectator ? 'bg-zinc-100 text-zinc-600' : 'bg-emerald-50 text-emerald-700',
-              )}
-            >
-              {isSpectator ? 'Spectating' : 'Player'}
-            </span>
-          )}
-        </div>
-        <Button variant="secondary" size="sm" onClick={handleLeave}>
-          Leave table
-        </Button>
-      </div>
-
-      {/* Action / Session Error (non-fatal, rendered under header) */}
+      {/* Action / Session Error (non-fatal) */}
       {error && (
-        <div className="rounded-xl border border-red-200 bg-red-50 p-2.5 text-xs text-red-700">
+        <div className="shrink-0 mb-2 rounded-xl border border-red-200 bg-red-50 p-2 text-xs text-red-700">
           {error.message || 'An error occurred'}
         </div>
       )}
 
       {/* Loading / Disconnected / Stub / Left States */}
       {status === 'joining' && !state && (
-        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-zinc-200 bg-zinc-50/50 p-8 text-center text-sm text-zinc-500">
+        <div className="flex flex-1 min-h-0 flex-col items-center justify-center rounded-xl border border-dashed border-zinc-200 bg-zinc-50/50 p-8 text-center text-sm text-zinc-500">
           <span className="size-5 animate-spin rounded-full border-2 border-zinc-400 border-r-transparent mb-2" />
           Joining Uno table...
         </div>
       )}
 
       {status === 'left' && (
-        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-zinc-200 bg-zinc-50/50 p-8 text-center text-sm text-zinc-500">
+        <div className="flex flex-1 min-h-0 flex-col items-center justify-center rounded-xl border border-dashed border-zinc-200 bg-zinc-50/50 p-8 text-center text-sm text-zinc-500">
           You left the Uno table.
         </div>
       )}
 
       {status === 'error' && !state && (
-        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-red-200 bg-red-50/50 p-8 text-center text-sm text-red-600">
+        <div className="flex flex-1 min-h-0 flex-col items-center justify-center rounded-xl border border-dashed border-red-200 bg-red-50/50 p-8 text-center text-sm text-red-600">
           {error?.message || 'Error connecting to Uno table.'}
         </div>
       )}
 
       {state && !state.phase && (
-        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-zinc-200 bg-zinc-50/50 p-8 text-center text-sm text-zinc-500">
+        <div className="flex flex-1 min-h-0 flex-col items-center justify-center rounded-xl border border-dashed border-zinc-200 bg-zinc-50/50 p-8 text-center text-sm text-zinc-500">
           Waiting for game state...
         </div>
       )}
 
       {/* LOBBY PHASE */}
       {state?.phase === 'lobby' && (
-        <div className="flex flex-col gap-4">
-          <div className="rounded-xl border border-zinc-200/80 bg-zinc-50/50 p-4">
+        <div className="flex flex-1 min-h-0 flex-col items-center justify-center gap-4 overflow-y-auto">
+          <div className="w-full max-w-xl rounded-xl border border-zinc-200/80 bg-zinc-50/50 p-4">
             <div className="flex items-center justify-between mb-3">
               <span className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
                 Seated Players ({state.players.length}/6)
@@ -190,9 +171,9 @@ export default function UnoPanel({ objectId, name, socket, me, onClose }: GamePa
 
       {/* PLAYING PHASE */}
       {state?.phase === 'playing' && (
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-1 min-h-0 flex-col justify-between gap-2 overflow-hidden">
           {/* Opponents row */}
-          <div className="flex flex-col gap-1.5">
+          <div className="flex flex-col gap-1 shrink-0">
             <span className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500 px-1">
               {isPlayer ? 'Opponents' : 'Players'}
             </span>
@@ -236,14 +217,14 @@ export default function UnoPanel({ objectId, name, socket, me, onClose }: GamePa
 
           {/* Pending Draw Banner */}
           {state.pendingDraw > 0 && (
-            <div className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-center text-xs font-bold text-amber-900 animate-pulse">
+            <div className="shrink-0 rounded-xl border border-amber-300 bg-amber-50 px-3 py-1.5 text-center text-xs font-bold text-amber-900 animate-pulse">
               +{state.pendingDraw} pending — stack a +{state.pendingKind === 'draw2' ? 2 : 4} or draw {state.pendingDraw}
             </div>
           )}
 
           {/* Centre Table Area */}
-          <div className="flex flex-col items-center justify-center gap-4 rounded-2xl border border-zinc-200/80 bg-zinc-100/60 p-5">
-            <div className="flex items-center justify-center gap-6 sm:gap-8">
+          <div className="flex flex-1 min-h-0 flex-col items-center justify-center gap-3 rounded-2xl border border-zinc-200/80 bg-zinc-100/60 p-3 sm:p-4">
+            <div className="flex items-center justify-center gap-6 sm:gap-10">
               {/* Draw pile button */}
               <button
                 type="button"
@@ -252,19 +233,19 @@ export default function UnoPanel({ objectId, name, socket, me, onClose }: GamePa
                 disabled={!isMyTurn || state.drewCardId != null || !isPlayer}
                 onClick={() => send({ type: 'draw' })}
                 className={cn(
-                  'relative flex h-28 w-20 sm:h-34 sm:w-24 flex-col items-center justify-between rounded-2xl border-2 border-zinc-700 bg-zinc-800 p-2 text-white shadow-md transition-all select-none',
+                  'relative flex w-[clamp(5rem,min(8vw,14vh),8.5rem)] h-[clamp(7.5rem,min(11.5vw,20vh),12.75rem)] flex-col items-center justify-between rounded-2xl border-2 border-zinc-700 bg-zinc-800 p-2 sm:p-3 text-white shadow-md transition-all select-none',
                   isMyTurn && state.drewCardId == null && isPlayer
                     ? 'cursor-pointer hover:-translate-y-1 hover:shadow-lg hover:border-zinc-500 active:scale-95'
                     : 'opacity-50 cursor-not-allowed',
                 )}
               >
-                <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
+                <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-zinc-400">
                   Deck
                 </span>
-                <span className="text-2xl sm:text-3xl font-black text-amber-400">
+                <span className="text-2xl sm:text-4xl font-black text-amber-400">
                   {state.drawPile}
                 </span>
-                <span className="text-[10px] font-semibold text-zinc-300">Draw</span>
+                <span className="text-[10px] sm:text-xs font-semibold text-zinc-300">Draw</span>
               </button>
 
               {/* Direction arrow */}
@@ -273,9 +254,9 @@ export default function UnoPanel({ objectId, name, socket, me, onClose }: GamePa
                 title={state.direction === 1 ? 'Direction: Clockwise' : 'Direction: Counter-clockwise'}
               >
                 {state.direction === 1 ? (
-                  <RotateCw className="size-6 text-zinc-600" />
+                  <RotateCw className="size-6 sm:size-8 text-zinc-600" />
                 ) : (
-                  <RotateCcw className="size-6 text-zinc-600" />
+                  <RotateCcw className="size-6 sm:size-8 text-zinc-600" />
                 )}
                 <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
                   {state.direction === 1 ? 'CW' : 'CCW'}
@@ -289,7 +270,7 @@ export default function UnoPanel({ objectId, name, socket, me, onClose }: GamePa
                     <UnoCard card={state.top} size="lg" />
                   </div>
                 ) : (
-                  <div className="flex h-28 w-20 sm:h-34 sm:w-24 items-center justify-center rounded-2xl border-2 border-dashed border-zinc-300 bg-white text-xs text-zinc-400">
+                  <div className="flex w-[clamp(5rem,min(8vw,14vh),8.5rem)] h-[clamp(7.5rem,min(11.5vw,20vh),12.75rem)] items-center justify-center rounded-2xl border-2 border-dashed border-zinc-300 bg-white text-xs text-zinc-400">
                     Empty
                   </div>
                 )}
@@ -354,7 +335,7 @@ export default function UnoPanel({ objectId, name, socket, me, onClose }: GamePa
 
           {/* 4-Colour Picker for Wild Cards */}
           {colorPickerCardId !== null && (
-            <div className="rounded-xl border border-zinc-200 bg-white p-3.5 shadow-lg flex flex-col items-center gap-2.5">
+            <div className="shrink-0 rounded-xl border border-zinc-200 bg-white p-3 shadow-lg flex flex-col items-center gap-2">
               <span className="text-xs font-semibold text-zinc-800">
                 Choose a colour for wild card:
               </span>
@@ -364,7 +345,7 @@ export default function UnoPanel({ objectId, name, socket, me, onClose }: GamePa
                   data-testid="uno-color-red"
                   aria-label="Choose red"
                   onClick={() => handleSelectColor('red')}
-                  className="h-9 px-4 rounded-lg bg-red-600 text-white text-xs font-bold hover:bg-red-700 active:scale-95 transition-all shadow-xs cursor-pointer"
+                  className="h-8 px-3 rounded-lg bg-red-600 text-white text-xs font-bold hover:bg-red-700 active:scale-95 transition-all shadow-xs cursor-pointer"
                 >
                   Red
                 </button>
@@ -373,7 +354,7 @@ export default function UnoPanel({ objectId, name, socket, me, onClose }: GamePa
                   data-testid="uno-color-yellow"
                   aria-label="Choose yellow"
                   onClick={() => handleSelectColor('yellow')}
-                  className="h-9 px-4 rounded-lg bg-yellow-400 text-zinc-950 text-xs font-bold hover:bg-yellow-500 active:scale-95 transition-all shadow-xs cursor-pointer"
+                  className="h-8 px-3 rounded-lg bg-yellow-400 text-zinc-950 text-xs font-bold hover:bg-yellow-500 active:scale-95 transition-all shadow-xs cursor-pointer"
                 >
                   Yellow
                 </button>
@@ -382,7 +363,7 @@ export default function UnoPanel({ objectId, name, socket, me, onClose }: GamePa
                   data-testid="uno-color-green"
                   aria-label="Choose green"
                   onClick={() => handleSelectColor('green')}
-                  className="h-9 px-4 rounded-lg bg-green-600 text-white text-xs font-bold hover:bg-green-700 active:scale-95 transition-all shadow-xs cursor-pointer"
+                  className="h-8 px-3 rounded-lg bg-green-600 text-white text-xs font-bold hover:bg-green-700 active:scale-95 transition-all shadow-xs cursor-pointer"
                 >
                   Green
                 </button>
@@ -391,7 +372,7 @@ export default function UnoPanel({ objectId, name, socket, me, onClose }: GamePa
                   data-testid="uno-color-blue"
                   aria-label="Choose blue"
                   onClick={() => handleSelectColor('blue')}
-                  className="h-9 px-4 rounded-lg bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 active:scale-95 transition-all shadow-xs cursor-pointer"
+                  className="h-8 px-3 rounded-lg bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 active:scale-95 transition-all shadow-xs cursor-pointer"
                 >
                   Blue
                 </button>
@@ -408,13 +389,13 @@ export default function UnoPanel({ objectId, name, socket, me, onClose }: GamePa
 
           {/* Hand Area */}
           {isSpectator && (
-            <div className="rounded-xl border border-dashed border-zinc-200 bg-zinc-50/50 p-6 text-center text-xs font-medium text-zinc-500">
+            <div className="shrink-0 rounded-xl border border-dashed border-zinc-200 bg-zinc-50/50 p-4 text-center text-xs font-medium text-zinc-500">
               Spectating
             </div>
           )}
 
           {isPlayer && (
-            <div className="flex flex-col gap-1.5">
+            <div className="flex flex-col gap-1 shrink-0">
               <div className="flex items-center justify-between text-xs text-zinc-500 px-1">
                 <span>Your hand ({state.hand.length} cards)</span>
                 {isMyTurn && (
@@ -423,19 +404,20 @@ export default function UnoPanel({ objectId, name, socket, me, onClose }: GamePa
                   </span>
                 )}
               </div>
-              <div className="flex flex-wrap gap-2 justify-center max-h-56 overflow-y-auto p-3 bg-zinc-50/50 rounded-xl border border-zinc-200/80">
+              <div className="flex gap-2 justify-start sm:justify-center overflow-x-auto p-2 bg-zinc-50/50 rounded-xl border border-zinc-200/80">
                 {state.hand.map((card) => {
                   const isPlayable = isMyTurn && state.playable.includes(card.id);
                   const isWild =
                     card.color === 'wild' || card.value === 'wild' || card.value === 'wild4';
                   return (
-                    <UnoCard
-                      key={card.id}
-                      card={card}
-                      isButton
-                      disabled={!isPlayable}
-                      onClick={() => handleCardClick(card.id, isWild)}
-                    />
+                    <div key={card.id} className="shrink-0">
+                      <UnoCard
+                        card={card}
+                        isButton
+                        disabled={!isPlayable}
+                        onClick={() => handleCardClick(card.id, isWild)}
+                      />
+                    </div>
                   );
                 })}
               </div>
@@ -444,11 +426,11 @@ export default function UnoPanel({ objectId, name, socket, me, onClose }: GamePa
 
           {/* Log Lines */}
           {state.log && state.log.length > 0 && (
-            <div className="rounded-xl border border-zinc-200/80 bg-zinc-50 p-2.5 text-xs">
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400 block mb-1">
+            <div className="shrink-0 rounded-xl border border-zinc-200/80 bg-zinc-50 p-2 text-xs">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400 block mb-0.5">
                 Game Log
               </span>
-              <div className="flex flex-col gap-0.5 max-h-16 overflow-y-auto font-mono text-[11px] text-zinc-600">
+              <div className="flex flex-col gap-0.5 max-h-12 overflow-y-auto font-mono text-[11px] text-zinc-600">
                 {state.log.map((line, idx) => (
                   <div key={idx} className="truncate">
                     {line}
@@ -462,11 +444,11 @@ export default function UnoPanel({ objectId, name, socket, me, onClose }: GamePa
 
       {/* ENDED PHASE */}
       {state?.phase === 'ended' && (
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-1 min-h-0 flex-col items-center justify-center gap-4 overflow-y-auto">
           <div
             data-testid="uno-winner"
             aria-label="Winner banner"
-            className="flex flex-col items-center justify-center gap-2 rounded-xl border border-amber-300 bg-amber-50 p-6 text-center"
+            className="flex flex-col items-center justify-center gap-2 rounded-xl border border-amber-300 bg-amber-50 p-6 text-center max-w-md w-full"
           >
             <div className="text-3xl">🏆</div>
             <div className="text-base font-bold text-zinc-900">
@@ -498,7 +480,7 @@ export default function UnoPanel({ objectId, name, socket, me, onClose }: GamePa
           </div>
 
           {state.log && state.log.length > 0 && (
-            <div className="rounded-xl border border-zinc-200/80 bg-zinc-50 p-2.5 text-xs">
+            <div className="w-full max-w-md rounded-xl border border-zinc-200/80 bg-zinc-50 p-2.5 text-xs">
               <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400 block mb-1">
                 Final Game Log
               </span>

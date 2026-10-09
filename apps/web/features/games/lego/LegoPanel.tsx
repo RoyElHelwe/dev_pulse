@@ -15,6 +15,7 @@ import {
   validatePlacement,
 } from '@/game/render/legoArt';
 import { cn } from '@/lib/cn';
+import { useGameChromeInfo } from '../GameChrome';
 import type { GamePanelProps } from '../types';
 import { useGameSession } from '../useGameSession';
 
@@ -36,8 +37,12 @@ function hexToRgba(hex: string, alpha: number): string {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
-export default function LegoPanel({ objectId, name, socket, onClose }: GamePanelProps) {
-  const { state, status, error, send, leave } = useGameSession<LegoState>(socket, 'lego', objectId);
+export default function LegoPanel({ objectId, socket }: GamePanelProps) {
+  const { state, status, error, send } = useGameSession<LegoState>(socket, 'lego', objectId);
+
+  useGameChromeInfo({
+    players: state?.players ? state.players.length : null,
+  });
 
   const [shapeIndex, setShapeIndex] = useState(1); // default 1x2
   const [rotated, setRotated] = useState(false);
@@ -46,8 +51,35 @@ export default function LegoPanel({ objectId, name, socket, onClose }: GamePanel
   const [confirmingClear, setConfirmingClear] = useState(false);
   const [briefError, setBriefError] = useState<string | null>(null);
   const [hoverPos, setHoverPos] = useState<[number, number] | null>(null);
+  const [cellSize, setCellSize] = useState(16);
 
+  const containerRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  // Measure available container space to compute square cell size
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const updateCellSize = (w: number, h: number) => {
+      if (w <= 0 || h <= 0) return;
+      const computed = Math.floor(Math.min(w / LEGO_W, h / LEGO_H));
+      setCellSize(Math.max(8, computed));
+    };
+
+    const rect = container.getBoundingClientRect();
+    updateCellSize(rect.width, rect.height);
+
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const { width, height } = entry.contentRect;
+        updateCellSize(width, height);
+      }
+    });
+
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, []);
 
   // Mirror state.bricks into legoArt.set(objectId, bricks) so the wall updates instantly
   useEffect(() => {
@@ -99,8 +131,9 @@ export default function LegoPanel({ objectId, name, socket, onClose }: GamePanel
     if (!ctx) return;
 
     const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
-    const renderW = 768;
-    const renderH = 512;
+    const studSize = cellSize;
+    const renderW = LEGO_W * studSize;
+    const renderH = LEGO_H * studSize;
 
     if (canvas.width !== Math.round(renderW * dpr) || canvas.height !== Math.round(renderH * dpr)) {
       canvas.width = Math.round(renderW * dpr);
@@ -117,17 +150,17 @@ export default function LegoPanel({ objectId, name, socket, onClose }: GamePanel
     // Baseplate studs
     for (let x = 0; x < LEGO_W; x++) {
       for (let y = 0; y < LEGO_H; y++) {
-        const cx = (x + 0.5) * 16;
-        const cy = (y + 0.5) * 16;
+        const cx = (x + 0.5) * studSize;
+        const cy = (y + 0.5) * studSize;
 
         ctx.fillStyle = '#14532d';
         ctx.beginPath();
-        ctx.arc(cx, cy + 0.5, 2.5, 0, Math.PI * 2);
+        ctx.arc(cx, cy + studSize * 0.03, studSize * 0.16, 0, Math.PI * 2);
         ctx.fill();
 
         ctx.fillStyle = '#22c55e';
         ctx.beginPath();
-        ctx.arc(cx, cy, 2.2, 0, Math.PI * 2);
+        ctx.arc(cx, cy, studSize * 0.14, 0, Math.PI * 2);
         ctx.fill();
       }
     }
@@ -136,10 +169,10 @@ export default function LegoPanel({ objectId, name, socket, onClose }: GamePanel
     const bricks = state?.bricks ?? [];
     for (const [bxStud, byStud, bwStud, bhStud, c] of bricks) {
       const colorHex = LEGO_PALETTE[c] ?? LEGO_PALETTE[0];
-      const px = bxStud * 16;
-      const py = byStud * 16;
-      const pw = bwStud * 16;
-      const ph = bhStud * 16;
+      const px = bxStud * studSize;
+      const py = byStud * studSize;
+      const pw = bwStud * studSize;
+      const ph = bhStud * studSize;
 
       ctx.fillStyle = colorHex;
       ctx.fillRect(px, py, pw, ph);
@@ -155,28 +188,28 @@ export default function LegoPanel({ objectId, name, socket, onClose }: GamePanel
       // Studs on the brick
       for (let sx = 0; sx < bwStud; sx++) {
         for (let sy = 0; sy < bhStud; sy++) {
-          const cx = (bxStud + sx + 0.5) * 16;
-          const cy = (byStud + sy + 0.5) * 16;
+          const cx = (bxStud + sx + 0.5) * studSize;
+          const cy = (byStud + sy + 0.5) * studSize;
 
           ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
           ctx.beginPath();
-          ctx.arc(cx, cy + 0.8, 4, 0, Math.PI * 2);
+          ctx.arc(cx, cy + studSize * 0.05, studSize * 0.25, 0, Math.PI * 2);
           ctx.fill();
 
           ctx.fillStyle = colorHex;
           ctx.beginPath();
-          ctx.arc(cx, cy, 3.8, 0, Math.PI * 2);
+          ctx.arc(cx, cy, studSize * 0.24, 0, Math.PI * 2);
           ctx.fill();
 
           ctx.strokeStyle = 'rgba(0, 0, 0, 0.15)';
-          ctx.lineWidth = 0.8;
+          ctx.lineWidth = Math.max(0.5, studSize * 0.05);
           ctx.beginPath();
-          ctx.arc(cx, cy, 3.8, 0, Math.PI * 2);
+          ctx.arc(cx, cy, studSize * 0.24, 0, Math.PI * 2);
           ctx.stroke();
 
           ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
           ctx.beginPath();
-          ctx.arc(cx - 1, cy - 1, 1.4, 0, Math.PI * 2);
+          ctx.arc(cx - studSize * 0.06, cy - studSize * 0.06, studSize * 0.09, 0, Math.PI * 2);
           ctx.fill();
         }
       }
@@ -191,16 +224,16 @@ export default function LegoPanel({ objectId, name, socket, onClose }: GamePanel
         if (target) {
           const [tx, ty, tw, th] = target;
           ctx.fillStyle = 'rgba(239, 68, 68, 0.4)';
-          ctx.fillRect(tx * 16, ty * 16, tw * 16, th * 16);
+          ctx.fillRect(tx * studSize, ty * studSize, tw * studSize, th * studSize);
           ctx.strokeStyle = '#ef4444';
           ctx.lineWidth = 2;
-          ctx.strokeRect(tx * 16, ty * 16, tw * 16, th * 16);
+          ctx.strokeRect(tx * studSize, ty * studSize, tw * studSize, th * studSize);
         } else {
           ctx.fillStyle = 'rgba(239, 68, 68, 0.3)';
-          ctx.fillRect(hx * 16, hy * 16, 16, 16);
+          ctx.fillRect(hx * studSize, hy * studSize, studSize, studSize);
           ctx.strokeStyle = '#ef4444';
           ctx.lineWidth = 1.5;
-          ctx.strokeRect(hx * 16, hy * 16, 16, 16);
+          ctx.strokeRect(hx * studSize, hy * studSize, studSize, studSize);
         }
       } else {
         const [w, h] = effectiveShape;
@@ -208,10 +241,10 @@ export default function LegoPanel({ objectId, name, socket, onClose }: GamePanel
         const validationError = validatePlacement(bricks, ghostBrick);
         const isValid = validationError === null;
 
-        const gx = hx * 16;
-        const gy = hy * 16;
-        const gw = w * 16;
-        const gh = h * 16;
+        const gx = hx * studSize;
+        const gy = hy * studSize;
+        const gw = w * studSize;
+        const gh = h * studSize;
 
         if (isValid) {
           const colorHex = LEGO_PALETTE[colorIndex] ?? LEGO_PALETTE[0];
@@ -223,11 +256,11 @@ export default function LegoPanel({ objectId, name, socket, onClose }: GamePanel
 
           for (let sx = 0; sx < w; sx++) {
             for (let sy = 0; sy < h; sy++) {
-              const cx = (hx + sx + 0.5) * 16;
-              const cy = (hy + sy + 0.5) * 16;
+              const cx = (hx + sx + 0.5) * studSize;
+              const cy = (hy + sy + 0.5) * studSize;
               ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
               ctx.beginPath();
-              ctx.arc(cx, cy, 3.5, 0, Math.PI * 2);
+              ctx.arc(cx, cy, studSize * 0.22, 0, Math.PI * 2);
               ctx.fill();
             }
           }
@@ -240,11 +273,11 @@ export default function LegoPanel({ objectId, name, socket, onClose }: GamePanel
 
           for (let sx = 0; sx < w; sx++) {
             for (let sy = 0; sy < h; sy++) {
-              const cx = (hx + sx + 0.5) * 16;
-              const cy = (hy + sy + 0.5) * 16;
+              const cx = (hx + sx + 0.5) * studSize;
+              const cy = (hy + sy + 0.5) * studSize;
               ctx.fillStyle = 'rgba(239, 68, 68, 0.7)';
               ctx.beginPath();
-              ctx.arc(cx, cy, 3, 0, Math.PI * 2);
+              ctx.arc(cx, cy, studSize * 0.19, 0, Math.PI * 2);
               ctx.fill();
             }
           }
@@ -253,7 +286,7 @@ export default function LegoPanel({ objectId, name, socket, onClose }: GamePanel
     }
 
     ctx.restore();
-  }, [state?.bricks, hoverPos, effectiveShape, colorIndex, isErasing]);
+  }, [state?.bricks, hoverPos, effectiveShape, colorIndex, isErasing, cellSize]);
 
   const getStudCoords = (e: React.PointerEvent<HTMLCanvasElement>): [number, number] | null => {
     const canvas = canvasRef.current;
@@ -302,34 +335,16 @@ export default function LegoPanel({ objectId, name, socket, onClose }: GamePanel
     send({ type: 'place', x, y, w, h, c: colorIndex });
   };
 
-  const handleLeave = () => {
-    leave();
-    onClose();
-  };
-
-  const builderCount = state?.players?.length ?? 0;
+  const canvasWidth = LEGO_W * cellSize;
+  const canvasHeight = LEGO_H * cellSize;
 
   return (
-    <div data-captures-keys="" className="flex flex-col gap-3.5 select-none">
-      {/* Top Header / Info */}
-      <div className="flex items-center justify-between text-xs text-zinc-500">
-        <div className="flex items-center gap-2">
-          <span className="font-semibold text-zinc-900">{name}</span>
-          <span>(48×32 Baseplate)</span>
-          {builderCount > 0 && (
-            <span className="rounded-full bg-zinc-100 px-2 py-0.5 font-medium text-zinc-600">
-              {builderCount} {builderCount === 1 ? 'builder' : 'builders'}
-            </span>
-          )}
-        </div>
-        <div>
-          {status === 'joining' && <span className="text-zinc-400">Connecting...</span>}
-          {status === 'error' && <span className="text-red-500">Connection error</span>}
-        </div>
-      </div>
-
+    <div
+      data-captures-keys=""
+      className="flex h-full w-full min-h-0 flex-col gap-2 p-3 sm:p-4 select-none overflow-hidden"
+    >
       {/* Toolbar: Shapes, Rotate, Erase, Clear */}
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-100 pb-3">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-200/80 pb-2 shrink-0">
         <div className="flex flex-wrap items-center gap-1.5">
           {LEGO_BASE_SHAPES.map(([sw, sh], idx) => {
             const isSelected = shapeIndex === idx && !isErasing;
@@ -415,7 +430,7 @@ export default function LegoPanel({ objectId, name, socket, onClose }: GamePanel
       </div>
 
       {/* Palette Swatches */}
-      <div className="flex flex-wrap items-center gap-1.5 py-1">
+      <div className="flex flex-wrap items-center gap-1.5 py-0.5 shrink-0">
         {LEGO_PALETTE.map((hex, i) => (
           <button
             key={hex}
@@ -436,34 +451,48 @@ export default function LegoPanel({ objectId, name, socket, onClose }: GamePanel
 
       {/* Brief Error Banner */}
       {briefError && (
-        <div className="text-xs font-medium text-red-600 bg-red-50 border border-red-200 px-3 py-1.5 rounded-lg transition">
+        <div className="text-xs font-medium text-red-600 bg-red-50 border border-red-200 px-3 py-1.5 rounded-lg transition shrink-0">
           {briefError}
         </div>
       )}
 
-      {/* Lego Canvas */}
-      <div className="relative w-full max-w-[768px] overflow-hidden rounded-xl border border-zinc-300 bg-zinc-900 shadow-inner">
-        <canvas
-          ref={canvasRef}
-          width={768}
-          height={512}
-          className={cn(
-            'block w-full aspect-[48/32] touch-none select-none',
-            isErasing ? 'cursor-not-allowed' : 'cursor-crosshair',
-          )}
-          onPointerMove={handlePointerMove}
-          onPointerLeave={handlePointerLeave}
-          onPointerDown={handlePointerDown}
-          onContextMenu={(e) => e.preventDefault()}
-        />
+      {/* Connection State Info (if joining or error) */}
+      {status === 'joining' && !state && (
+        <div className="text-xs text-zinc-400 py-1 shrink-0">Connecting to Lego wall...</div>
+      )}
+      {status === 'error' && !state && (
+        <div className="text-xs text-red-500 py-1 shrink-0">Connection error</div>
+      )}
+
+      {/* Lego Canvas Container */}
+      <div
+        ref={containerRef}
+        className="relative flex-1 min-h-0 w-full flex items-center justify-center overflow-hidden"
+      >
+        <div
+          className="relative overflow-hidden rounded-xl border border-zinc-300 bg-zinc-900 shadow-inner"
+          style={{ width: canvasWidth, height: canvasHeight }}
+        >
+          <canvas
+            ref={canvasRef}
+            width={canvasWidth}
+            height={canvasHeight}
+            style={{ width: canvasWidth, height: canvasHeight }}
+            className={cn(
+              'block touch-none select-none',
+              isErasing ? 'cursor-not-allowed' : 'cursor-crosshair',
+            )}
+            onPointerMove={handlePointerMove}
+            onPointerLeave={handlePointerLeave}
+            onPointerDown={handlePointerDown}
+            onContextMenu={(e) => e.preventDefault()}
+          />
+        </div>
       </div>
 
-      {/* Footer Hints & Leave */}
-      <div className="flex items-center justify-between pt-1 text-xs text-zinc-500">
+      {/* Footer Hints */}
+      <div className="flex items-center justify-between pt-1 text-xs text-zinc-500 shrink-0">
         <span>Click to place. Right-click or Shift-click to erase. Press R to rotate.</span>
-        <Button variant="secondary" size="sm" onClick={handleLeave}>
-          Leave wall
-        </Button>
       </div>
     </div>
   );

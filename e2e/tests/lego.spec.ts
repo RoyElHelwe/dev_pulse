@@ -129,6 +129,22 @@ test('dev-login as owner, walk to Lego wall, place and erase brick', async () =>
   await page.waitForTimeout(500);
   await page.screenshot({ path: shotPath('lego-panel.png') });
 
+  // Full screen at both reference sizes: whole viewport, Leave reachable, board fits.
+  for (const vp of [{ width: 1920, height: 1080 }, { width: 1366, height: 768 }]) {
+    // The browser's own fullscreen (requested by the game) blocks resizing: leave it, the in-page layout stays.
+    await page.evaluate(() => (document.fullscreenElement ? document.exitFullscreen() : undefined));
+    await page.setViewportSize(vp);
+    await page.waitForTimeout(300);
+    const dbox = await dialog.boundingBox();
+    expect(dbox?.width).toBe(vp.width);
+    expect(dbox?.height).toBe(vp.height);
+    await expect(dialog.getByTestId('game-leave')).toBeInViewport();
+    await expect(legoCanvas).toBeInViewport({ ratio: 0.98 });
+    await page.screenshot({ path: shotPath(`lego-panel-${vp.width}x${vp.height}.png`) });
+  }
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.waitForTimeout(300);
+
   // Pick a free cell to place a brick (stud 24, 16 is near the center)
   const box = await legoCanvas.boundingBox();
   expect(box).not.toBeNull();

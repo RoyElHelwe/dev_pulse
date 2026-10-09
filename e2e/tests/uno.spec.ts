@@ -97,6 +97,21 @@ test('2 players join office, walk to Uno table, start game and take turn', async
   await expect(staff.locator('[data-testid^="uno-card-"]')).toHaveCount(7, { timeout: 10_000 });
   await org.screenshot({ path: shotPath('uno-playing.png') });
 
+  // Full screen at both reference sizes: whole viewport, Leave reachable, no page scrolling.
+  const unoDialog = org.getByRole('dialog', { name: 'Uno table' });
+  for (const vp of [{ width: 1920, height: 1080 }, { width: 1366, height: 768 }]) {
+    // The browser's own fullscreen (requested by the game) blocks resizing: leave it, the in-page layout stays.
+    await org.evaluate(() => (document.fullscreenElement ? document.exitFullscreen() : undefined));
+    await org.setViewportSize(vp);
+    const box = await unoDialog.boundingBox();
+    expect(box?.width).toBe(vp.width);
+    expect(box?.height).toBe(vp.height);
+    await expect(unoDialog.getByTestId('game-leave')).toBeInViewport();
+    await expect(org.getByTestId('uno-draw')).toBeInViewport();
+    await expect(org.locator('[data-testid^="uno-card-"]').first()).toBeInViewport();
+    await org.screenshot({ path: shotPath(`uno-playing-${vp.width}x${vp.height}.png`) });
+  }
+
   // Assert turn indicator (uno-turn) shows on exactly one of them
   const orgTurn = org.getByTestId('uno-turn');
   const staffTurn = staff.getByTestId('uno-turn');
