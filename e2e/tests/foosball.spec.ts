@@ -33,7 +33,7 @@ async function walkToFoosball(page: Page, layout: any, label = '') {
 }
 
 test('2 players join office, play foosball, kick, forfeit and check leaderboard', async () => {
-  test.setTimeout(300_000);
+  test.setTimeout(480_000);
   const stamp = Date.now();
   console.log('[FOOSBALL] Registering Alice...');
   await register(org, 'Alice', `alice${stamp}@example.com`);
@@ -62,15 +62,15 @@ test('2 players join office, play foosball, kick, forfeit and check leaderboard'
   await walkToFoosball(org, ws.layout, 'Alice');
   await walkToFoosball(staff, ws.layout, 'Bob');
 
-  // Alice opens Foosball table
-  const orgDialog = org.getByRole('dialog', { name: 'Foosball table' });
+  // Alice opens the Baby foot table
+  const orgDialog = org.getByRole('dialog', { name: 'Baby foot table' });
   await expect(async () => {
     await org.keyboard.press('e');
     await expect(orgDialog).toBeVisible({ timeout: 1_500 });
   }).toPass({ timeout: 20_000 });
 
-  // Bob opens Foosball table
-  const staffDialog = staff.getByRole('dialog', { name: 'Foosball table' });
+  // Bob opens the Baby foot table
+  const staffDialog = staff.getByRole('dialog', { name: 'Baby foot table' });
   await expect(async () => {
     await staff.keyboard.press('e');
     await expect(staffDialog).toBeVisible({ timeout: 1_500 });
@@ -95,20 +95,45 @@ test('2 players join office, play foosball, kick, forfeit and check leaderboard'
   // Save foosball-playing.png
   await org.screenshot({ path: shotPath('foosball-playing.png') });
 
-  // Press W / S on Alice's page and verify rod position changes
+  // Full screen: the dialog covers the whole viewport, nothing needs scrolling, Leave is reachable.
+  for (const vp of [{ width: 1920, height: 1080 }, { width: 1366, height: 768 }]) {
+    // The browser's own fullscreen (requested by the game) blocks resizing: leave it, the in-page layout stays.
+    await org.evaluate(() => (document.fullscreenElement ? document.exitFullscreen() : undefined));
+    await org.setViewportSize(vp);
+    const box = await orgDialog.boundingBox();
+    expect(box?.width).toBe(vp.width);
+    expect(box?.height).toBe(vp.height);
+    await expect(orgDialog.getByTestId('game-leave')).toBeInViewport();
+    const tbl = await orgDialog.getByTestId('foosball-canvas').boundingBox();
+    expect(tbl!.y + tbl!.height).toBeLessThanOrEqual(vp.height);
+    expect(tbl!.width).toBeGreaterThan(vp.width * 0.5);
+    await org.screenshot({ path: shotPath(`babyfoot-playing-${vp.width}x${vp.height}.png`) });
+  }
+
+  // Mouse controls (pointer lock is not available here: the in-table position fallback is used).
+  const canvas = orgDialog.getByTestId('foosball-canvas');
+  const cb = (await canvas.boundingBox())!;
   const activeRodPos = orgDialog.getByTestId('active-rod-pos');
-  const initialY = Number(await activeRodPos.getAttribute('data-y'));
-  await org.keyboard.down('KeyS');
-  await expect.poll(async () => {
-    return Number(await activeRodPos.getAttribute('data-y'));
-  }, { timeout: 5_000 }).not.toBe(initialY);
-  await org.keyboard.up('KeyS');
+  const yAt = async () => Number(await activeRodPos.getAttribute('data-y'));
+  await org.mouse.move(cb.x + cb.width * 0.5, cb.y + cb.height * 0.1, { steps: 12 });
+  await expect.poll(yAt, { timeout: 5_000 }).toBeLessThan(-2);
+  const up = await yAt();
+  await org.mouse.move(cb.x + cb.width * 0.5, cb.y + cb.height * 0.9, { steps: 12 });
+  await expect.poll(yAt, { timeout: 5_000 }).toBeGreaterThan(up + 4);
 
-  // Press Space to kick
-  await org.keyboard.press('Space');
+  // Click on another owned rod selects it, a click elsewhere kicks.
+  await orgDialog.getByTestId('foosball-rod-3').click();
+  await expect(orgDialog.getByTestId('foosball-rod-3')).toHaveClass(/bg-amber-400/);
+  await org.mouse.move(cb.x + cb.width * 0.5, cb.y + cb.height * 0.3, { steps: 6 });
+  await org.mouse.down();
+  await org.mouse.up();
+  // A quick flick up and down (kick by velocity).
+  await org.waitForTimeout(500);
+  await org.mouse.move(cb.x + cb.width * 0.5, cb.y + cb.height * 0.9);
+  await org.mouse.move(cb.x + cb.width * 0.5, cb.y + cb.height * 0.1);
 
-  // Bob closes his dialog via "Close game" button
-  await staffDialog.getByRole('button', { name: 'Close game' }).click();
+  // Bob leaves via the top bar "Leave" button
+  await staffDialog.getByTestId('game-leave').click();
   await expect(staffDialog).toBeHidden({ timeout: 5_000 });
 
   // After >10s forfeit: Alice's dialog shows ended / winner
@@ -131,7 +156,7 @@ test('2 players join office, play foosball, kick, forfeit and check leaderboard'
 
 test('Escape closes the dialog even when a button inside is focused', async () => {
   // Ensure dialog is closed first if still open
-  const dialog = org.getByRole('dialog', { name: 'Foosball table' });
+  const dialog = org.getByRole('dialog', { name: 'Baby foot table' });
   if (await dialog.isVisible()) {
     await dialog.getByRole('button', { name: 'Close game' }).click();
     await expect(dialog).toBeHidden({ timeout: 5_000 });

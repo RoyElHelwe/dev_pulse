@@ -13,6 +13,19 @@ export const TARGET_SCORE = 5;
 export const TICK_HZ = 30;
 export const GRACE_MS = 10000;
 
+export const CANVAS_W = 560;
+export const CANVAS_H = 320;
+export const OFFSET_X = 40;
+export const OFFSET_Y = 32;
+export const SCALE = 4;
+
+export const ROD_TRAVEL_LIMITS: readonly number[] = [
+  16,
+  13,
+  3.4,
+  FIELD_W / 6 - MAN_R,
+];
+
 export const ROD_X_A = [8, 24, 56, 88] as const;
 export const ROD_X_B = [112, 96, 64, 32] as const;
 export const ROD_MEN_COUNTS = [1, 2, 5, 3] as const;
@@ -85,7 +98,8 @@ export type FoosballAction =
   | { type: 'start' }
   | { type: 'rematch' }
   | { type: 'move'; rod: number; dir: -1 | 0 | 1 }
-  | { type: 'kick'; rod: number };
+  | { type: 'kick'; rod: number; strength?: number }
+  | { type: 'aim'; rod: number; y: number };
 
 export const DEFAULT_VIEW: FoosballView = {
   phase: 'lobby',

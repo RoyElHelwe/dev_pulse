@@ -333,6 +333,7 @@ function OfficeCard({
   const [confirmName, setConfirmName] = useState('');
   const [deleteError, setDeleteError] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
+  const [chillAdded, setChillAdded] = useState(false);
 
   return (
     <Card title="Office settings">
@@ -361,7 +362,19 @@ function OfficeCard({
         <p className={`mt-2 text-sm ${nameResult.tone === 'success' ? 'text-emerald-700' : 'text-rose-700'}`}>{nameResult.text}</p>
       )}
 
-      {(workspace.canExpand || workspace.canAddChill) && <ExpandOfficeCard workspace={workspace} onExpanded={onRenamed} />}
+      {(workspace.canExpand || workspace.canAddChill) && (
+        <ExpandOfficeCard
+          workspace={workspace}
+          onExpanded={onRenamed}
+          onChillAdded={() => setChillAdded(true)}
+        />
+      )}
+
+      {chillAdded && (
+        <p role="status" data-testid="chill-added" className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm font-medium text-emerald-800">
+          Chill room added
+        </p>
+      )}
 
       {isOwner && <TemplateSwitcher workspace={workspace} onSwitched={onRenamed} />}
 
@@ -529,9 +542,11 @@ type WingSide = 'LEFT' | 'RIGHT' | 'BOTTOM';
 function ExpandOfficeCard({
   workspace,
   onExpanded,
+  onChillAdded,
 }: {
   workspace: MyWorkspace;
   onExpanded: (workspace?: MyWorkspace) => void;
+  onChillAdded?: () => void;
 }) {
   const [busySide, setBusySide] = useState<WingSide | null>(null);
   const [result, setResult] = useState<{ tone: 'success' | 'error'; text: string } | null>(null);
@@ -573,6 +588,7 @@ function ExpandOfficeCard({
       });
       const sideName = side === 'LEFT' ? 'left' : side === 'RIGHT' ? 'right' : 'bottom';
       setChillResult({ tone: 'success', text: `Added chill room on the ${sideName}.` });
+      onChillAdded?.();
       onExpanded(updated);
     } catch (err) {
       setChillResult({ tone: 'error', text: message(err) });
@@ -685,7 +701,7 @@ function ExpandOfficeCard({
         <div className={cn(workspace.canExpand && 'mt-6 border-t border-zinc-200/60 pt-4')}>
           <h4 className="font-semibold text-zinc-900">Chill room</h4>
           <p className="mt-1 text-sm text-zinc-600">
-            Add a dedicated games and hangout room (foosball, Uno, Lego wall). One chill room per office.
+            Add a dedicated games and hangout room (Baby foot, Uno, Lego wall). One chill room per office.
           </p>
           {chillResult && (
             <p className={`mt-3 text-sm ${chillResult.tone === 'success' ? 'text-emerald-700' : 'text-rose-700'}`}>
