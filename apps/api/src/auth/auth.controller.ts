@@ -4,7 +4,7 @@ import type { Request, Response } from 'express';
 import type { AuthUser } from '../common/auth/auth-user';
 import { CurrentUser } from '../common/auth/current-user.decorator';
 import { Public } from '../common/auth/public.decorator';
-import { AppConfig } from '../config/app-config';
+import { AppConfig, isDevLoginEnabled } from '../config/app-config';
 import { AuthService, type SignInResult, TAKEOVER_SECONDS } from './auth.service';
 import { clientInfo } from './client-info';
 import { clearSessionCookies, COOKIE_OPTIONS, COOKIES, setSessionCookies } from './cookies';
@@ -129,6 +129,16 @@ export class AuthController {
   @HttpCode(204)
   changePassword(@CurrentUser() user: AuthUser, @Body() dto: ChangePasswordDto) {
     return this.passwords.change(user.id, user.sessionId, dto);
+  }
+
+  /**
+   * Whether the dev identity switcher is on. Always mounted (unlike DevModule) so the login
+   * page gets a 200 in production too: a 404 would show up as an error in the browser console.
+   */
+  @Public()
+  @Get('dev')
+  devStatus() {
+    return { enabled: isDevLoginEnabled(process.env) };
   }
 
   /** The signed-in user. */

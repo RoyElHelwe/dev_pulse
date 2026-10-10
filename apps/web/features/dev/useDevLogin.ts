@@ -1,8 +1,8 @@
 'use client';
 
-// Dev/test only: asks the api whether the dev sign-in is on. The api only mounts that
-// endpoint when DEV_LOGIN is effective (never in production), so it answers 404 elsewhere
-// and every dev feature in the web app stays off.
+// Dev/test only: asks the api whether the dev sign-in is on (GET /auth/dev, always answered,
+// `enabled` is false in production), then loads the users the switcher offers from DevModule,
+// which the api only mounts when DEV_LOGIN is effective.
 
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
@@ -25,8 +25,11 @@ export function useDevLogin(): DevStatus | null {
   const [status, setStatus] = useState<DevStatus | null>(null);
   useEffect(() => {
     let alive = true;
-    api<DevStatus>('/auth/dev')
-      .then((s) => alive && setStatus(s))
+    api<{ enabled: boolean }>('/auth/dev')
+      .then(async ({ enabled }) => {
+        const users = enabled ? (await api<{ users: DevUser[] }>('/auth/dev/users')).users : [];
+        if (alive) setStatus({ enabled, users });
+      })
       .catch(() => alive && setStatus({ enabled: false, users: [] }));
     return () => {
       alive = false;
