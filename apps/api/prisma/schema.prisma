@@ -14,11 +14,9 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ============================================================================
-// CORE (shared by everyone – agreed together on day 1)
-//   User, Workspace, WorkspaceMember
-// ============================================================================
+// ===== Core: users and workspaces =====
 
+/// Registered user account with authentication credentials, profile info, and workspace relations.
 model User {
   id              String    @id @default(cuid())
   email           String    @unique
@@ -26,6 +24,7 @@ model User {
   avatarUrl       String?
   /// scrypt hash; null for accounts created with Google / GitHub / 42 only.
   passwordHash    String?
+  /// Timestamp when email was confirmed; null for unverified accounts.
   emailVerifiedAt DateTime?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
@@ -39,11 +38,11 @@ model User {
   settings        UserSettings?
   chatMessages    ChatMessage[]
   bookings        RoomBooking[]
-  tasksReported   Task[]    @relation("TaskReporter")
-  tasksAssigned   Task[]    @relation("TaskAssignee")
+  tasksReported   Task[]           @relation("TaskReporter")
+  tasksAssigned   Task[]           @relation("TaskAssignee")
 }
 
-/// An organisation and its virtual office. Created by its owner (the organiser).
+/// Organization and virtual office environment containing layout, rooms, and shared resources.
 model Workspace {
   id            String   @id @default(cuid())
   name          String
@@ -66,38 +65,14 @@ model Workspace {
   legoBoards   LegoBoard[]
 }
 
-enum WingSide {
-  LEFT
-  RIGHT
-  BOTTOM
-}
-
-/// A generated extension of a Loft office. The composed layout lives in Workspace.layout;
-/// this table records what was added (position in tiles, in the current layout's coordinates).
-model OfficeWing {
-  id          String   @id @default(cuid())
-  workspaceId String
-  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  side        WingSide
-  seed        String
-  x           Float
-  y           Float
-  w           Float
-  h           Float
-  deskCount   Int
-  createdAt   DateTime @default(now())
-
-  @@index([workspaceId])
-}
-
-/// OWNER: the organiser (one per workspace). ADMIN: can invite and edit the office.
+/// Workspace permission role determining administrative, invitation, and office editing privileges.
 enum Role {
   OWNER
   ADMIN
   MEMBER
 }
 
-/// A person in a workspace. One workspace per user (userId is unique).
+/// A person in a workspace, tracking their role, desk assignment, status, and avatar appearance.
 model WorkspaceMember {
   id          String   @id @default(cuid())
   userId      String   @unique
@@ -120,88 +95,7 @@ model WorkspaceMember {
   @@index([workspaceId])
 }
 
-// ============================================================================
-// ROY – auth, profile, invitations
-// ============================================================================
-
-/// One row per refresh token. Tokens are rotated on every use: the old row is
-/// revoked and points to its replacement. All rows created from one sign-in
-/// share a familyId (= one device), so a stolen token can kill the family.
-model RefreshToken {
-  id           String    @id @default(cuid())
-  userId       String
-  familyId     String
-  /// SHA-256 of the token. The token itself is only ever in the cookie.
-  tokenHash    String    @unique
-  userAgent    String?
-  ip           String?
-  createdAt    DateTime  @default(now())
-  expiresAt    DateTime
-  revokedAt    DateTime?
-  replacedById String?
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-  @@index([familyId])
-}
-
-/// A Google / GitHub / 42 identity linked to a user.
-model OAuthAccount {
-  id             String   @id @default(cuid())
-  provider       String
-  providerUserId String
-  userId         String
-  createdAt      DateTime @default(now())
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([provider, providerUserId])
-  @@index([userId])
-}
-
-enum AuthTokenType {
-  VERIFY_EMAIL
-  RESET_PASSWORD
-  /// "Close all my sessions" link, sent when the account is open on another device.
-  CLOSE_SESSIONS
-}
-
-/// One-time tokens sent by email (verify email, reset password).
-model AuthToken {
-  id          String        @id @default(cuid())
-  userId      String
-  type        AuthTokenType
-  tokenHash   String        @unique
-  /// SHA-256 of a secret cookie of the browser that asked for the link. The
-  /// link only works in that browser (or elsewhere with the account password).
-  bindingHash String?
-  expiresAt   DateTime
-  usedAt      DateTime?
-  createdAt   DateTime      @default(now())
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId, type])
-}
-
-/// Authenticator-app (TOTP) settings. enabledAt is null until the user has
-/// confirmed the first code, so a half-finished setup never locks anyone out.
-model TwoFactor {
-  userId         String    @id
-  /// AES-256-GCM encrypted base32 secret.
-  secret         String
-  enabledAt      DateTime?
-  /// SHA-256 hashes of the unused backup codes.
-  backupCodes    String[]
-  /// Last accepted 30-second step, so a code can't be used twice.
-  lastUsedStep   Int?
-  failedAttempts Int       @default(0)
-  lockedUntil    DateTime?
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-}
-
+/// Lifecycle status of an email invitation sent to join a workspace.
 enum InvitationStatus {
   PENDING
   ACCEPTED
@@ -209,7 +103,7 @@ enum InvitationStatus {
   REVOKED
 }
 
-/// An emailed invitation to join a workspace. Only works for that email address.
+/// Emailed invitation to join a workspace with a hashed token and expiration timestamp.
 model Invitation {
   id          String           @id @default(cuid())
   workspaceId String
@@ -230,84 +124,129 @@ model Invitation {
   @@index([email])
 }
 
-// ============================================================================
-// ROY – onboarding, office map, game
-// ============================================================================
+// ===== Auth: sessions, refresh tokens, email tokens, OAuth accounts, 2FA =====
 
-// ============================================================================
-// ZAKARIA (+ helper) – tasks, voice, meeting room, chill room
-// ============================================================================
+/// Rotating session refresh token bound to a device token family for replay detection.
+model RefreshToken {
+  id           String    @id @default(cuid())
+  userId       String
+  /// Device session identifier shared across rotated tokens in the same chain.
+  familyId     String
+  /// SHA-256 of the token. The token itself is only ever in the cookie.
+  tokenHash    String    @unique
+  userAgent    String?
+  ip           String?
+  createdAt    DateTime  @default(now())
+  expiresAt    DateTime
+  revokedAt    DateTime?
+  /// Points to the replacement token ID when rotated.
+  replacedById String?
 
-/// How someone talks in the office: mic open (with a mute button) or push to talk.
-enum VoiceMode {
-  OPEN
-  PUSH_TO_TALK
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([familyId])
 }
 
-/// Personal settings, the same on every device.
-model UserSettings {
-  userId        String    @id
-  voiceMode     VoiceMode @default(OPEN)
-  /// KeyboardEvent.code held to talk in PUSH_TO_TALK mode ("KeyV", "Space"...).
-  pushToTalkKey String    @default("KeyV")
-  /// Rebound keys by action (KeyboardEvent.code). Missing actions use the defaults.
-  keybinds      Json      @default("{}")
-  updatedAt     DateTime  @updatedAt
+/// External OAuth provider identity (Google, GitHub, 42) linked to a user account.
+model OAuthAccount {
+  id             String   @id @default(cuid())
+  provider       String
+  providerUserId String
+  userId         String
+  createdAt      DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerUserId])
+  @@index([userId])
+}
+
+/// Purpose of a one-time emailed authentication token (email verification, password reset, session revoke).
+enum AuthTokenType {
+  VERIFY_EMAIL
+  RESET_PASSWORD
+  /// "Close all my sessions" link, sent when the account is open on another device.
+  CLOSE_SESSIONS
+}
+
+/// One-time hashed email token for password reset, email verification, or session revocation.
+model AuthToken {
+  id          String        @id @default(cuid())
+  userId      String
+  type        AuthTokenType
+  tokenHash   String        @unique
+  /// SHA-256 of a secret cookie of the browser that asked for the link. The
+  /// link only works in that browser (or elsewhere with the account password).
+  bindingHash String?
+  expiresAt   DateTime
+  usedAt      DateTime?
+  createdAt   DateTime      @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, type])
+}
+
+/// TOTP two-factor authentication configuration, encrypted secret, and backup codes for a user.
+model TwoFactor {
+  userId         String    @id
+  /// AES-256-GCM encrypted base32 secret.
+  secret         String
+  /// Timestamp when 2FA was confirmed; null while setup is incomplete.
+  enabledAt      DateTime?
+  /// SHA-256 hashes of the unused backup codes.
+  backupCodes    String[]
+  /// Last accepted 30-second step, so a code can't be used twice.
+  lastUsedStep   Int?
+  failedAttempts Int       @default(0)
+  lockedUntil    DateTime?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
-/// A text message: to the whole office (channel "office") or inside a room
-/// (channel = the layout room id, seen only by people in that room).
-model ChatMessage {
-  id          String   @id @default(cuid())
-  workspaceId String
-  channel     String
-  userId      String
-  text        String
-  /// The booking running in the room when it was sent: a meeting's chat stays
-  /// with that meeting (null = outside any booking).
-  bookingId   String?
-  createdAt   DateTime @default(now())
+// ===== Office: desks, layout, office state =====
 
-  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([workspaceId, channel, createdAt])
+/// Directional side of the office building where an expansion wing attaches.
+enum WingSide {
+  LEFT
+  RIGHT
+  BOTTOM
 }
 
-/// A meeting room reserved for a time slot. No two bookings of one room overlap
-/// (checked by the API under a lock). While it runs, only its attendees can enter
-/// the room, hear its audio and read its chat.
-model RoomBooking {
-  id          String   @id @default(cuid())
+/// Procedural extension wing attached to an office layout to expand desk capacity.
+model OfficeWing {
+  id          String    @id @default(cuid())
   workspaceId String
-  /// Meeting room id in the layout (rooms with kind "meeting").
-  roomId      String
-  title       String
-  startsAt    DateTime
-  endsAt      DateTime
-  createdById String
-  /// Who may join (always includes the creator).
-  attendeeIds String[]
-  createdAt   DateTime @default(now())
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  side        WingSide
+  /// Random seed used for procedural wing generation.
+  seed        String
+  /// Left tile position in office layout coordinates.
+  x           Float
+  /// Top tile position in office layout coordinates.
+  y           Float
+  /// Wing width in tiles.
+  w           Float
+  /// Wing height in tiles.
+  h           Float
+  /// Number of additional desks provided by this wing.
+  deskCount   Int
+  createdAt   DateTime  @default(now())
 
-  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  createdBy User      @relation(fields: [createdById], references: [id], onDelete: Cascade)
-
-  @@index([workspaceId, roomId, startsAt])
+  @@index([workspaceId])
 }
 
-// ============================================================================
-// TASKS (Jira-like global board: apps/api/src/tasks)
-// ============================================================================
+// ===== Tasks =====
 
+/// Issue classification type on the workspace task board (task, bug, or story).
 enum TaskType {
   TASK
   BUG
   STORY
 }
 
+/// Workflow progression column status for tasks on the workspace board.
 enum TaskStatus {
   TODO
   IN_PROGRESS
@@ -315,6 +254,7 @@ enum TaskStatus {
   DONE
 }
 
+/// Urgency and severity priority level assigned to a task.
 enum TaskPriority {
   HIGHEST
   HIGH
@@ -323,7 +263,7 @@ enum TaskPriority {
   LOWEST
 }
 
-/// One issue of a workspace. Shown as `<PREFIX>-<number>` (prefix from the workspace name).
+/// Issue tracker task within a workspace board, identified by sequential number and ranked in status columns.
 model Task {
   id          String       @id @default(cuid())
   workspaceId String
@@ -352,10 +292,69 @@ model Task {
   @@index([workspaceId, assigneeId])
 }
 
-// ============================================================================
-// GAMES (apps/api/src/games)
-// ============================================================================
+// ===== Meetings & chat =====
 
+/// Voice audio transmission mode for office proximity chat (open microphone or push-to-talk).
+enum VoiceMode {
+  OPEN
+  PUSH_TO_TALK
+}
+
+/// User preferences for voice chat transmission and keyboard shortcuts across devices.
+model UserSettings {
+  userId        String    @id
+  voiceMode     VoiceMode @default(OPEN)
+  /// KeyboardEvent.code held to talk in PUSH_TO_TALK mode ("KeyV", "Space"...).
+  pushToTalkKey String    @default("KeyV")
+  /// Rebound keys by action (KeyboardEvent.code). Missing actions use the defaults.
+  keybinds      Json      @default("{}")
+  updatedAt     DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+/// Text chat message sent to an office channel or a scoped room booking.
+model ChatMessage {
+  id          String   @id @default(cuid())
+  workspaceId String
+  /// Channel identifier ("office" for workspace-wide, or room ID for room-scoped chat).
+  channel     String
+  userId      String
+  text        String
+  /// The booking running in the room when it was sent: a meeting's chat stays
+  /// with that meeting (null = outside any booking).
+  bookingId   String?
+  createdAt   DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, channel, createdAt])
+}
+
+/// Scheduled meeting room reservation controlling attendee access, audio privacy, and room chat.
+model RoomBooking {
+  id          String   @id @default(cuid())
+  workspaceId String
+  /// Meeting room id in the layout (rooms with kind "meeting").
+  roomId      String
+  title       String
+  startsAt    DateTime
+  endsAt      DateTime
+  createdById String
+  /// Who may join (always includes the creator).
+  attendeeIds String[]
+  createdAt   DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdBy User      @relation(fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, roomId, startsAt])
+}
+
+// ===== Games =====
+
+/// Outcome of a completed minigame match recording winners and losers for workspace leaderboards.
 model GameResult {
   id          String   @id @default(cuid())
   workspaceId String
@@ -364,28 +363,22 @@ model GameResult {
   losers      String[]
   createdAt   DateTime @default(now())
 
-  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@index([workspaceId, game, createdAt])
 }
 
-// ============================================================================
-// LEGO (apps/api/src/games/lego)
-// ============================================================================
-
-/// One JSON row per board = 1 read on load, 1 upsert per (debounced) write,
-/// <=1536 bricks (~25KB); a row per brick would give thousands of tiny writes
-/// and no benefit since we never query bricks individually.
+/// Collaborative virtual lego building board storing brick state as JSON for debounced persistence.
 model LegoBoard {
   id          String   @id @default(cuid())
   workspaceId String
+  /// Furniture object ID in the office layout corresponding to the board.
   objectId    String
+  /// JSON array of placed bricks [x, y, colorIndex, shapeIndex, rotation].
   bricks      Json
   updatedAt   DateTime @updatedAt
 
-  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@unique([workspaceId, objectId])
 }
-
-
