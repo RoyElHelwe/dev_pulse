@@ -172,11 +172,12 @@ test('the editor refuses overlaps, moves groups and saves for everyone', async (
   await expect(org.getByRole('status').filter({ hasText: 'overlaps' })).toBeVisible();
 
   // Shift-click selects both; dragging one moves the pair.
-  // (The refused plant is still sliding back: a click that lands on it too early misses, so retry the click.)
+  // (Which plant is still selected after the refused drop varies, so start over: select one, add the other.
+  // The refused plant may still be sliding back and a click that lands too early misses: retry it all.)
   await expect(async () => {
-    if (await org.getByText('2 pieces selected').isVisible()) return;
-    await org.keyboard.down('Shift');
     await org.mouse.click(p1[0], p1[1]);
+    await org.keyboard.down('Shift');
+    await org.mouse.click(p2[0], p2[1]);
     await org.keyboard.up('Shift');
     await expect(org.getByText('2 pieces selected')).toBeVisible({ timeout: 2_000 });
   }).toPass({ timeout: 20_000 });

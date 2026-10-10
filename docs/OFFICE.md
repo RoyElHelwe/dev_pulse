@@ -372,7 +372,32 @@ server emits `game:state`, `game:event`, `game:left`, `game:ended`, `game:error`
   status, walk to your desk and press E, meeting room presence, desk swap, editor (overlap
   refused, multi-select, save reaches the others), concurrent saves, template switch,
   joystick, removal, and a clean console throughout. The players really walk: a path is
-  planned on the layout and followed with the arrow keys.
+  planned on the layout and followed with the arrow keys (specs that only need to *be*
+  somewhere use `jumpTo`, an instant teleport).
+
+**Why the suite takes about 1 minute (it took 42):**
+
+- **Setup through the API**: with `DEV_LOGIN=true` specs create users and offices with
+  `devOwner` / `devUser` (`e2e/tests/helpers.ts`, `POST /api/auth/dev/users` + `POST
+  /api/workspace`); only the specs that test sign-up, onboarding and invitations use the forms.
+- **Teleport**: `jumpTo(page, tx, ty)` (`e2e/tests/nav.ts`) uses `window.__devpulse.teleport`,
+  which sends the socket event `dev:teleport`. The API honours it only when dev login is
+  effective (never in production; unit-tested in `office.gateway.spec.ts`). Walking tests
+  (proximity, joystick, desk move) still walk for real.
+- **3 parallel workers** (`E2E_WORKERS`, default 3; more gains nothing with 7 spec files).
+  Spec files run in parallel, tests inside a file stay in order; every file creates its own
+  users and office and closes its browser contexts.
+- **Cheap browsers**: no WebGL (Phaser uses its canvas renderer, ~10x cheaper than software
+  WebGL; `E2E_WEBGL=1` brings it back), office capped at 15 fps (`E2E_FPS`), no
+  `backdrop-filter`, half-resolution baby foot canvas. The office render loop also pauses
+  while a game is open.
+- A global set-up (`e2e/global-setup.ts`) visits every route once so Next compiles before the
+  tests; traces are kept on the first retry only (`retries: 1`).
+
+```bash
+# fast default (3 workers):    pnpm test        (E2E_WORKERS=1 pnpm test for one at a time)
+# full, explicit:              pnpm test:full
+```
 
 ```bash
 # with the API on :4100 and the web app on :3000 (any way you like)
