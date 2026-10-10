@@ -30,7 +30,7 @@ export const DEFAULT_KEYBINDS: Record<Action, string> = {
   people: 'KeyP',
 };
 
-export const ACTION_LABELS: Record<Action, string> = {
+const ACTION_LABELS: Record<Action, string> = {
   interact: 'Use / interact',
   mute: 'Mute microphone',
   deafen: 'Deafen',
@@ -55,9 +55,9 @@ export const RESERVED = [
   'Tab',
 ] as const;
 
-export const RESERVED_KEYS: ReadonlySet<string> = new Set<string>(RESERVED);
+const RESERVED_KEYS: ReadonlySet<string> = new Set<string>(RESERVED);
 
-export const KEY_CODE = /^[A-Za-z0-9]{1,24}$/;
+const KEY_CODE = /^[A-Za-z0-9]{1,24}$/;
 
 /** Strips "Key" or "Digit" prefix if followed by a character, else returns raw code. */
 export function friendlyKeyName(code: string): string {

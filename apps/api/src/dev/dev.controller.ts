@@ -1,45 +1,49 @@
-import { Body, Controller, Get, HttpCode, NotFoundException, Post, Req, Res } from '@nestjs/common';
+/**
+ * Dev/test only: HTTP routes of the dev identity switcher (/auth/dev/*). Never active in
+ * production because DevModule is only loaded when DEV_LOGIN=true outside production.
+ */
+import { Body, Controller, Get, HttpCode, Post, Req, Res } from '@nestjs/common';
 import type { Request, Response } from 'express';
+import type { SignInResult } from '../auth/auth.service';
+import { clientInfo } from '../auth/client-info';
+import { setSessionCookies } from '../auth/cookies';
 import { Public } from '../common/auth/public.decorator';
 import { AppConfig } from '../config/app-config';
-import { clientInfo } from './client-info';
-import { setSessionCookies } from './cookies';
-import { DevLoginService } from './dev-login.service';
-import { DevLoginDto, DevUserDto } from './dto/dev-login.dto';
-import type { SignInResult } from './auth.service';
+import { DevLoginDto, DevUserDto } from './dev.dto';
+import { DevService } from './dev.service';
 
-/** Dev identity switcher. Every route refuses (404) unless DEV_LOGIN=true. */
+/** Dev identity switcher: list users, sign in as one, or create a throwaway user. */
 @Controller('auth/dev')
-export class DevLoginController {
+export class DevController {
   constructor(
-    private readonly dev: DevLoginService,
+    private readonly dev: DevService,
     private readonly config: AppConfig,
   ) {}
 
-  /** `{ enabled: false }` when off, so the login page knows to show the normal forms. */
+  /** The users the switcher offers. When the module is not loaded this route is a plain 404, which the web treats as "off". */
   @Public()
   @Get()
   async status() {
-    if (!this.dev.enabled) return { enabled: false, users: [] };
     return { enabled: true, users: await this.dev.list() };
   }
 
+  /** Signs in as the given user, skipping password and 2FA. */
   @Public()
   @Post('login')
   @HttpCode(200)
   async login(@Body() dto: DevLoginDto, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
-    if (!this.dev.enabled) throw new NotFoundException();
     return this.respond(await this.dev.login(dto.userId, clientInfo(req)), res);
   }
 
+  /** Creates a verified throwaway user (optionally in someone's office) and signs in as them. */
   @Public()
   @Post('users')
   @HttpCode(200)
   async createUser(@Body() dto: DevUserDto, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
-    if (!this.dev.enabled) throw new NotFoundException();
     return this.respond(await this.dev.createUser(dto.name, dto.joinUserId, clientInfo(req)), res);
   }
 
+  /** Same response shape as the normal sign-in routes: cookies for the session, JSON for the rest. */
   private respond(result: SignInResult, res: Response) {
     if (result.status === 'signed-in') {
       setSessionCookies(res, result.tokens, this.config);

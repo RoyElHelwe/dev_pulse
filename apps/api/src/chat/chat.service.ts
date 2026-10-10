@@ -14,7 +14,7 @@ import {
 } from './chat.rules';
 
 /** What clients receive (`chat:message`, history). */
-export interface ChatMessageDto {
+interface ChatMessageDto {
   id: string;
   channel: string;
   userId: string;

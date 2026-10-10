@@ -1,6 +1,6 @@
 import { Injectable, Logger, type OnModuleDestroy } from '@nestjs/common';
 import { OfficeGateway } from '../../office/office.gateway';
-import { Budget } from '../../office/rules';
+import { Budget } from '../../office/office.rules';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   type GameContext,

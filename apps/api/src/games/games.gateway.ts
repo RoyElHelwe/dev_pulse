@@ -10,7 +10,7 @@ import {
 } from '@nestjs/websockets';
 import type { Namespace, Socket } from 'socket.io';
 import { OfficeGateway } from '../office/office.gateway';
-import { Budget } from '../office/rules';
+import { Budget } from '../office/office.rules';
 import { PrismaService } from '../prisma/prisma.service';
 import { GameError, type GameKind, type GamePlayerRef } from './game.types';
 import { GamesRegistry } from './games.registry';

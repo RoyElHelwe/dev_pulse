@@ -1,6 +1,6 @@
 export const BOARD_W = 48;
 export const BOARD_H = 32;
-export const PALETTE_SIZE = 16;
+const PALETTE_SIZE = 16;
 
 export type Brick = [x: number, y: number, w: number, h: number, c: number];
 
@@ -15,7 +15,7 @@ export const ALLOWED_SIZES: ReadonlyArray<readonly [number, number]> = [
   [4, 2],
 ] as const;
 
-export function isAllowedSize(w: number, h: number): boolean {
+function isAllowedSize(w: number, h: number): boolean {
   return ALLOWED_SIZES.some(([sw, sh]) => sw === w && sh === h);
 }
 

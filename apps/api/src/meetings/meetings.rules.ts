@@ -1,8 +1,8 @@
 // Pure booking rules (no database), shared by the service and its tests.
 
-export const SLOT_MINUTES = 15;
-export const MAX_HOURS = 4;
-export const MAX_DAYS_AHEAD = 30;
+const SLOT_MINUTES = 15;
+const MAX_HOURS = 4;
+const MAX_DAYS_AHEAD = 30;
 export const MAX_ATTENDEES = 30;
 
 const MINUTE = 60_000;

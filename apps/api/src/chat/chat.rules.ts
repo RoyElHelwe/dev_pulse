@@ -1,9 +1,9 @@
 // Pure chat rules (no Nest, no database), so they are easy to test.
 
-import { ZONE_ID } from '../office/rules';
+import { ZONE_ID } from '../office/office.rules';
 
 export const MAX_LENGTH = 500;
-export const RATE_LIMIT = { count: 5, windowMs: 5000 };
+const RATE_LIMIT = { count: 5, windowMs: 5000 };
 export const HISTORY_PAGE = 50;
 /** The channel everyone in the office reads; any other channel is a layout room id. */
 export const OFFICE_CHANNEL = 'office';

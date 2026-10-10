@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { VoiceMode } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import type { UpdateSettingsDto } from './dto';
+import type { UpdateSettingsDto } from './settings.dto';
 import {
   type Action,
   ACTIONS,

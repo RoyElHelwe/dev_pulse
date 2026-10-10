@@ -1,14 +1,20 @@
-import { Injectable, Logger, NotFoundException, OnModuleInit } from '@nestjs/common';
+/**
+ * Dev/test only: the logic behind the dev identity switcher. It bypasses passwords and 2FA,
+ * so it must never run in production: DevModule is only loaded when DEV_LOGIN=true outside
+ * production (see dev.module.ts).
+ */
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { randomBytes } from 'node:crypto';
-import { AppConfig } from '../config/app-config';
+import { AuthService, type SignInResult } from '../auth/auth.service';
+import type { ClientInfo } from '../auth/tokens.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { randomCharacter } from '../workspace/characters';
 import { DesksService } from '../workspace/desks.service';
-import { AuthService, type SignInResult } from './auth.service';
-import type { ClientInfo } from './tokens.service';
 
 const FIRST_NAMES = ['Ada', 'Linus', 'Grace', 'Alan', 'Margaret', 'Dennis', 'Barbara', 'Ken', 'Radia', 'Tim', 'Hedy', 'Guido'];
 const LAST_NAMES = ['Byte', 'Kernel', 'Stack', 'Pixel', 'Cache', 'Socket', 'Query', 'Cursor', 'Patch', 'Commit'];
+/** The switcher lists at most this many users (oldest first); plenty for a dev database. */
+const MAX_LISTED_USERS = 200;
 
 export interface DevUser {
   id: string;
@@ -18,36 +24,26 @@ export interface DevUser {
   role: string | null;
 }
 
-/**
- * Dev identity switcher (DEV_LOGIN=true). Lets you sign in as any user in one
- * click, or create a throwaway one. Testing aid: it bypasses passwords and 2FA,
- * so every method refuses (404) unless the flag is on.
- */
+/** Sign in as any user in one click, or create a throwaway one. */
 @Injectable()
-export class DevLoginService implements OnModuleInit {
-  private readonly logger = new Logger('DevLogin');
+export class DevService implements OnModuleInit {
+  private readonly logger = new Logger('Dev');
 
   constructor(
-    private readonly config: AppConfig,
     private readonly prisma: PrismaService,
     private readonly auth: AuthService,
     private readonly desks: DesksService,
   ) {}
 
   onModuleInit() {
-    if (!this.config.devLogin) return;
     this.logger.warn('!!! DEV_LOGIN is ON: anyone who can reach this server can sign in as any user. Never use it in production. !!!');
   }
 
-  get enabled() {
-    return this.config.devLogin;
-  }
-
+  /** Every user with their office and role, for the switcher list. */
   async list(): Promise<DevUser[]> {
-    this.assertEnabled();
     const users = await this.prisma.user.findMany({
       orderBy: { createdAt: 'asc' },
-      take: 200,
+      take: MAX_LISTED_USERS,
       include: { membership: { include: { workspace: true } } },
     });
     return users.map((u) => ({
@@ -59,8 +55,8 @@ export class DevLoginService implements OnModuleInit {
     }));
   }
 
+  /** Signs in as this user (taking the account over from any other device). */
   login(userId: string, client: ClientInfo): Promise<SignInResult> {
-    this.assertEnabled();
     return this.auth.devSignIn(userId, client);
   }
 
@@ -69,7 +65,6 @@ export class DevLoginService implements OnModuleInit {
    * the new user joins that person's office with a random character and a free desk.
    */
   async createUser(name: string | undefined, joinUserId: string | undefined, client: ClientInfo): Promise<SignInResult> {
-    this.assertEnabled();
     const pick = <T>(list: T[]) => list[Math.floor(Math.random() * list.length)];
     const displayName = name?.trim() || `${pick(FIRST_NAMES)} ${pick(LAST_NAMES)}`;
     const email = `dev-${randomBytes(4).toString('hex')}@devpulse.test`;
@@ -85,9 +80,5 @@ export class DevLoginService implements OnModuleInit {
       }
     }
     return this.auth.devSignIn(user.id, client);
-  }
-
-  private assertEnabled() {
-    if (!this.config.devLogin) throw new NotFoundException();
   }
 }

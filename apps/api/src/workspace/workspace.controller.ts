@@ -2,7 +2,7 @@ import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Put } from
 import { IsIn, IsString, MaxLength } from 'class-validator';
 import type { AuthUser } from '../common/auth/auth-user';
 import { CurrentUser } from '../common/auth/current-user.decorator';
-import { CreateWorkspaceDto, DeskDto, MyDeskDto, RenameWorkspaceDto, SwitchTemplateDto, UpdateLayoutDto, UpdateMeDto, WingDto } from './dto';
+import { CreateWorkspaceDto, DeskDto, MyDeskDto, RenameWorkspaceDto, SwitchTemplateDto, UpdateLayoutDto, UpdateMeDto, WingDto } from './workspace.dto';
 import { DesksService } from './desks.service';
 import { MembersService } from './members.service';
 import { WorkspaceService } from './workspace.service';

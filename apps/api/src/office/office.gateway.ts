@@ -16,10 +16,9 @@ import { TokensService } from '../auth/tokens.service';
 import { authenticateSocket } from '../common/auth/socket-auth';
 import { PrismaService } from '../prisma/prisma.service';
 import { type WorkspaceEvent, WorkspaceEvents } from '../workspace/workspace-events';
-import { AppConfig } from '../config/app-config';
 import { TILE } from './layout/geometry';
 import type { OfficeLayout, Room } from './layout/types';
-import { Budget, claimOffice, limitMove, TAB_ID, ZONE_ID } from './rules';
+import { Budget, claimOffice, limitMove, TAB_ID, ZONE_ID } from './office.rules';
 
 /** 0 down, 1 up, 2 left, 3 right. */
 type Dir = 0 | 1 | 2 | 3;
@@ -78,7 +77,6 @@ export class OfficeGateway implements OnGatewayInit, OnGatewayConnection, OnGate
     private readonly prisma: PrismaService,
     private readonly workspaceEvents: WorkspaceEvents,
     private readonly sessionEvents: SessionEvents,
-    private readonly config: AppConfig,
   ) {}
 
   afterInit(namespace: Namespace) {
@@ -213,12 +211,11 @@ export class OfficeGateway implements OnGatewayInit, OnGatewayConnection, OnGate
   }
 
   /**
-   * Dev-only teleport: [x, y] in pixels. Accepted only when DEV_LOGIN is enabled
-   * outside production. Clamps to office bounds, resets speed baseline.
+   * Puts a player at `[x, y]` (pixels) at once: clamps to the office bounds and resets the
+   * speed baseline so the jump is not rejected as too fast. Not a socket handler: only the
+   * dev-only DevGateway (src/dev/) calls it, for the `dev:teleport` event.
    */
-  @SubscribeMessage('dev:teleport')
-  teleport(@ConnectedSocket() socket: Socket, @MessageBody() body: unknown) {
-    if (!this.config.devLogin) return;
+  teleport(socket: Socket, body: unknown) {
     const data = socket.data as SocketData;
     if (!Array.isArray(body) || body.length !== 2 || !data?.budget?.allow()) return;
     const [x, y] = body as [unknown, unknown];

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { clock, slotProblem, slotStart } from './booking-rules';
+import { clock, slotProblem, slotStart } from './meetings.rules';
 
 const at = (iso: string) => new Date(iso);
 const now = at('2026-10-05T10:07:00Z');
