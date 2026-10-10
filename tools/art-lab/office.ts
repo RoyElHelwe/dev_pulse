@@ -1,17 +1,17 @@
-import { TILE } from '../../constants';
-import { itemBounds, numberedDesks, seatPoint } from '../../layout/derive';
-import type { Furniture, OfficeLayout } from '../../layout/types';
-import { seededRandom } from '../../render/draw';
-import { drawFloor } from '../../render/floors';
-import { FURNITURE } from '../../render/furniture';
-import { drawWall, wallCollider } from '../../render/walls';
-import { roomFinder } from '../../systems/rooms';
-import { type Direction, drawCharacter, type Mood } from '../character';
-import { css, type Hex, mix } from '../color';
-import { type DeskLight, drawDesk } from '../desk';
-import { GLOW } from '../palette';
-import { canvasPen, type Pen } from '../pen';
-import type { Recipe } from '../recipe';
+import { TILE } from '../../apps/web/game/constants';
+import { itemBounds, numberedDesks, seatPoint } from '../../apps/web/game/layout/derive';
+import type { Furniture, OfficeLayout } from '../../apps/web/game/layout/types';
+import { seededRandom } from '../../apps/web/game/render/draw';
+import { drawFloor } from '../../apps/web/game/render/floors';
+import { FURNITURE } from '../../apps/web/game/render/furniture';
+import { drawWall, wallCollider } from '../../apps/web/game/render/walls';
+import { roomFinder } from '../../apps/web/game/systems/rooms';
+import { type Direction, drawCharacter, type Mood } from '../../apps/web/game/art/character';
+import { css, type Hex, mix } from '../../apps/web/game/art/color';
+import { type DeskLight, drawDesk } from '../../apps/web/game/art/desk';
+import { GLOW } from '../../apps/web/game/art/palette';
+import { canvasPen, type Pen } from '../../apps/web/game/art/pen';
+import type { Recipe } from '../../apps/web/game/art/recipe';
 import { CanvasGraphics } from './shim';
 
 // A small simulation of a day at the office, drawn with the game's real
