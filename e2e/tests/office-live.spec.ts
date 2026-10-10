@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { expect, type Page, test } from '@playwright/test';
-import { closeContexts, inOffice, invite, openPage, register, workspace } from './helpers';
+import { closeContexts, devOwner, devUser, gotoOffice, openPage, userId, workspace } from './helpers';
 
 // Serial run: two users collaborating in the office.
 test.describe.configure({ mode: 'serial' });
@@ -32,21 +32,11 @@ test.afterEach(({}, info) => {
 });
 
 test('setup: organiser creates office and teammate joins', async () => {
-  await register(org, 'Alice', `alice${stamp}@example.com`);
-  await org.getByRole('button', { name: /Create an office/ }).click();
-  await org.getByLabel('Office name').fill('TaskHQ');
-  await org.getByRole('button', { name: 'Continue' }).click();
-  // Office template step: Loft is selected by default
-  await org.getByRole('button', { name: 'Continue' }).click();
-  // Character step
-  await org.getByRole('button', { name: 'Create the office' }).click();
-  await inOffice(org);
+  await devOwner(org, 'Alice', 'TaskHQ', 'loft');
+  await gotoOffice(org);
 
-  const link = await invite(org, `bob${stamp}@example.com`);
-  await register(staff, 'Bob', `bob${stamp}@example.com`);
-  await staff.goto(link);
-  await staff.getByRole('button', { name: /^Join / }).click();
-  await inOffice(staff);
+  await devUser(staff, 'Bob', org);
+  await gotoOffice(staff);
 });
 
 test('1. CHAT BUBBLE: speech bubble over Alice appears and fades after ~12s', async () => {
@@ -89,10 +79,7 @@ test('1. CHAT BUBBLE: speech bubble over Alice appears and fades after ~12s', as
 
 test('2. PAPER STACK: tasks assigned to Alice increase paper stack on her desk', async () => {
   // Get Alice's user id
-  const authRes = await org.request.get('/api/auth/me');
-  expect(authRes.ok()).toBe(true);
-  const me = await authRes.json();
-  const aliceId: string = me.id;
+  const aliceId = await userId(org);
 
   // Alice creates 1 task assigned to herself
   const taskRes1 = await org.request.post('/api/workspace/tasks', {

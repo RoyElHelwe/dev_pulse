@@ -50,6 +50,8 @@ export interface OfficeController {
   localPosition(): { x: number; y: number } | null;
   /** Dev/test hook: teleport the local player to pixel coordinates. */
   teleportTo(x: number, y: number): void;
+  /** Pause or resume the Phaser render loop (e.g. while a full-screen game overlay is open). */
+  setPaused(paused: boolean): void;
   destroy(): void;
 }
 
@@ -72,6 +74,12 @@ interface GameOptions {
  * pixel ratio and scaled down with CSS, so everything stays sharp on retina
  * screens. Import this file dynamically: Phaser only runs in the browser.
  */
+/** Frame-rate cap requested by a test browser (0: none). */
+function fpsCap(): number {
+  const cap = (window as unknown as { __devpulseFps?: unknown }).__devpulseFps;
+  return typeof cap === 'number' && cap >= 5 && cap <= 60 ? cap : 0;
+}
+
 export function createGame(parent: HTMLElement, options: GameOptions): OfficeController {
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
   const size = () => ({
@@ -87,6 +95,8 @@ export function createGame(parent: HTMLElement, options: GameOptions): OfficeCon
   let bookings: RoomBooking[] = [];
   const voice = new Map<string, { inCall: boolean; talking: boolean }>();
   const touch = window.matchMedia('(pointer: coarse)').matches;
+  let isPaused = false;
+  let destroyed = false;
   let data: OfficeSceneData = {
     ...options,
     dpr,
@@ -108,6 +118,8 @@ export function createGame(parent: HTMLElement, options: GameOptions): OfficeCon
     scale: { mode: Phaser.Scale.NONE, ...size(), zoom: 1 / dpr },
     physics: { default: 'arcade', arcade: { debug: false } },
     render: { antialias: true },
+    // Test browsers render in software: e2e sets `window.__devpulseFps` to cap the frame rate.
+    ...(fpsCap() ? { fps: { limit: fpsCap() } } : {}),
   });
   game.scene.add('office', OfficeScene, true, data);
 
@@ -202,7 +214,20 @@ export function createGame(parent: HTMLElement, options: GameOptions): OfficeCon
     startEditing: (editor, onProblem) => scene()?.startEditing(editor, onProblem),
     localPosition: () => scene()?.localPosition() ?? null,
     teleportTo: (x, y) => scene()?.teleportTo(x, y),
+    setPaused(paused) {
+      if (destroyed || !game || isPaused === paused) return;
+      isPaused = paused;
+      if (paused) {
+        game.loop.sleep();
+      } else {
+        game.loop.wake();
+        // Clear keyboard and joystick input so the avatar is not left stuck walking on resume
+        scene()?.input?.keyboard?.resetKeys();
+        scene()?.setJoystick(0, 0);
+      }
+    },
     destroy: () => {
+      destroyed = true;
       observer.disconnect();
       game.destroy(true);
     },

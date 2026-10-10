@@ -337,6 +337,17 @@ export function OfficeView() {
     if (isEditing) setBoardOpen(false);
   }, [isEditing]);
   useKeybind('board', toggleBoard, !isEditing);
+
+  // Full-screen games (foosball/Uno/Lego): pause the office Phaser render loop while open
+  // to avoid dropped frames on software-rendered devices, without affecting socket/voice state.
+  const [gameOpen, setGameOpen] = useState(false);
+  useEffect(() => {
+    if (!gameOpen || !ready) return;
+    controllerRef.current?.setPaused(true);
+    return () => {
+      controllerRef.current?.setPaused(false);
+    };
+  }, [gameOpen, ready]);
   const features = useMemo(
     () => ({
       socket,
@@ -400,7 +411,11 @@ export function OfficeView() {
             <VoiceControls {...features} />
             <ChatPanel {...features} />
             <MeetingsPanel {...features} />
-            <GameHost socket={socket} me={{ id: user.id, name: user.displayName, character: workspace.character }} />
+            <GameHost
+              socket={socket}
+              me={{ id: user.id, name: user.displayName, character: workspace.character }}
+              onOpenChange={setGameOpen}
+            />
             <LegoSync socket={socket} />
           </>
         )}

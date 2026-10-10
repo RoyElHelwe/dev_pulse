@@ -1,6 +1,6 @@
 import { expect, type Page, test } from '@playwright/test';
-import { closeContexts, inOffice, invite, openPage, register, shotPath } from './helpers';
-import { position, walkTo } from './nav';
+import { closeContexts, devOwner, devUser, gotoOffice, openPage, shotPath } from './helpers';
+import { jumpTo } from './nav';
 
 test.describe.configure({ mode: 'serial' });
 
@@ -10,6 +10,11 @@ const problems: string[][] = [];
 
 test.afterAll(closeContexts);
 
+// When a test fails, show what the browsers logged: that is usually where the cause is.
+test.afterEach(({}, info) => {
+  if (info.status !== info.expectedStatus) console.log(`browser problems:\n  ${problems.flat().slice(-30).join('\n  ')}`);
+});
+
 test.beforeAll(async ({ browser }) => {
   const a = await openPage(browser, 'organiser');
   const b = await openPage(browser, 'staff');
@@ -17,50 +22,23 @@ test.beforeAll(async ({ browser }) => {
   problems.push(a.problems, b.problems);
 });
 
-async function walkToFoosball(page: Page, layout: any, label = '') {
-  console.log(`[FOOSBALL] ${label} walking into chill room...`);
-  await walkTo(page, layout, 25.5, 7.5);
-  console.log(`[FOOSBALL] ${label} in chill room:`, await position(page));
-  for (let i = 0; i < 20; i++) {
-    const pos = await position(page);
-    if (pos.y <= 6.0) break;
-    await page.keyboard.down('ArrowUp');
-    await page.waitForTimeout(60);
-    await page.keyboard.up('ArrowUp');
-    await page.waitForTimeout(60);
-  }
-  console.log(`[FOOSBALL] ${label} arrived at foosball:`, await position(page));
+async function walkToFoosball(page: Page, label = '') {
+  console.log(`[FOOSBALL] ${label} jumping into chill room...`);
+  await jumpTo(page, 25.5, 5.9);
 }
 
 test('2 players join office, play foosball, kick, forfeit and check leaderboard', async () => {
   test.setTimeout(480_000);
-  const stamp = Date.now();
-  console.log('[FOOSBALL] Registering Alice...');
-  await register(org, 'Alice', `alice${stamp}@example.com`);
-  await org.getByRole('button', { name: /Create an office/ }).click();
-  await org.getByLabel('Office name').fill('FoosballHQ');
-  await org.getByRole('button', { name: 'Continue' }).click();
-  // Template step: Loft
-  await org.getByRole('button', { name: 'Continue' }).click();
-  // Character step
-  await org.getByRole('button', { name: 'Create the office' }).click();
-  console.log('[FOOSBALL] Waiting for Alice inOffice...');
-  await inOffice(org);
+  console.log('[FOOSBALL] Setting up Alice and FoosballHQ...');
+  await devOwner(org, 'Alice', 'FoosballHQ', 'loft');
+  await gotoOffice(org);
 
-  console.log('[FOOSBALL] Inviting Bob...');
-  const link = await invite(org, `bob${stamp}@example.com`);
-  console.log('[FOOSBALL] Registering Bob...');
-  await register(staff, 'Bob', `bob${stamp}@example.com`);
-  await staff.goto(link);
-  await staff.getByRole('button', { name: /^Join / }).click();
-  console.log('[FOOSBALL] Waiting for Bob inOffice...');
-  await inOffice(staff);
+  console.log('[FOOSBALL] Setting up Bob...');
+  await devUser(staff, 'Bob', org);
+  await gotoOffice(staff);
 
-  const wsRes = await org.request.get('/api/workspace');
-  const ws = await wsRes.json();
-
-  await walkToFoosball(org, ws.layout, 'Alice');
-  await walkToFoosball(staff, ws.layout, 'Bob');
+  await walkToFoosball(org, 'Alice');
+  await walkToFoosball(staff, 'Bob');
 
   // Alice opens the Baby foot table
   const orgDialog = org.getByRole('dialog', { name: 'Baby foot table' });
@@ -110,6 +88,8 @@ test('2 players join office, play foosball, kick, forfeit and check leaderboard'
     await org.screenshot({ path: shotPath(`babyfoot-playing-${vp.width}x${vp.height}.png`) });
   }
 
+  // Back to the normal size: a software-rendered full-HD canvas starves the page of CPU for the rest of the test.
+  await org.setViewportSize({ width: 1200, height: 760 });
   // Mouse controls (pointer lock is not available here: the in-table position fallback is used).
   const canvas = orgDialog.getByTestId('foosball-canvas');
   const cb = (await canvas.boundingBox())!;
@@ -136,7 +116,8 @@ test('2 players join office, play foosball, kick, forfeit and check leaderboard'
   await staffDialog.getByTestId('game-leave').click();
   await expect(staffDialog).toBeHidden({ timeout: 5_000 });
 
-  // After >10s forfeit: Alice's dialog shows ended / winner
+  // After >10s forfeit: Alice's dialog shows ended / winner (her page must be in front: background pages get no frames)
+  await org.bringToFront();
   await expect(panel).toHaveAttribute('data-phase', 'ended', { timeout: 25_000 });
   await expect(orgDialog.getByText(/Won!/)).toBeVisible({ timeout: 5_000 });
 
@@ -169,16 +150,12 @@ test('Escape closes the dialog even when a button inside is focused', async () =
     await expect(dialog).toBeVisible({ timeout: 1_500 });
   }).toPass({ timeout: 20_000 });
 
-  // Take a seat so rod buttons are visible
-  const sitLeft = dialog.getByRole('button', { name: 'Sit Left' });
-  if (await sitLeft.isVisible()) {
-    await sitLeft.click();
-  }
-
-  // Click a rod button inside the panel so it receives focus
-  const rodBtn = dialog.getByRole('button', { name: /1: Goalkeeper/i });
-  await expect(rodBtn).toBeVisible({ timeout: 5_000 });
-  await rodBtn.click();
+  // Click a button inside the dialog so it has the focus (rod buttons only exist during a match,
+  // and the match has ended by now).
+  const focusBtn = dialog.getByRole('button', { name: 'Leaderboard' });
+  await expect(focusBtn).toBeVisible({ timeout: 5_000 });
+  await focusBtn.focus();
+  await expect(focusBtn).toBeFocused();
 
   // Press Escape
   await org.keyboard.press('Escape');

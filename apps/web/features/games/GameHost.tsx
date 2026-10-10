@@ -16,6 +16,8 @@ import type { GameKind } from './types';
 export interface GameHostProps {
   socket: Socket | null;
   me: { id: string; name: string; character: string };
+  /** Callback notified when a full-screen game panel opens or closes. */
+  onOpenChange?: (open: boolean) => void;
 }
 
 interface ActiveGame {
@@ -24,7 +26,7 @@ interface ActiveGame {
   name: string;
 }
 
-export function GameHost({ socket, me }: GameHostProps) {
+export function GameHost({ socket, me, onOpenChange }: GameHostProps) {
   const [activeGame, setActiveGame] = useState<ActiveGame | null>(null);
   const [mounted, setMounted] = useState(false);
   const [chromeInfo, setChromeInfo] = useState<GameChromeInfo>({ players: null, spectators: null });
@@ -32,6 +34,17 @@ export function GameHost({ socket, me }: GameHostProps) {
 
   const activeGameRef = useRef<ActiveGame | null>(null);
   activeGameRef.current = activeGame;
+
+  // Notify parent when a game opens or closes so background rendering can be paused
+  useEffect(() => {
+    const isOpen = Boolean(activeGame);
+    onOpenChange?.(isOpen);
+    return () => {
+      if (isOpen) {
+        onOpenChange?.(false);
+      }
+    };
+  }, [activeGame, onOpenChange]);
 
   useEffect(() => {
     setMounted(true);

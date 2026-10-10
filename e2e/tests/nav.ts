@@ -1,5 +1,5 @@
-import type { Page } from '@playwright/test';
-import type { Layout } from './helpers';
+import { expect, type Page } from '@playwright/test';
+import { type Layout, teleport } from './helpers';
 
 // Walks a player somewhere in the office: a path on the layout (same
 // obstacles as the game), then arrow keys with the minimap as position
@@ -365,6 +365,24 @@ async function along(
     return 'blocked';
   }
   return 'reached';
+}
+
+/**
+ * Puts the player at tile (tx, ty) at once (dev sign-in mode: server and client both accept it) instead of
+ * walking. Use where walking is not what the test checks; keep walkTo for walking/proximity/joystick tests.
+ */
+export async function jumpTo(page: Page, tx: number, ty: number) {
+  // Same as walkTo: this page must be the one with the focus, or its key presses go nowhere.
+  await page.bringToFront().catch(() => undefined);
+  await page.locator('canvas').click({ position: { x: 600, y: 400 } }).catch(() => undefined);
+  await teleport(page, tx * 32, ty * 32);
+  await expect
+    .poll(async () => {
+      const p = await position(page);
+      return Math.hypot(p.x - tx, p.y - ty);
+    }, { timeout: 15_000 })
+    .toBeLessThan(1.5);
+  return position(page);
 }
 
 /** Walks to (tx, ty), or the closest free spot. Returns where the player ended. */

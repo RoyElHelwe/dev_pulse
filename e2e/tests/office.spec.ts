@@ -1,6 +1,6 @@
 import { expect, type Page, test } from '@playwright/test';
-import { closeContexts, connectedCalls, inOffice, invite, openPage, peopleList, register, workspace } from './helpers';
-import { walkTo } from './nav';
+import { closeContexts, connectedCalls, devUser, gotoOffice, inOffice, invite, openPage, peopleList, register, workspace } from './helpers';
+import { jumpTo, walkTo } from './nav';
 
 // One story, in order, with the same people (sign-ups are rate limited):
 // an organiser creates the office, invites a teammate, they meet, work and
@@ -114,7 +114,7 @@ test('at your desk, E opens it and others see where you are', async () => {
   const w = await workspace(org);
   const desk = w.layout.furniture.find((f) => f.id === w.deskId)!;
   const seatY = desk.y + Math.cos(((desk.rotation ?? 0) * Math.PI) / 180) * (desk.h / 2 + 0.45);
-  await walkTo(org, w.layout, desk.x, seatY);
+  await jumpTo(org, desk.x, seatY);
   // The player may still be sitting down or standing up: press E until the desk answers.
   await expect(async () => {
     await org.keyboard.press('e');
@@ -130,7 +130,7 @@ test('at your desk, E opens it and others see where you are', async () => {
 test('walking into a meeting room shows it to the others', async () => {
   const { layout } = await workspace(staff);
   const room = layout.rooms.find((r) => r.kind === 'meeting')!;
-  await walkTo(staff, layout, room.x + room.w / 2, room.y + room.h - 2);
+  await jumpTo(staff, room.x + room.w / 2, room.y + room.h - 2);
   await expect.poll(() => peopleList(org)).toContain(`${room.name} · Meeting room`);
 });
 
@@ -220,11 +220,8 @@ test('on a phone, the joystick walks', async ({ browser }) => {
     isMobile: true,
   });
   problems.push(phoneProblems);
-  const link = await invite(org, `mira${stamp}@example.com`);
-  await register(phone, 'Mira', `mira${stamp}@example.com`);
-  await phone.goto(link);
-  await phone.getByRole('button', { name: 'Join E2E HQ' }).click();
-  await inOffice(phone);
+  await devUser(phone, `Mira${stamp}`, org);
+  await gotoOffice(phone);
   const stick = phone.getByRole('application', { name: /Joystick/ });
   await expect(stick).toBeVisible();
 

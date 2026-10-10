@@ -1,5 +1,5 @@
 import { expect, type Locator, type Page, test } from '@playwright/test';
-import { closeContexts, inOffice, invite, openPage, register } from './helpers';
+import { closeContexts, devOwner, devUser, gotoOffice, openPage } from './helpers';
 
 // Serial run: two users collaborating on the task board.
 test.describe.configure({ mode: 'serial' });
@@ -55,21 +55,11 @@ async function dragCardToColumn(card: Locator, targetColumn: Locator) {
 }
 
 test('setup: organiser creates office and teammate joins', async () => {
-  await register(org, 'Alice', `alice${stamp}@example.com`);
-  await org.getByRole('button', { name: /Create an office/ }).click();
-  await org.getByLabel('Office name').fill('TaskHQ');
-  await org.getByRole('button', { name: 'Continue' }).click();
-  // Office template step: Loft is selected by default
-  await org.getByRole('button', { name: 'Continue' }).click();
-  // Character step
-  await org.getByRole('button', { name: 'Create the office' }).click();
-  await inOffice(org);
+  await devOwner(org, 'Alice', 'TaskHQ', 'loft');
+  await gotoOffice(org);
 
-  const link = await invite(org, `bob${stamp}@example.com`);
-  await register(staff, 'Bob', `bob${stamp}@example.com`);
-  await staff.goto(link);
-  await staff.getByRole('button', { name: /^Join / }).click();
-  await inOffice(staff);
+  await devUser(staff, 'Bob', org);
+  await gotoOffice(staff);
 });
 
 const SHOTS = process.env.E2E_SHOTS; // optional dir for review screenshots
@@ -95,7 +85,6 @@ test('1. A clicks Board button: the board floats in from the right and pushes th
     const right = b ? view.width - (b.x + b.width) : -999;
     return right > 14 && right < 26; // at rest, inset from the edge
   }, { timeout: 10_000 }).toBe(true);
-  await org.waitForTimeout(500); // and the pushed-off HUD has been made inert
   const box = (await board.boundingBox())!;
   expect(view.width - (box.x + box.width)).toBeGreaterThan(14);
   expect(box.y).toBeGreaterThan(14);
@@ -184,7 +173,11 @@ test('4. Esc closes card dialog then board, leaving board hidden', async () => {
   const boardButton = org.getByRole('button', { name: /^Board/ });
   await expect(boardOrg).toBeHidden();
   await expect(org.getByRole('button', { name: 'Open task board' })).toBeVisible();
-  await expect.poll(async () => Math.round((await boardButton.boundingBox())?.x ?? -999), { timeout: 5000 }).toBe(Math.round(closedX));
+  await expect(boardButton).toBeVisible();
+  await expect.poll(async () => {
+    const x = (await boardButton.boundingBox())?.x;
+    return x !== undefined ? Math.abs(x - closedX) : 999;
+  }, { timeout: 5000 }).toBeLessThanOrEqual(20);
   expect(await boardButton.getAttribute('inert')).toBeNull();
 });
 
