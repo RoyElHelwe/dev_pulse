@@ -300,10 +300,17 @@ export class OfficeScene extends Phaser.Scene {
     this.sendPosition(true);
   }
 
+  /** True while a full-screen game covers the office: the scene keeps ticking but ignores the keyboard. */
+  private inputBlocked = false;
+
+  setInputBlocked(blocked: boolean) {
+    this.inputBlocked = blocked;
+  }
+
   update(time: number, delta: number) {
     beginTextureBudget();
     const body = this.player.body as Phaser.Physics.Arcade.Body;
-    const typing = isTyping();
+    const typing = isTyping() || this.inputBlocked;
 
     if (this.justLeft) {
       const leftSeat = this.seats.find((s) => s.id === this.justLeft);

@@ -50,8 +50,12 @@ export interface OfficeController {
   localPosition(): { x: number; y: number } | null;
   /** Dev/test hook: teleport the local player to pixel coordinates. */
   teleportTo(x: number, y: number): void;
-  /** Pause or resume the Phaser render loop (e.g. while a full-screen game overlay is open). */
-  setPaused(paused: boolean): void;
+  /**
+   * Take the office off the display's frame clock while something covers it (a slow background tick keeps
+   * people, proximity and timers going). `hidden` (default, a full-screen game): no rendering and no local input;
+   * `throttled` (the board drawer): ~15 fps rendering. `setPaused(false)` resumes instantly.
+   */
+  setPaused(paused: boolean, mode?: 'hidden' | 'throttled'): void;
   destroy(): void;
 }
 
@@ -96,6 +100,12 @@ export function createGame(parent: HTMLElement, options: GameOptions): OfficeCon
   const voice = new Map<string, { inCall: boolean; talking: boolean }>();
   const touch = window.matchMedia('(pointer: coarse)').matches;
   let isPaused = false;
+  let pausedMode: 'hidden' | 'throttled' = 'hidden';
+  let tick: ReturnType<typeof setInterval> | undefined;
+  const stopTicking = () => {
+    clearInterval(tick);
+    tick = undefined;
+  };
   let destroyed = false;
   let data: OfficeSceneData = {
     ...options,
@@ -214,20 +224,43 @@ export function createGame(parent: HTMLElement, options: GameOptions): OfficeCon
     startEditing: (editor, onProblem) => scene()?.startEditing(editor, onProblem),
     localPosition: () => scene()?.localPosition() ?? null,
     teleportTo: (x, y) => scene()?.teleportTo(x, y),
-    setPaused(paused) {
-      if (destroyed || !game || isPaused === paused) return;
+    setPaused(paused, mode = 'hidden') {
+      if (destroyed || !game) return;
+      if (isPaused === paused && (!paused || pausedMode === mode)) return;
       isPaused = paused;
+      stopTicking();
       if (paused) {
+        pausedMode = mode;
         game.loop.sleep();
+        // Not on the display's frame clock any more, but people keep moving, proximity (voice) and timers keep
+        // running: a slow manual tick. `hidden` (a full-screen game covers the office) does not render at all,
+        // `throttled` (the board covers most of it) renders ~15 times a second.
+        let last = performance.now();
+        tick = setInterval(() => {
+          const now = performance.now();
+          const s = scene();
+          if (s) {
+            s.sys.settings.visible = mode === 'throttled';
+            s.setInputBlocked(mode === 'hidden');
+          }
+          game.step(now, Math.min(100, now - last));
+          last = now;
+        }, mode === 'hidden' ? 100 : 66);
       } else {
+        const s = scene();
+        if (s) {
+          s.sys.settings.visible = true;
+          s.setInputBlocked(false);
+        }
         game.loop.wake();
         // Clear keyboard and joystick input so the avatar is not left stuck walking on resume
-        scene()?.input?.keyboard?.resetKeys();
-        scene()?.setJoystick(0, 0);
+        s?.input?.keyboard?.resetKeys();
+        s?.setJoystick(0, 0);
       }
     },
     destroy: () => {
       destroyed = true;
+      stopTicking();
       observer.disconnect();
       game.destroy(true);
     },
