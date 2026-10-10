@@ -20,11 +20,11 @@ export class DevController {
     private readonly config: AppConfig,
   ) {}
 
-  /** The users the switcher offers. When the module is not loaded this route is a plain 404, which the web treats as "off". */
+  /** The users the switcher offers. (Whether the switcher is on at all: GET /auth/dev in AuthController.) */
   @Public()
-  @Get()
-  async status() {
-    return { enabled: true, users: await this.dev.list() };
+  @Get('users')
+  async users() {
+    return { users: await this.dev.list() };
   }
 
   /** Signs in as the given user, skipping password and 2FA. */
