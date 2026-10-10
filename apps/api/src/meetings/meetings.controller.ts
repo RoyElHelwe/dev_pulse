@@ -2,7 +2,7 @@ import { Body, Controller, Delete, Get, HttpCode, Param, Post, Query } from '@ne
 import { Throttle } from '@nestjs/throttler';
 import type { AuthUser } from '../common/auth/auth-user';
 import { CurrentUser } from '../common/auth/current-user.decorator';
-import { CreateBookingDto, ListBookingsDto } from './dto';
+import { CreateBookingDto, ListBookingsDto } from './meetings.dto';
 import { MeetingsService } from './meetings.service';
 
 /** Meeting room bookings of the caller's office. */

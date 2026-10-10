@@ -6,8 +6,8 @@ import { OfficeGateway } from '../office/office.gateway';
 import { PrismaService } from '../prisma/prisma.service';
 import { MembershipService } from '../workspace/membership.service';
 import { WorkspaceEvents } from '../workspace/workspace-events';
-import type { CreateTaskDto, UpdateTaskDto } from './dto';
-import { canDeleteTask, needsRebalance, taskKey, workspacePrefix } from './rules';
+import type { CreateTaskDto, UpdateTaskDto } from './tasks.dto';
+import { canDeleteTask, needsRebalance, taskKey, workspacePrefix } from './tasks.rules';
 
 export interface TaskView {
   id: string;
@@ -26,7 +26,7 @@ export interface TaskView {
   updatedAt: string;
 }
 
-export function toTaskView(task: Task, prefix: string): TaskView {
+function toTaskView(task: Task, prefix: string): TaskView {
   return {
     id: task.id,
     key: taskKey(prefix, task.number),

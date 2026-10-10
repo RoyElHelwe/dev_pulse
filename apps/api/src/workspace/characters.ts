@@ -1,7 +1,7 @@
 import { ValidateBy } from 'class-validator';
 
 /** The named characters (apps/web/game/art/recipe.ts, PRESETS). */
-export const CHARACTERS = ['maya', 'sam', 'noor', 'lea', 'omar', 'kai', 'zoe', 'ivan'] as const;
+const CHARACTERS = ['maya', 'sam', 'noor', 'lea', 'omar', 'kai', 'zoe', 'ivan'] as const;
 
 /**
  * A character can also be a recipe code: "1" + one base-36 digit per choice

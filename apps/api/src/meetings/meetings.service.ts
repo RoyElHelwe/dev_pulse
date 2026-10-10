@@ -4,8 +4,8 @@ import type { OfficeLayout } from '../office/layout/types';
 import { OfficeGateway } from '../office/office.gateway';
 import { PrismaService } from '../prisma/prisma.service';
 import { CAN_MANAGE, MembershipService } from '../workspace/membership.service';
-import { clock, MAX_ATTENDEES, slotProblem } from './booking-rules';
-import type { CreateBookingDto } from './dto';
+import { clock, MAX_ATTENDEES, slotProblem } from './meetings.rules';
+import type { CreateBookingDto } from './meetings.dto';
 
 /** A booking running right now in a meeting room (what voice and chat need of it). */
 export interface ActiveBooking {

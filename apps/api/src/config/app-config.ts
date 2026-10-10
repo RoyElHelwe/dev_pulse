@@ -14,6 +14,13 @@ export interface SmtpConfig {
 }
 
 /**
+ * Whether the dev-only features (src/dev/: dev sign-in, dev:teleport) are on. A function of
+ * the environment so AppModule can decide whether to load DevModule before Nest starts.
+ * The NODE_ENV check makes a leftover DEV_LOGIN=true harmless in production.
+ */
+export const isDevLoginEnabled = (env: NodeJS.ProcessEnv): boolean => env.DEV_LOGIN === 'true' && env.NODE_ENV !== 'production';
+
+/**
  * All settings read from the environment, checked once at startup so a
  * missing or weak secret fails loudly instead of at the first sign-in.
  */
@@ -25,8 +32,6 @@ export class AppConfig {
   readonly refreshTokenTtlDays = 30;
   /** When true, people must click the email link before they can sign in. */
   readonly requireEmailVerification: boolean;
-  /** DEV_LOGIN=true: one-click sign-in as any user. Local testing only, never in production. */
-  readonly devLogin: boolean;
   readonly smtp: SmtpConfig | null;
   readonly emailFrom: string;
   readonly oauth: Partial<Record<OAuthProvider, OAuthClient>>;
@@ -44,8 +49,6 @@ export class AppConfig {
     this.jwtSecret = secret;
 
     this.requireEmailVerification = env.REQUIRE_EMAIL_VERIFICATION === 'true';
-
-    this.devLogin = env.DEV_LOGIN === 'true' && env.NODE_ENV !== 'production';
 
     this.smtp = env.SMTP_HOST
       ? {

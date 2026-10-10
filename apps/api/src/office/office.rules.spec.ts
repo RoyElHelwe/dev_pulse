@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { TILE } from './layout/geometry';
-import { Budget, claimOffice, limitMove, WALK_SPEED, ZONE_ID } from './rules';
+import { Budget, claimOffice, limitMove, WALK_SPEED, ZONE_ID } from './office.rules';
 
 describe('Budget', () => {
   it('allows `perSecond` messages, then again the next second', () => {

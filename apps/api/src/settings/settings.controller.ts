@@ -1,7 +1,7 @@
 import { Body, Controller, Get, Patch } from '@nestjs/common';
 import type { AuthUser } from '../common/auth/auth-user';
 import { CurrentUser } from '../common/auth/current-user.decorator';
-import { UpdateSettingsDto } from './dto';
+import { UpdateSettingsDto } from './settings.dto';
 import { SettingsService } from './settings.service';
 
 /** The signed-in user's preferences: voice mode and push-to-talk key. */

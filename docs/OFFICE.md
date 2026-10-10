@@ -134,7 +134,7 @@ Loft only. When a team outgrows the initial 8 desks, owners and admins can expan
 ### One office tab at a time
 
 The `/office` handshake sends auth `{ tabId, takeover }` (`tabId` is random per page load).
-The server (`OfficeGateway` + `claimOffice` in `office/rules.ts`) refuses a connection while
+The server (`OfficeGateway` + `claimOffice` in `office/office.rules.ts`) refuses a connection while
 the same user has another tab's socket live with `connect_error` `ALREADY_OPEN` (also `office:busy`
 event if two race). `takeover: true` (set only by the "Use here" button) emits `office:replaced`
 to the old tabs and disconnects them without the avatar leaving; same tabId reconnecting
@@ -457,7 +457,7 @@ details; its creator, or an owner / admin, can cancel it.
 
 Every change sends `office:bookings` on the `/office` socket; clients reload the list, and
 re-check every minute which rooms are closed to them (`controller.setLockedRooms`).
-Rules and their tests: `meetings/booking-rules.ts`.
+Rules and their tests: `meetings/meetings.rules.ts`.
 
 ## 10. Chill room and games
 

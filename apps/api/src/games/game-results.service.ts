@@ -9,7 +9,7 @@ export interface LeaderboardAggregationEntry {
   games: number;
 }
 
-export interface LeaderboardEntry extends LeaderboardAggregationEntry {
+interface LeaderboardEntry extends LeaderboardAggregationEntry {
   name: string;
   character: string;
 }

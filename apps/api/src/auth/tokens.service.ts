@@ -21,7 +21,7 @@ type PurposeToken = 'mfa' | 'trust' | 'oauth' | 'takeover';
  * A session counts as "in use" if it refreshed its tokens recently. An open
  * app refreshes every ~14 minutes, so 20 minutes means "someone is there".
  */
-export const ACTIVE_SESSION_WINDOW_MS = 20 * 60 * 1000;
+const ACTIVE_SESSION_WINDOW_MS = 20 * 60 * 1000;
 
 /** A refresh token reused within this window is a race between tabs, not theft. */
 const REUSE_GRACE_MS = 30_000;

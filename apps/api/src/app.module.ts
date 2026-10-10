@@ -4,6 +4,7 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AuthModule } from './auth/auth.module';
 import { OriginMiddleware } from './common/origin.middleware';
 import { ConfigModule } from './config/config.module';
+import { devImports } from './dev/dev.module';
 import { ChatModule } from './chat/chat.module';
 import { GamesModule } from './games/games.module';
 import { TasksModule } from './tasks/tasks.module';
@@ -35,6 +36,8 @@ import { WorkspaceModule } from './workspace/workspace.module';
     TasksModule,
     SettingsModule,
     HealthModule,
+    // Dev/test only (dev sign-in, dev:teleport): empty unless DEV_LOGIN=true outside production.
+    ...devImports(process.env),
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })

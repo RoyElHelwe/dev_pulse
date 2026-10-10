@@ -247,8 +247,10 @@ Set `DEV_LOGIN=true` in `.env` (default `false`; **never in production**: it is 
   them (no password, no 2FA), or create a test user (random name, verified email, optionally joining an
   existing office with a random character). "Use the real sign-in" shows the normal forms.
 - The user menu gets "Switch user (dev)" (signs out, then back to the switcher).
-- Endpoints, all public and refusing when off (`GET` answers `enabled: false`, the others 404):
-  `GET /api/auth/dev` -> `{ enabled, users[] }`, `POST /api/auth/dev/login { userId }`,
-  `POST /api/auth/dev/users { name?, joinUserId? }`. They use the normal session code, so the
-  one-device rule still applies.
-- Code: `apps/api/src/auth/dev-login.*`, `apps/web/features/auth/DevSwitcher.tsx`.
+- Endpoints, all public and **absent when off** (the api does not load `DevModule`, so they answer 404
+  and the web treats that as "off"): `GET /api/auth/dev` -> `{ enabled, users[] }`,
+  `POST /api/auth/dev/login { userId }`, `POST /api/auth/dev/users { name?, joinUserId? }`. They use the
+  normal session code, so the one-device rule still applies. The same module adds the `dev:teleport`
+  socket event used by browser tests.
+- Code: `apps/api/src/dev/` (module, controller, service, gateway, dto, spec), the web switcher
+  `DevSwitcher.tsx` under `apps/web/features/`.

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Room } from '../office/layout/types';
-import { bookingAllows, EARSHOT_PX, withinEarshot } from './talk-rule';
+import { bookingAllows, EARSHOT_PX, withinEarshot } from './voice.rules';
 
 const room = (id: string, kind: Room['kind']): Room => ({ id, name: id, kind, x: 0, y: 0, w: 10, h: 10, floor: 'oak' });
 const meeting = room('atlas', 'meeting');

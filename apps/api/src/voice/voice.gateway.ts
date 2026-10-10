@@ -8,8 +8,8 @@ import {
 import type { Socket } from 'socket.io';
 import { MeetingsService } from '../meetings/meetings.service';
 import { OfficeGateway } from '../office/office.gateway';
-import { Budget } from '../office/rules';
-import { bookingAllows, withinEarshot } from './talk-rule';
+import { Budget } from '../office/office.rules';
+import { bookingAllows, withinEarshot } from './voice.rules';
 
 interface VoiceSocketData {
   userId: string;

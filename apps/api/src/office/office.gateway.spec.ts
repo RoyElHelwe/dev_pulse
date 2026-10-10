@@ -1,24 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Socket } from 'socket.io';
-import { AppConfig } from '../config/app-config';
 import { SessionEvents } from '../auth/session-events';
 import { WorkspaceEvents } from '../workspace/workspace-events';
 import { TILE } from './layout/geometry';
 import type { OfficeLayout } from './layout/types';
 import { OfficeGateway, userRoom, wsRoom } from './office.gateway';
-import { Budget } from './rules';
+import { Budget } from './office.rules';
 
-const baseEnv = { JWT_SECRET: 'x'.repeat(40) };
-
-function createTestSetup(env: NodeJS.ProcessEnv = { DEV_LOGIN: 'true' }) {
-  const config = new AppConfig({ ...baseEnv, ...env });
-  const gateway = new OfficeGateway(
-    {} as any,
-    {} as any,
-    new WorkspaceEvents(),
-    new SessionEvents(),
-    config,
-  );
+function createTestSetup() {
+  const gateway = new OfficeGateway({} as any, {} as any, new WorkspaceEvents(), new SessionEvents());
 
   const layout: OfficeLayout = {
     width: 20, // 20 * 32 = 640 px
@@ -77,8 +67,8 @@ function createTestSetup(env: NodeJS.ProcessEnv = { DEV_LOGIN: 'true' }) {
   return { gateway, player, socket, toSpy, exceptSpy, emitSpy, layout };
 }
 
-describe('OfficeGateway dev:teleport', () => {
-  describe('when devLogin is true', () => {
+describe('OfficeGateway.teleport (used by DevGateway for dev:teleport)', () => {
+  describe('valid coordinates', () => {
     it('teleports to valid coordinates, resets movedAt baseline, and preserves dir', () => {
       const { gateway, player, socket, toSpy, exceptSpy, emitSpy } = createTestSetup();
 
@@ -160,44 +150,6 @@ describe('OfficeGateway dev:teleport', () => {
 
       const loc = gateway.locate('ws-1', 'u1');
       expect(loc).toEqual({ x: 160, y: 192, room: null });
-    });
-  });
-
-  describe('when devLogin is false', () => {
-    it('refuses when DEV_LOGIN is false (position unchanged, nothing emitted)', () => {
-      const { gateway, player, socket, emitSpy } = createTestSetup({ DEV_LOGIN: 'false' });
-
-      gateway.teleport(socket, [300, 300]);
-
-      expect(player.x).toBe(100);
-      expect(player.y).toBe(100);
-      expect(player.movedAt).toBe(5000);
-      expect(emitSpy).not.toHaveBeenCalled();
-    });
-
-    it('refuses when DEV_LOGIN is unset (default false)', () => {
-      const { gateway, player, socket, emitSpy } = createTestSetup({});
-
-      gateway.teleport(socket, [300, 300]);
-
-      expect(player.x).toBe(100);
-      expect(player.y).toBe(100);
-      expect(player.movedAt).toBe(5000);
-      expect(emitSpy).not.toHaveBeenCalled();
-    });
-
-    it('refuses in production even if DEV_LOGIN is true (NODE_ENV=production)', () => {
-      const { gateway, player, socket, emitSpy } = createTestSetup({
-        DEV_LOGIN: 'true',
-        NODE_ENV: 'production',
-      });
-
-      gateway.teleport(socket, [300, 300]);
-
-      expect(player.x).toBe(100);
-      expect(player.y).toBe(100);
-      expect(player.movedAt).toBe(5000);
-      expect(emitSpy).not.toHaveBeenCalled();
     });
   });
 

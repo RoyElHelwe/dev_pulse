@@ -1,20 +1,11 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, Post } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
-import { IsIn } from 'class-validator';
-import { IsEmailField } from '../auth/dto/validation';
 import type { AuthUser } from '../common/auth/auth-user';
 import { CurrentUser } from '../common/auth/current-user.decorator';
 import { Public } from '../common/auth/public.decorator';
-import { AcceptInvitationDto } from '../workspace/dto';
+import { AcceptInvitationDto } from '../workspace/workspace.dto';
+import { InviteDto } from './invitations.dto';
 import { InvitationsService } from './invitations.service';
-
-class InviteDto {
-  @IsEmailField()
-  email: string;
-
-  @IsIn(['ADMIN', 'MEMBER'])
-  role: 'ADMIN' | 'MEMBER';
-}
 
 @Controller()
 export class InvitationsController {

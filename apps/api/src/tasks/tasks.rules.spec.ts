@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { canDeleteTask, needsRebalance, RANK_GAP_MIN, rankBetween, taskKey, workspacePrefix } from './rules';
+import { canDeleteTask, needsRebalance, RANK_GAP_MIN, rankBetween, taskKey, workspacePrefix } from './tasks.rules';
 
 describe('workspacePrefix', () => {
   it('takes initials of multi-word names up to 4 characters', () => {

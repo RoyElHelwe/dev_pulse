@@ -2,7 +2,7 @@ import { Controller, Get, Query } from '@nestjs/common';
 import type { AuthUser } from '../common/auth/auth-user';
 import { CurrentUser } from '../common/auth/current-user.decorator';
 import { MembershipService } from '../workspace/membership.service';
-import { LeaderboardQueryDto } from './dto';
+import { LeaderboardQueryDto } from './games.dto';
 import { GameResultsService } from './game-results.service';
 
 @Controller('workspace/games')

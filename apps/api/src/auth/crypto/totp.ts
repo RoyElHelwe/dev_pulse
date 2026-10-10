@@ -46,7 +46,7 @@ export function generateTotpSecret(): string {
   return base32Encode(randomBytes(20));
 }
 
-export function currentStep(now = Date.now()): number {
+function currentStep(now = Date.now()): number {
   return Math.floor(now / 1000 / STEP_SECONDS);
 }
 

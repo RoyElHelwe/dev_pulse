@@ -3,7 +3,7 @@ import { IsISO8601, IsOptional, Matches } from 'class-validator';
 import type { AuthUser } from '../common/auth/auth-user';
 import { CurrentUser } from '../common/auth/current-user.decorator';
 import { FormError } from '../common/form-error';
-import { ZONE_ID } from '../office/rules';
+import { ZONE_ID } from '../office/office.rules';
 import { MembershipService } from '../workspace/membership.service';
 import { ChatService } from './chat.service';
 

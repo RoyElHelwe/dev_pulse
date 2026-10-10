@@ -1,6 +1,6 @@
 import type { FurnitureKind as OfficeFurnitureKind } from '../office/layout/types';
 
-export type FurnitureKind = OfficeFurnitureKind | 'foosball' | 'cardTable' | 'legoBoard';
+type FurnitureKind = OfficeFurnitureKind | 'foosball' | 'cardTable' | 'legoBoard';
 
 export type GameKind = 'foosball' | 'uno' | 'lego';
 

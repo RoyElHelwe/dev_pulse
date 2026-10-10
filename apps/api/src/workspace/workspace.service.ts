@@ -9,7 +9,7 @@ import { addWing, WingError, type WingResult } from '../office/layout/wings';
 import { findTemplate } from '../office/templates';
 import { PrismaService } from '../prisma/prisma.service';
 import { DesksService } from './desks.service';
-import type { CreateWorkspaceDto, SwitchTemplateDto, UpdateLayoutDto, UpdateMeDto, WingDto } from './dto';
+import type { CreateWorkspaceDto, SwitchTemplateDto, UpdateLayoutDto, UpdateMeDto, WingDto } from './workspace.dto';
 import { CAN_MANAGE, MembershipService } from './membership.service';
 import { WorkspaceEvents } from './workspace-events';
 

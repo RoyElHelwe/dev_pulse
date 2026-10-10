@@ -1,6 +1,6 @@
 import { Transform } from 'class-transformer';
 import { ArrayMaxSize, IsArray, IsISO8601, IsOptional, IsString, Length, MaxLength } from 'class-validator';
-import { MAX_ATTENDEES } from './booking-rules';
+import { MAX_ATTENDEES } from './meetings.rules';
 
 const trim = () => Transform(({ value }) => (typeof value === 'string' ? value.trim().replace(/\s+/g, ' ') : value));
 
