@@ -3,6 +3,7 @@ import { drawCharacter, type Mood, type Pose } from '../art/character';
 import { phaserPen } from '../art/pen';
 import { encode, type Recipe } from '../art/recipe';
 import { circle, rr } from '../render/draw';
+import { acquireShape, releaseShape, shapeImage, shapeScale } from '../render/shapes';
 import { Bubble, SpeechBubble } from './Bubble';
 
 /** Chat bubbles show at most this many characters. */
@@ -71,8 +72,11 @@ function moodOf(status: string | null): { mood: Mood; mug: boolean } {
  * the feet, which is also used for depth sorting and the physics body.
  */
 export class Avatar extends Phaser.GameObjects.Container {
+  private readonly textures: Phaser.Textures.TextureManager;
+  private shadowKey?: string;
+  private tagKey?: string;
   private readonly figure: Phaser.GameObjects.Image;
-  private readonly shadow: Phaser.GameObjects.Graphics;
+  private readonly shadow: Phaser.GameObjects.Image;
   /** Texture pixels per world pixel (sharp on retina screens). */
   private readonly texScale: number;
   private code: string;
@@ -103,9 +107,15 @@ export class Avatar extends Phaser.GameObjects.Container {
   ) {
     super(scene, x, y);
 
-    this.shadow = scene.add.graphics();
-    this.shadow.fillStyle(0x000000, 0.16);
-    this.shadow.fillEllipse(0, 0, 26, 9, 20);
+    this.textures = scene.textures;
+    const shapeRes = shapeScale(textResolution);
+
+    const shadowBounds = { x: -14, y: -5.5, w: 28, h: 11 };
+    this.shadowKey = acquireShape(scene, 'shadow', shadowBounds, shapeRes, (g) => {
+      g.fillStyle(0x000000, 0.16);
+      g.fillEllipse(0, 0, 26, 9, 20);
+    });
+    this.shadow = shapeImage(scene, this.shadowKey, shadowBounds, shapeRes);
 
     this.texScale = Math.min(2, textResolution * 0.75);
     this.code = encode(recipe);
@@ -124,10 +134,13 @@ export class Avatar extends Phaser.GameObjects.Container {
       })
       .setOrigin(0.5)
       .setResolution(textResolution);
-    const tag = scene.add.graphics();
     const tagW = label.width + 24;
-    rr(tag, -tagW / 2, -75, tagW, 18, 9, 0x18181b, 0.82);
-    circle(tag, -tagW / 2 + 9.5, -66, 2.5, 0x34d399);
+    const tagBounds = { x: -tagW / 2 - 1, y: -76, w: tagW + 2, h: 20 };
+    this.tagKey = acquireShape(scene, `tag:${tagW.toFixed(2)}`, tagBounds, shapeRes, (g) => {
+      rr(g, -tagW / 2, -75, tagW, 18, 9, 0x18181b, 0.82);
+      circle(g, -tagW / 2 + 9.5, -66, 2.5, 0x34d399);
+    });
+    const tag = shapeImage(scene, this.tagKey, tagBounds, shapeRes);
     label.setX(4.5);
 
     this.add([this.shadow, this.figure, tag, label]);
@@ -245,11 +258,21 @@ export class Avatar extends Phaser.GameObjects.Container {
   }
 
   destroy(fromScene?: boolean) {
-    const textures = this.scene?.textures;
+    const textures = this.scene?.textures ?? this.textures;
     this.speechTimer?.remove(false);
     this.speechTween?.stop();
     super.destroy(fromScene);
-    if (textures) unwear(textures, this.code);
+    if (textures) {
+      unwear(textures, this.code);
+      if (this.shadowKey) {
+        releaseShape(textures, this.shadowKey);
+        this.shadowKey = undefined;
+      }
+      if (this.tagKey) {
+        releaseShape(textures, this.tagKey);
+        this.tagKey = undefined;
+      }
+    }
   }
 
   /** In a voice call (headset on); `talking` blinks its light. For the voice features (Z3, Z4). */
