@@ -28,7 +28,6 @@ import {
   Undo2,
   Utensils,
 } from 'lucide-react';
-import { useSyncExternalStore } from 'react';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { Kbd } from '@/components/ui/Kbd';
@@ -38,6 +37,8 @@ import type { LayoutEditor } from '@/game/editor/LayoutEditor';
 import { PROBLEM_TEXT, type PlacementProblem } from '@/game/editor/rules';
 import type { FurnitureKind } from '@/game/layout/types';
 import { cn } from '@/lib/cn';
+import { hexColor } from '@/lib/color';
+import { useEditorState } from './editorStore';
 
 const ICON: Record<FurnitureKind, LucideIcon> = {
   desk: Laptop,
@@ -65,7 +66,6 @@ const ICON: Record<FurnitureKind, LucideIcon> = {
 
 const GROUPS = [...new Set(CATALOG.map((c) => c.group))];
 
-const hex = (n: number) => `#${n.toString(16).padStart(6, '0')}`;
 
 interface EditorPanelProps {
   editor: LayoutEditor;
@@ -82,7 +82,7 @@ interface EditorPanelProps {
 
 /** The organiser's tools around the office while editing it. */
 export function EditorPanel({ editor, saving, error, onSave, onDiscard, onReload, onReset, onProblem }: EditorPanelProps) {
-  const state = useSyncExternalStore(editor.subscribe, editor.getState, editor.getState);
+  const state = useEditorState(editor);
   const selected = state.selectedId ? editor.item(state.selectedId) : undefined;
   const count = state.selectedIds.length;
   const report = (problem: PlacementProblem | null) => problem && onProblem(PROBLEM_TEXT[problem]);
@@ -171,14 +171,14 @@ export function EditorPanel({ editor, saving, error, onSave, onDiscard, onReload
                       <button
                         key={color}
                         type="button"
-                        aria-label={`Colour ${hex(color)}`}
+                        aria-label={`Colour ${hexColor(color)}`}
                         aria-pressed={selected.color === color}
                         onClick={() => editor.setColor(selected.id, color)}
                         className={cn(
                           'size-7 rounded-full ring-2 ring-offset-2 transition',
                           selected.color === color ? 'ring-emerald-500' : 'ring-transparent hover:ring-zinc-300',
                         )}
-                        style={{ background: hex(color) }}
+                        style={{ background: hexColor(color) }}
                       />
                     ))}
                   </div>

@@ -3,7 +3,7 @@ import type { OfficeController, OfficeSnapshot } from '@/game/createGame';
 import type { OfficeLayout, RoomKind } from '@/game/layout/types';
 import { NEAR_RADIUS as NEAR } from '@/game/systems/Proximity';
 import { meetingGain, openGain, relativeTo } from './spatial';
-import { voiceStates } from './store';
+import { voiceStates } from './voiceStore';
 
 // Proximity voice: one peer-to-peer WebRTC audio call per person we can hear.
 // Who we call comes from the game (same room, and close by or in a meeting room);

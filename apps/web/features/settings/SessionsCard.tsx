@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { api } from '@/lib/api';
-import { describeUserAgent, timeAgo } from '@/lib/user-agent';
+import { describeUserAgent, timeAgo } from '@/lib/userAgent';
 
 interface Session {
   id: string;

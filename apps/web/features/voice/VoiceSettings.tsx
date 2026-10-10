@@ -10,7 +10,7 @@ import { Kbd } from '@/components/ui/Kbd';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { api, ApiError } from '@/lib/api';
 import { cn } from '@/lib/cn';
-import { rebind, useKeybinds } from '@/features/settings/keybinds';
+import { rebind, useKeybinds } from '@/features/settings/keybindStore';
 import { keyName, type VoiceMode, type VoiceSettings as Settings } from './settings';
 
 const MODES: { mode: VoiceMode; title: string; text: string; Icon: typeof Mic }[] = [

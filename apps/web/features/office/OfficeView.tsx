@@ -4,12 +4,12 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Socket } from 'socket.io-client';
 import { useAuth } from '@/features/auth/AuthProvider';
-import { useDevLogin } from '@/features/auth/DevSwitcher';
-import { useKeybind } from '@/features/settings/keybinds';
+import { useDevHooks } from '@/features/dev/devHooks';
+import { useKeybind } from '@/features/settings/keybindStore';
 import { ChatPanel } from '@/features/chat/ChatPanel';
 import { MeetingsPanel } from '@/features/meetings/MeetingsPanel';
 import { EMPTY_FILTER } from '@/features/tasks/BoardFilters';
-import { useOpenTaskCounts, useTaskSync } from '@/features/tasks/store';
+import { useOpenTaskCounts, useTaskSync } from '@/features/tasks/taskStore';
 import { BoardDrawer } from '@/features/tasks/BoardDrawer';
 import { TaskBoard } from '@/features/tasks/TaskBoard';
 import type { BoardFilter } from '@/features/tasks/types';
@@ -40,7 +40,6 @@ export function OfficeView() {
   const containerRef = useRef<HTMLDivElement>(null);
   const controllerRef = useRef<OfficeController | null>(null);
   const connectionRef = useRef<ReturnType<typeof connectOffice> | null>(null);
-  const devStatus = useDevLogin();
   const [ready, setReady] = useState(false);
   const [workspace, setWorkspace] = useState<MyWorkspace | null>(null);
   const [people, setPeople] = useState<Presence[]>([]);
@@ -155,22 +154,14 @@ export function OfficeView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspaceId, myId, name]);
 
-  // Expose dev-only test hooks for e2e automation when dev login is enabled.
-  useEffect(() => {
-    if (!devStatus?.enabled) return;
-    window.__devpulse = {
-      teleport(x: number, y: number) {
-        connectionRef.current?.teleport(x, y);
-        controllerRef.current?.teleportTo(x, y);
-      },
-      position() {
-        return controllerRef.current?.localPosition() ?? null;
-      },
-    };
-    return () => {
-      delete window.__devpulse;
-    };
-  }, [devStatus?.enabled]);
+  // Test-only window.__devpulse for e2e; installs nothing unless dev sign-in is on.
+  useDevHooks({
+    teleport(x, y) {
+      connectionRef.current?.teleport(x, y);
+      controllerRef.current?.teleportTo(x, y);
+    },
+    position: () => controllerRef.current?.localPosition() ?? null,
+  });
 
   // ---- office editor ---------------------------------------------------------------
 

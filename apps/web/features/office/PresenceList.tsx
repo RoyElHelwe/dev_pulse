@@ -4,9 +4,9 @@ import { HeadphoneOff, MicOff, Users } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Panel } from '@/components/ui/Panel';
 import { useAuth } from '@/features/auth/AuthProvider';
-import { useVoiceStates, type VoiceState } from '@/features/voice/store';
+import { useVoiceStates, type VoiceState } from '@/features/voice/voiceStore';
 import { CharacterFace } from '@/features/workspace/CharacterPreview';
-import { useKeybind, useKeyName } from '@/features/settings/keybinds';
+import { useKeybind, useKeyName } from '@/features/settings/keybindStore';
 import { useEscape } from '@/lib/escape';
 import type { Presence } from './connection';
 

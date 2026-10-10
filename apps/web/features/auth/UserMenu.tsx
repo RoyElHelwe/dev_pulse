@@ -12,7 +12,7 @@ import { KeybindsModal } from '@/features/settings/KeybindsModal';
 import { cn } from '@/lib/cn';
 import { useEscape } from '@/lib/escape';
 import { useAuth } from './AuthProvider';
-import { useDevLogin } from './DevSwitcher';
+import { useDevLogin } from '@/features/dev/useDevLogin';
 
 export interface UserMenuProps {
   className?: string;

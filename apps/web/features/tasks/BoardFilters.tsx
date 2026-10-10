@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import { Plus, Search, X } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { PeoplePicker } from './PeoplePicker';
-import { countOpenTasks, useTasks } from './store';
+import { countOpenTasks, useTasks } from './taskStore';
 import { AssigneeAvatar } from './TaskIcons';
 import type { BoardFilter, BoardMember, TaskView } from './types';
 
@@ -62,7 +62,7 @@ export function compareMembers(
   return a.displayName.localeCompare(b.displayName);
 }
 
-export function pickVisibleMembers(
+function pickVisibleMembers(
   members: BoardMember[],
   selectedIds: string[],
   myId: string,

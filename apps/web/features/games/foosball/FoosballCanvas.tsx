@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/Button';
+import { devLowRes } from '@/features/dev/devHooks';
 import {
   BALL_R,
   CANVAS_H,
@@ -118,9 +119,8 @@ export function FoosballCanvas({
       w = Math.max(1, Math.floor(w));
       h = Math.max(1, Math.floor(h));
 
-      // Test browsers without a GPU set `__devpulseLowRes`: half resolution keeps the page responsive.
-      const lowRes = typeof window !== 'undefined' && (window as unknown as { __devpulseLowRes?: boolean }).__devpulseLowRes;
-      const dpr = lowRes ? 0.5 : Math.min(typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1, 2);
+      // Test browsers without a GPU ask for half resolution so the page stays responsive.
+      const dpr = devLowRes() ? 0.5 : Math.min(typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1, 2);
       const bw = Math.max(1, Math.round(w * dpr));
       const bh = Math.max(1, Math.round(h * dpr));
 

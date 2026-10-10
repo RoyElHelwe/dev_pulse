@@ -10,11 +10,9 @@ import {
   KEYBIND_ACTIONS,
   KEYBIND_LABELS,
   type KeybindAction,
-  rebind,
   RESERVED_KEYS,
-  resetKeybinds,
-  useKeybinds,
 } from '@/features/settings/keybinds';
+import { getKeybinds, rebind, resetKeybinds, useKeybinds } from '@/features/settings/keybindStore';
 import { keyName } from '@/features/voice/settings';
 import { useEscape } from '@/lib/escape';
 
@@ -83,7 +81,7 @@ export function KeybindsModal({ open, onClose }: KeybindsModalProps) {
         return;
       }
 
-      const other = actionUsing(code, action);
+      const other = actionUsing(getKeybinds(), code, action);
       if (other) {
         setConflict({ action, code, other });
         return;

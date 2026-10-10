@@ -8,7 +8,7 @@ import { IconButton } from '@/components/ui/IconButton';
 import { Select } from '@/components/ui/Select';
 import { ApiError } from '@/lib/api';
 import { useEscape } from '@/lib/escape';
-import { taskActions, useTasks } from './store';
+import { taskActions, useTasks } from './taskStore';
 import { AssigneeAvatar, PriorityIcon, TypeIcon } from './TaskIcons';
 import type {
   BoardMember,
@@ -27,7 +27,7 @@ import {
   TYPES,
 } from './types';
 
-export type TaskDialogMode =
+type TaskDialogMode =
   | { kind: 'create'; status?: TaskStatus; assigneeId?: string | null }
   | { kind: 'edit'; taskId: string };
 

@@ -4,9 +4,9 @@
 export type Facing = 'up' | 'down' | 'left' | 'right';
 
 /** Open space: full volume within this distance (tiles). */
-export const CLOSE = 1;
+const CLOSE = 1;
 /** Meeting room: the far wall (the room's longer side) still sounds like this. */
-export const MEETING_FLOOR = 0.3;
+const MEETING_FLOOR = 0.3;
 /** Meeting room: inside this distance (tiles) everyone is at full volume. */
 const MEETING_CLOSE = 1.5;
 

@@ -29,11 +29,6 @@ function install() {
   window.addEventListener('keydown', onKeyDown, true);
 }
 
-/** True while something registered with `useEscape` is open. */
-export function hasEscapeLayer() {
-  return stack.length > 0;
-}
-
 /**
  * While `active`, Escape calls `onEscape` if this is the top-most open layer.
  * Layers stack in the order they became active, so a dialog opened from a panel

@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { Suspense } from 'react';
-import { DevSwitcherGate } from '@/features/auth/DevSwitcher';
+import { DevSwitcherGate } from '@/features/dev/DevSwitcher';
 import { RegisterForm } from '@/features/auth/RegisterForm';
 
 export const metadata: Metadata = { title: 'Create your account · Dev Pulse' };
