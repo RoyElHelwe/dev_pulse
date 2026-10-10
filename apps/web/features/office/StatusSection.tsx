@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/cn';
 
-export const STATUS_PRESETS = ['Focusing', 'In a meeting', 'On break ☕', 'Back soon'];
+const STATUS_PRESETS = ['Focusing', 'In a meeting', 'On break ☕', 'Back soon'];
 
 export interface StatusSectionProps {
   status: string | null;

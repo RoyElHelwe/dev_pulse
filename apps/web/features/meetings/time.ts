@@ -18,8 +18,8 @@ export interface Member {
 }
 
 /** The timetable shows 08:00–20:00 in 30-minute rows. */
-export const FIRST_HOUR = 8;
-export const LAST_HOUR = 20;
+const FIRST_HOUR = 8;
+const LAST_HOUR = 20;
 export const ROW_MINUTES = 30;
 export const ROWS = ((LAST_HOUR - FIRST_HOUR) * 60) / ROW_MINUTES;
 /** Bookings move in 15-minute steps and last 4 hours at most (same rules as the API). */

@@ -8,12 +8,12 @@ import { Kbd } from '@/components/ui/Kbd';
 import { Panel } from '@/components/ui/Panel';
 import type { OfficeFeatureProps } from '@/features/office/types';
 import { CharacterFace } from '@/features/workspace/CharacterPreview';
-import { getKeybinds, useKeybinds } from '@/features/settings/keybinds';
+import { getKeybinds, useKeybinds } from '@/features/settings/keybindStore';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { isTyping } from '@/lib/dom';
 import { DEFAULT_VOICE_SETTINGS, keyName, type VoiceSettings } from './settings';
-import { type VoiceEntry, voiceStates } from './store';
+import { type VoiceEntry, voiceStates } from './voiceStore';
 import { type VoiceSnapshot, VoiceManager } from './VoiceManager';
 
 const IDLE: VoiceSnapshot = { joined: false, muted: false, deafened: false, pushToTalk: false, live: false, peers: [] };

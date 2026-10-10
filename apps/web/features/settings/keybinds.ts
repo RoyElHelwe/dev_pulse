@@ -1,19 +1,12 @@
-'use client';
-
-import { useCallback, useEffect, useRef, useSyncExternalStore } from 'react';
-import { api, ApiError } from '@/lib/api';
-import { isTyping } from '@/lib/dom';
-import { keyName } from '@/features/voice/settings';
-
-// One keybind store for the whole app. Every key listener (voice, E in the game,
-// chat / board / rooms / people toggles) reads it, the Keybinds modal and
-// /settings/voice write it. Saved per user on the server (`/settings`).
+// What can be rebound: the actions, their defaults, labels, and which keys are allowed.
+// Pure data and functions; the live per-user state is in keybindStore.ts.
+// Mirror of apps/api/src/settings/keybinds.ts (defaults and key rules): change both together.
 
 export const KEYBIND_ACTIONS = ['interact', 'mute', 'deafen', 'pushToTalk', 'chat', 'board', 'rooms', 'people'] as const;
 export type KeybindAction = (typeof KEYBIND_ACTIONS)[number];
 export type Keybinds = Record<KeybindAction, string>;
 
-/** Same defaults and rules as the API (apps/api/src/settings/keybinds.ts). */
+/** Same defaults as the API. Values are KeyboardEvent.code, so they do not depend on the layout. */
 export const DEFAULT_KEYBINDS: Keybinds = {
   interact: 'KeyE',
   mute: 'KeyM',
@@ -25,6 +18,7 @@ export const DEFAULT_KEYBINDS: Keybinds = {
   people: 'KeyP',
 };
 
+/** Name and one-line hint shown in the Keybinds modal. */
 export const KEYBIND_LABELS: Record<KeybindAction, { label: string; hint: string }> = {
   interact: { label: 'Use / interact', hint: 'Sit, open your desk, claim a desk' },
   mute: { label: 'Mute microphone', hint: 'While in voice' },
@@ -41,24 +35,11 @@ export const RESERVED_KEYS = new Set([
   'KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Escape', 'Enter', 'Tab',
 ]);
 
-/** Same rule as the API. */
+/** Shape of a valid key code (same rule as the API). */
 export const KEY_CODE = /^[A-Za-z0-9]{1,24}$/;
 
-interface State {
-  keybinds: Keybinds;
-  loaded: boolean;
-}
-
-let state: State = { keybinds: DEFAULT_KEYBINDS, loaded: false };
-const listeners = new Set<() => void>();
-let inflight: Promise<void> | null = null;
-
-function set(next: State) {
-  state = next;
-  for (const l of listeners) l();
-}
-
-function normalize(raw: unknown): Keybinds {
+/** Server data (or garbage) -> a complete Keybinds: invalid or missing entries fall back to the defaults. */
+export function normalizeKeybinds(raw: unknown): Keybinds {
   const out = { ...DEFAULT_KEYBINDS };
   if (raw && typeof raw === 'object') {
     for (const action of KEYBIND_ACTIONS) {
@@ -69,109 +50,7 @@ function normalize(raw: unknown): Keybinds {
   return out;
 }
 
-export function getKeybinds(): Keybinds {
-  return state.keybinds;
-}
-
-/** Fetches the user's keybinds (once per call while none is in flight). */
-export function loadKeybinds(): Promise<void> {
-  inflight ??= api<{ keybinds?: unknown; pushToTalkKey?: string }>('/settings')
-    .then((s) => set({ keybinds: normalize({ ...(s.keybinds as object), pushToTalk: s.pushToTalkKey ?? (s.keybinds as Keybinds | undefined)?.pushToTalk }), loaded: true }))
-    .catch(() => undefined) // keep the defaults / what we have
-    .finally(() => {
-      inflight = null;
-    });
-  return inflight;
-}
-
-/** The action that already uses `code`, if any (other than `except`). */
-export function actionUsing(code: string, except?: KeybindAction, from: Keybinds = state.keybinds): KeybindAction | null {
-  return KEYBIND_ACTIONS.find((a) => a !== except && from[a] === code) ?? null;
-}
-
-export type RebindResult = { ok: true } | { ok: false; error: string };
-
-/**
- * Binds `code` to `action`. If another action holds the key: with `swap` the two
- * trade keys, otherwise the call is refused (`conflict` tells which action).
- */
-export async function rebind(
-  action: KeybindAction,
-  code: string,
-  opts: { swap?: boolean } = {},
-): Promise<RebindResult> {
-  if (!KEY_CODE.test(code)) return { ok: false, error: 'That key can’t be used. Try another one.' };
-  if (RESERVED_KEYS.has(code)) return { ok: false, error: `${keyName(code)} is used to walk or close things. Try another key.` };
-  const other = actionUsing(code, action);
-  const next = { ...state.keybinds, [action]: code };
-  if (other) {
-    if (!opts.swap) return { ok: false, error: `${keyName(code)} is already used for ${KEYBIND_LABELS[other].label}.` };
-    next[other] = state.keybinds[action];
-  }
-  return save(next);
-}
-
-export function resetKeybinds(): Promise<RebindResult> {
-  return save({ ...DEFAULT_KEYBINDS });
-}
-
-async function save(next: Keybinds): Promise<RebindResult> {
-  const previous = state;
-  set({ keybinds: next, loaded: true });
-  try {
-    const saved = await api<{ keybinds?: unknown }>('/settings', { method: 'PATCH', body: { keybinds: next } });
-    if (saved.keybinds) set({ keybinds: normalize(saved.keybinds), loaded: true });
-    return { ok: true };
-  } catch (err) {
-    set(previous);
-    return { ok: false, error: err instanceof ApiError ? err.message : 'Could not reach the server.' };
-  }
-}
-
-function subscribe(l: () => void) {
-  listeners.add(l);
-  return () => {
-    listeners.delete(l);
-  };
-}
-
-/** The current keybinds (re-renders on change); loads them from the server on first use. */
-export function useKeybinds(): Keybinds {
-  useEffect(() => {
-    if (!state.loaded) void loadKeybinds();
-  }, []);
-  return useSyncExternalStore(subscribe, getKeybinds, () => DEFAULT_KEYBINDS);
-}
-
-/** "KeyC" → "C" for the action's current key (for hints). */
-export function useKeyName(action: KeybindAction): string {
-  return keyName(useKeybinds()[action]);
-}
-
-/** Is this key event the bound key for `action`? No modifiers, no auto-repeat. */
-export function matchesKey(e: KeyboardEvent, action: KeybindAction) {
-  return e.code === state.keybinds[action] && !e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey;
-}
-
-/**
- * Runs `handler` when the user presses the key bound to `action`, unless they are
- * typing or `enabled` is false. Handler may be a fresh closure on each render.
- */
-export function useKeybind(action: KeybindAction, handler: () => void, enabled = true) {
-  const ref = useRef(handler);
-  ref.current = handler;
-  useKeybinds(); // make sure they are loaded
-  const onKey = useCallback(
-    (e: KeyboardEvent) => {
-      if (!matchesKey(e, action) || isTyping()) return;
-      e.preventDefault();
-      ref.current();
-    },
-    [action],
-  );
-  useEffect(() => {
-    if (!enabled) return;
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [enabled, onKey]);
+/** The action in `keybinds` that already uses `code`, if any (other than `except`). */
+export function actionUsing(keybinds: Keybinds, code: string, except?: KeybindAction): KeybindAction | null {
+  return KEYBIND_ACTIONS.find((a) => a !== except && keybinds[a] === code) ?? null;
 }

@@ -9,7 +9,7 @@ import { IconButton } from '@/components/ui/IconButton';
 import { Panel } from '@/components/ui/Panel';
 import type { OfficeFeatureProps } from '@/features/office/types';
 import { canManage } from '@/features/workspace/types';
-import { useKeybind, useKeyName } from '@/features/settings/keybinds';
+import { useKeybind, useKeyName } from '@/features/settings/keybindStore';
 import { api, ApiError } from '@/lib/api';
 import { useEscape } from '@/lib/escape';
 import { BookingForm } from './BookingForm';

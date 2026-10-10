@@ -8,7 +8,7 @@ import { ApiError } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { useEscape } from '@/lib/escape';
 import { BoardFilters, isFiltered, matchesFilter } from './BoardFilters';
-import { taskActions, useTasks } from './store';
+import { taskActions, useTasks } from './taskStore';
 import { TaskCard } from './TaskCard';
 import { TaskDialog } from './TaskDialog';
 import type { BoardFilter, BoardMember, TaskStatus, TaskView } from './types';

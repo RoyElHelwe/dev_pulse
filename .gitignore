@@ -12,3 +12,8 @@ coverage/
 .vscode/
 .idea/
 *.log
+
+# Test output
+test-results/
+playwright-report/
+e2e/test-results/

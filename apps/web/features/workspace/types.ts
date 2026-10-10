@@ -3,7 +3,7 @@ import type { OfficeLayout } from '@/game/layout/types';
 
 export type Role = 'OWNER' | 'ADMIN' | 'MEMBER';
 
-export interface OfficeWingInfo {
+interface OfficeWingInfo {
   id: string;
   side: 'LEFT' | 'RIGHT' | 'BOTTOM';
   x: number;

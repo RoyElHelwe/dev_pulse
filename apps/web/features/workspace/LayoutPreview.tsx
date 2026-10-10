@@ -2,6 +2,7 @@ import { memo } from 'react';
 import { itemBounds } from '@/game/layout/derive';
 import type { FurnitureKind, OfficeLayout } from '@/game/layout/types';
 import { cn } from '@/lib/cn';
+import { hexColor } from '@/lib/color';
 
 const FLOOR: Record<string, string> = { oak: '#dcc29e', terrazzo: '#ebe6de' };
 
@@ -20,7 +21,6 @@ const FURNITURE_COLOR: Partial<Record<FurnitureKind, string>> = {
   tv: '#111417',
 };
 
-const hex = (c?: number) => (c === undefined ? undefined : `#${c.toString(16).padStart(6, '0')}`);
 
 /** A small floor plan of an office (rooms, walls, furniture), as SVG. */
 export const LayoutPreview = memo(function LayoutPreview({ layout, className }: { layout: OfficeLayout; className?: string }) {
@@ -34,12 +34,12 @@ export const LayoutPreview = memo(function LayoutPreview({ layout, className }: 
     >
       <rect x="-0.5" y="-0.5" width={layout.width + 1} height={layout.height + 1} rx="1.2" fill="#d6d1c9" />
       {layout.rooms.map((r) => (
-        <rect key={r.id} x={r.x} y={r.y} width={r.w} height={r.h} fill={hex(r.color) ?? FLOOR[r.floor]} />
+        <rect key={r.id} x={r.x} y={r.y} width={r.w} height={r.h} fill={hexColor(r.color) ?? FLOOR[r.floor]} />
       ))}
       {items.map((f) => {
         const b = itemBounds(f);
         const round = f.kind === 'plant' || f.kind === 'stool' || f.kind === 'beanbag';
-        const fill = FURNITURE_COLOR[f.kind] ?? hex(f.color) ?? '#9ca3af';
+        const fill = FURNITURE_COLOR[f.kind] ?? hexColor(f.color) ?? '#9ca3af';
         if (f.kind === 'floorLamp') return null;
         return round ? (
           <circle key={f.id} cx={f.x} cy={f.y} r={Math.min(b.w, b.h) / 2} fill={fill} />

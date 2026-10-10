@@ -1,43 +1,20 @@
 'use client';
 
+// Dev/test only: the "pick who you want to be" sign-in shown on /login and /register.
+// Never active in production because it renders only when the api reports DEV_LOGIN
+// as enabled (see useDevLogin), and the api never enables it in production.
+
 import { UserPlus } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Alert } from '@/components/ui/Alert';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
+import { AuthShell } from '@/features/auth/AuthShell';
+import type { SignInResponse } from '@/features/auth/types';
 import { api, ApiError } from '@/lib/api';
 import { safeRedirect } from '@/lib/redirect';
-import { AuthShell } from './AuthShell';
-import type { SignInResponse } from './types';
-
-export interface DevUser {
-  id: string;
-  displayName: string;
-  email: string;
-  officeName: string | null;
-  role: string | null;
-}
-
-interface DevStatus {
-  enabled: boolean;
-  users: DevUser[];
-}
-
-/** Asks the api whether DEV_LOGIN is on (it never is in production). */
-export function useDevLogin() {
-  const [status, setStatus] = useState<DevStatus | null>(null);
-  useEffect(() => {
-    let alive = true;
-    api<DevStatus>('/auth/dev')
-      .then((s) => alive && setStatus(s))
-      .catch(() => alive && setStatus({ enabled: false, users: [] }));
-    return () => {
-      alive = false;
-    };
-  }, []);
-  return status;
-}
+import { useDevLogin, type DevUser } from './useDevLogin';
 
 /**
  * Wraps the sign-in / register forms: when DEV_LOGIN is on, shows the identity

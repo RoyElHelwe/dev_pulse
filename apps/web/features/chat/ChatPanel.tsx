@@ -9,7 +9,7 @@ import { CharacterFace } from '@/features/workspace/CharacterPreview';
 import { api, ApiError } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { useEscape } from '@/lib/escape';
-import { useKeybind, useKeyName } from '@/features/settings/keybinds';
+import { useKeybind, useKeyName } from '@/features/settings/keybindStore';
 import { useCurrentRoom } from './useCurrentRoom';
 
 const OFFICE = 'office';
