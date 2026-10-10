@@ -146,6 +146,11 @@ export class OfficeScene extends Phaser.Scene {
   private standHoldMs = 0;
   private justLeft: string | null = null;
   private lastSent = { at: 0, moving: false, dir: 'down' as Direction, seated: false };
+  private readonly moveVec = new Phaser.Math.Vector2();
+  private readonly remoteTilePoints = new Map<string, { x: number; y: number }>();
+  private lastProximityAt = -100;
+  private lastZoneX = NaN;
+  private lastZoneY = NaN;
 
   constructor() {
     super('office');
@@ -170,6 +175,10 @@ export class OfficeScene extends Phaser.Scene {
     this.standHoldMs = 0;
     this.justLeft = null;
     this.lastSent = { at: 0, moving: false, dir: 'down', seated: false };
+    this.remoteTilePoints.clear();
+    this.lastProximityAt = -100;
+    this.lastZoneX = NaN;
+    this.lastZoneY = NaN;
   }
 
   create() {
@@ -332,22 +341,23 @@ export class OfficeScene extends Phaser.Scene {
         this.standHoldMs = 0;
       }
     } else {
-      const v = new Phaser.Math.Vector2(ix, iy).normalize().scale(speed);
+      const v = this.moveVec.set(ix, iy).normalize().scale(speed);
       body.setVelocity(v.x, v.y);
       this.player.animate(body.velocity.x, body.velocity.y, delta);
 
       if (!typing && !this.editMode) {
-        const matchingSeats = this.seats.filter((s) => inSeatZone(s, this.player.x, this.player.y) && this.isSeatFree(s));
         let candidate: Seat | null = null;
-        if (matchingSeats.length === 1) {
-          candidate = matchingSeats[0];
-        } else if (matchingSeats.length > 1) {
-          matchingSeats.sort(
-            (a, b) =>
-              Math.hypot(this.player.x - a.centerX, this.player.y - a.centerY) -
-              Math.hypot(this.player.x - b.centerX, this.player.y - b.centerY),
-          );
-          candidate = matchingSeats[0];
+        let bestDistance = Infinity;
+        const px = this.player.x;
+        const py = this.player.y;
+        for (const s of this.seats) {
+          if (inSeatZone(s, px, py) && this.isSeatFree(s)) {
+            const d = Math.hypot(px - s.centerX, py - s.centerY);
+            if (d < bestDistance) {
+              bestDistance = d;
+              candidate = s;
+            }
+          }
         }
 
         if (candidate) {
@@ -372,7 +382,10 @@ export class OfficeScene extends Phaser.Scene {
       }
     }
 
-    this.player.setDepth(this.peopleDepth(this.player.x, this.player.y, this.player.seated));
+    const depth = this.peopleDepth(this.player.x, this.player.y, this.player.seated);
+    if (depth !== this.player.depth) {
+      this.player.setDepth(depth);
+    }
     for (const remote of this.remotes.values()) remote.update(delta);
     this.crowd.length = 0;
     this.crowd.push(this.player);
@@ -384,7 +397,26 @@ export class OfficeScene extends Phaser.Scene {
     this.maybeSend(time, body.velocity.x !== 0 || body.velocity.y !== 0);
     this.updateZone();
     this.interactions.update(this.player.x, this.player.y, !this.editMode);
-    this.proximity.update(time, { x: this.player.x / TILE, y: this.player.y / TILE }, this.remoteTiles());
+    if (time - this.lastProximityAt >= 100) {
+      this.lastProximityAt = time;
+      for (const id of this.remoteTilePoints.keys()) {
+        if (!this.remotes.has(id)) {
+          this.remoteTilePoints.delete(id);
+        }
+      }
+      for (const [id, remote] of this.remotes) {
+        const tx = remote.avatar.x / TILE;
+        const ty = remote.avatar.y / TILE;
+        const pt = this.remoteTilePoints.get(id);
+        if (pt) {
+          pt.x = tx;
+          pt.y = ty;
+        } else {
+          this.remoteTilePoints.set(id, { x: tx, y: ty });
+        }
+      }
+      this.proximity.update(time, { x: this.player.x / TILE, y: this.player.y / TILE }, this.remoteTilePoints);
+    }
     if (this.badgesDirty) this.refreshBadges();
   }
 
@@ -516,6 +548,8 @@ export class OfficeScene extends Phaser.Scene {
     (this.player.body as Phaser.Physics.Arcade.Body).reset(to.x, to.y);
     this.cameras.main.centerOn(to.x, to.y);
     this.sendPosition();
+    this.lastZoneX = NaN;
+    this.lastZoneY = NaN;
     this.updateZone();
     return inside.roomId;
   }
@@ -581,6 +615,8 @@ export class OfficeScene extends Phaser.Scene {
     this.player.animate(0, 0, 0);
     this.cameras.main.centerOn(x, y);
     this.sendPosition();
+    this.lastZoneX = NaN;
+    this.lastZoneY = NaN;
     this.updateZone();
   }
 
@@ -767,8 +803,11 @@ export class OfficeScene extends Phaser.Scene {
 
   private peopleDepth(x: number, y: number, seated = false): number {
     if (seated) {
-      const seat = this.seats.find((s) => Math.hypot(x - s.centerX, y - s.centerY) <= 24);
-      if (seat) return this.furnitureDepth(seat.item) + 0.000001;
+      for (const s of this.seats) {
+        if (Math.hypot(x - s.centerX, y - s.centerY) <= 24) {
+          return this.furnitureDepth(s.item) + 0.000001;
+        }
+      }
     }
     return DEPTH.sorted + y / 100000;
   }
@@ -882,10 +921,6 @@ export class OfficeScene extends Phaser.Scene {
     this.applyViewShift();
   }
 
-  private *remoteTiles(): Iterable<[string, { x: number; y: number }]> {
-    for (const [id, r] of this.remotes) yield [id, { x: r.avatar.x / TILE, y: r.avatar.y / TILE }];
-  }
-
   /** People per meeting room, from everyone's reported zone (and ours). */
   private refreshBadges() {
     this.badgesDirty = false;
@@ -898,9 +933,18 @@ export class OfficeScene extends Phaser.Scene {
 
   /** Emits zone:leave / zone:enter when the player's feet cross into a zone. */
   private updateZone() {
+    if (this.player.x === this.lastZoneX && this.player.y === this.lastZoneY) return;
+    this.lastZoneX = this.player.x;
+    this.lastZoneY = this.player.y;
     const px = this.player.x / TILE;
     const py = this.player.y / TILE;
-    const zone = this.zones.find((z) => px >= z.x && px < z.x + z.w && py >= z.y && py < z.y + z.h) ?? null;
+    let zone: Zone | null = null;
+    for (const z of this.zones) {
+      if (px >= z.x && px < z.x + z.w && py >= z.y && py < z.y + z.h) {
+        zone = z;
+        break;
+      }
+    }
     if (zone?.id === this.currentZone?.id) return;
     if (this.currentZone) officeEvents.emit('zone:leave', toEvent(this.currentZone));
     if (zone) officeEvents.emit('zone:enter', toEvent(zone));

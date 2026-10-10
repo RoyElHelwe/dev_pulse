@@ -20,14 +20,15 @@ interface Point {
 export class Proximity {
   /** userId → last distance sent and when. */
   private near = new Map<string, { at: number; distance: number }>();
+  private readonly seen = new Set<string>();
 
   constructor(private readonly roomAt: (x: number, y: number) => string | null) {}
 
   update(now: number, me: Point, others: Iterable<[string, Point]>) {
     const myRoom = this.roomAt(me.x, me.y);
-    const seen = new Set<string>();
+    this.seen.clear();
     for (const [userId, p] of others) {
-      seen.add(userId);
+      this.seen.add(userId);
       const distance = Math.round(Math.hypot(p.x - me.x, p.y - me.y) * 100) / 100;
       const sameRoom = this.roomAt(p.x, p.y) === myRoom;
       const state = this.near.get(userId);
@@ -46,7 +47,7 @@ export class Proximity {
     }
     // Gone (left the office): far.
     for (const userId of this.near.keys()) {
-      if (!seen.has(userId)) {
+      if (!this.seen.has(userId)) {
         this.near.delete(userId);
         officeEvents.emit('player:far', { userId });
       }
@@ -57,6 +58,7 @@ export class Proximity {
   clear() {
     for (const userId of this.near.keys()) officeEvents.emit('player:far', { userId });
     this.near.clear();
+    this.seen.clear();
   }
 
   isNear(userId: string) {

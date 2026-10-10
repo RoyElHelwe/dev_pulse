@@ -28,6 +28,9 @@ export class Interactions {
   private owners = new Map<string, DeskOwner>();
   private current: Target | null = null;
   private hint: Bubble | null = null;
+  private lastPx = NaN;
+  private lastPy = NaN;
+  private lastEnabled = false;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -112,12 +115,18 @@ export class Interactions {
   }
 
   setOwners(owners: DeskOwner[]) {
+    this.lastPx = NaN;
     this.owners = new Map(owners.map((o) => [o.deskId, o]));
     if (this.current) this.show(this.current);
   }
 
   /** Player feet in pixels; `enabled` false hides the hint (editing...). */
   update(px: number, py: number, enabled: boolean) {
+    if (px === this.lastPx && py === this.lastPy && enabled === this.lastEnabled) return;
+    this.lastPx = px;
+    this.lastPy = py;
+    this.lastEnabled = enabled;
+
     let best: Target | null = null;
     if (enabled) {
       const x = px / TILE;
