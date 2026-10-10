@@ -1,11 +1,11 @@
-import type { OfficeLayout } from '../../layout/types';
-import { seededRandom } from '../../render/draw';
-import { type Direction, drawCharacter, type Mood } from '../character';
-import { css } from '../color';
-import { drawDesk } from '../desk';
-import { BOTTOM, CLOTH, HAIR, SHOES, SKIN, type Swatch } from '../palette';
-import { canvasPen } from '../pen';
-import { breed, decode, encode, FIELDS, HAT_FREE_HAIR, mutate, PRESETS, randomRecipe, type Recipe, tidy } from '../recipe';
+import type { OfficeLayout } from '../../apps/web/game/layout/types';
+import { seededRandom } from '../../apps/web/game/render/draw';
+import { type Direction, drawCharacter, type Mood } from '../../apps/web/game/art/character';
+import { css } from '../../apps/web/game/art/color';
+import { drawDesk } from '../../apps/web/game/art/desk';
+import { BOTTOM, CLOTH, HAIR, SHOES, SKIN, type Swatch } from '../../apps/web/game/art/palette';
+import { canvasPen } from '../../apps/web/game/art/pen';
+import { breed, decode, encode, FIELDS, HAT_FREE_HAIR, mutate, PRESETS, randomRecipe, type Recipe, tidy } from '../../apps/web/game/art/recipe';
 import { OfficeSim, skyAt } from './office';
 
 // The art lab page: a live office, a character studio, a lineup to test
