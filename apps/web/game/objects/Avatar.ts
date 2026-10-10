@@ -26,14 +26,29 @@ const BOX = { left: 26, top: 64, width: 52, height: 72 };
 
 const MOODS: Mood[] = ['neutral', 'happy', 'focus', 'sleepy'];
 
+let budgetEnd = 0;
+
+export function beginTextureBudget(ms = 3) {
+  budgetEnd = performance.now() + ms;
+}
+
 /**
  * Each frame (direction, step, blink, mood...) is drawn once into a texture
  * shared by everyone with the same recipe, then shown as an image: Phaser
  * replays a Graphics object's shapes every frame, a texture costs nothing.
  */
-function frameTexture(scene: Phaser.Scene, code: string, recipe: Recipe, frame: number, pose: Pose, scale: number) {
+function frameTexture(
+  scene: Phaser.Scene,
+  code: string,
+  recipe: Recipe,
+  frame: number,
+  pose: Pose,
+  scale: number,
+  force = false,
+): string | null {
   const key = `avatar:${code}:${frame}:${scale}`;
   if (scene.textures.exists(key)) return key;
+  if (!force && performance.now() >= budgetEnd) return null;
   const g = scene.make.graphics({}, false);
   drawCharacter(phaserPen(g), recipe, pose);
   const texture = scene.textures.addDynamicTexture(key, Math.ceil(BOX.width * scale), Math.ceil(BOX.height * scale))!;
@@ -95,6 +110,7 @@ export class Avatar extends Phaser.GameObjects.Container {
   private clock = Math.random() * BLINK_EVERY_MS;
   /** Frame drawn last (see redraw): skip redraws when nothing visible changed. */
   private drawn = -1;
+  private hasTexture = false;
 
   constructor(
     scene: Phaser.Scene,
@@ -123,7 +139,8 @@ export class Avatar extends Phaser.GameObjects.Container {
     this.figure = scene.add
       .image(0, 0, '__DEFAULT')
       .setOrigin(BOX.left / BOX.width, BOX.top / BOX.height)
-      .setScale(1 / this.texScale);
+      .setScale(1 / this.texScale)
+      .setVisible(false);
 
     const label = scene.add
       .text(0, -66, name, {
@@ -254,7 +271,8 @@ export class Avatar extends Phaser.GameObjects.Container {
     this.recipe = recipe;
     this.code = code;
     this.drawn = -1;
-    this.redraw();
+    // Forced: the old look's textures were just freed, the figure must not keep pointing at them.
+    this.redraw(true);
   }
 
   destroy(fromScene?: boolean) {
@@ -282,22 +300,28 @@ export class Avatar extends Phaser.GameObjects.Container {
     this.redraw();
   }
 
-  private redraw() {
-    // Everything visible, packed in one number: step (0 standing, 1-8 walking),
-    // blink, talking light, direction, mood, mug, headset.
-    const step = !this._seated && this.moving ? 1 + (Math.round(this.phase / FRAME) % 8) : 0;
-    const blink = !this.moving && this.clock % BLINK_EVERY_MS < BLINK_MS ? 1 : 0;
-    const talk = this.talking ? 1 + (Math.floor(this.clock / 160) % 2) : 0;
+  show() {
+    this.redraw(true);
+  }
+
+  prebake() {
+    for (const dir of DIRECTIONS) {
+      for (let step = 0; step <= 8; step++) {
+        const { frame, pose } = this.frameFor(step, 0, 0, dir);
+        frameTexture(this.scene, this.code, this.recipe, frame, pose, this.texScale, true);
+      }
+    }
+  }
+
+  private frameFor(step: number, blink: number, talk: number, direction: Direction): { frame: number; pose: Pose } {
     const { mood, mug } = this.face;
     const frame =
       step +
-      9 * (blink + 2 * (talk + 3 * (DIRECTIONS.indexOf(this.direction) + 4 * (MOODS.indexOf(mood) + 4 * (Number(mug) + 2 * Number(this.inCall)))))) +
+      9 * (blink + 2 * (talk + 3 * (DIRECTIONS.indexOf(direction) + 4 * (MOODS.indexOf(mood) + 4 * (Number(mug) + 2 * Number(this.inCall)))))) +
       3456 * Number(this._seated);
-    if (frame === this.drawn) return;
-    this.drawn = frame;
-    const texture = frameTexture(this.scene, this.code, this.recipe, frame, {
-      dir: this.direction,
-      moving: !this._seated && this.moving,
+    const pose: Pose = {
+      dir: direction,
+      moving: !this._seated && step > 0,
       seated: this._seated,
       phase: Math.max(0, step - 1) * FRAME,
       blink: blink === 1,
@@ -307,7 +331,25 @@ export class Avatar extends Phaser.GameObjects.Container {
       talking: this.talking,
       // Two light/mouth positions while talking.
       time: talk ? (talk - 1) * 250 : undefined,
-    }, this.texScale);
+    };
+    return { frame, pose };
+  }
+
+  redraw(force = false) {
+    // Everything visible, packed in one number: step (0 standing, 1-8 walking),
+    // blink, talking light, direction, mood, mug, headset.
+    const step = !this._seated && this.moving ? 1 + (Math.round(this.phase / FRAME) % 8) : 0;
+    const blink = !this.moving && this.clock % BLINK_EVERY_MS < BLINK_MS ? 1 : 0;
+    const talk = this.talking ? 1 + (Math.floor(this.clock / 160) % 2) : 0;
+    const { frame, pose } = this.frameFor(step, blink, talk, this.direction);
+    if (!force && frame === this.drawn) return;
+    const texture = frameTexture(this.scene, this.code, this.recipe, frame, pose, this.texScale, force);
+    if (!texture) return;
+    this.drawn = frame;
     this.figure.setTexture(texture);
+    if (!this.hasTexture) {
+      this.hasTexture = true;
+      this.figure.setVisible(true);
+    }
   }
 }

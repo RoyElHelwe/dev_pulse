@@ -7,7 +7,7 @@ import { EditMode } from '../editor/EditMode';
 import type { LayoutEditor } from '../editor/LayoutEditor';
 import { deriveLabels, deriveZones, itemBounds, type Rect } from '../layout/derive';
 import type { Furniture, OfficeLayout, Zone } from '../layout/types';
-import { Avatar, DIRECTIONS, type Direction } from '../objects/Avatar';
+import { Avatar, beginTextureBudget, DIRECTIONS, type Direction } from '../objects/Avatar';
 import { DeskPlates, type DeskOwner } from '../objects/DeskPlates';
 import { recipeOf } from '../art/recipe';
 import { RemotePlayer } from '../objects/RemotePlayer';
@@ -213,6 +213,8 @@ export class OfficeScene extends Phaser.Scene {
     const start =
       this.opts.startAt && this.isFree(this.opts.startAt.x, this.opts.startAt.y) ? this.opts.startAt : this.arrivalPoint(layout);
     this.player = new Avatar(this, start.x, start.y, recipeOf(this.opts.character), this.opts.name, this.opts.fontFamily, this.opts.dpr * 2);
+    this.player.prebake();
+    this.player.show();
     this.physics.add.existing(this.player);
     const body = this.player.body as Phaser.Physics.Arcade.Body;
     body.setSize(18, 10).setOffset(-9, -10).setCollideWorldBounds(true);
@@ -290,6 +292,7 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   update(time: number, delta: number) {
+    beginTextureBudget();
     const body = this.player.body as Phaser.Physics.Arcade.Body;
     const typing = isTyping();
 
