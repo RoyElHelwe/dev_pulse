@@ -81,6 +81,47 @@ export async function register(page: Page, name: string, email: string) {
   await page.waitForURL('**/onboarding**');
 }
 
+/**
+ * Setup through the dev sign-in API instead of the forms (the specs that test the forms still use register()).
+ * Creates a verified user, signs the page's browser context in and, when `host` is given, puts the user in the
+ * host's office. Never use this in the specs that test sign-up, onboarding or invitations.
+ */
+export async function devUser(page: Page, name: string, host?: Page): Promise<string> {
+  const joinUserId = host ? await userId(host) : undefined;
+  const res = await page.context().request.post('/api/auth/dev/users', { data: { name, joinUserId } });
+  expect(res.ok(), `dev sign-in failed: ${res.status()}`).toBeTruthy();
+  return ((await res.json()) as { user: { id: string } }).user.id;
+}
+
+export async function userId(page: Page): Promise<string> {
+  const res = await page.context().request.get('/api/auth/me');
+  return ((await res.json()) as { id: string }).id;
+}
+
+/** Creates the office of a signed-in user through the API (same body as the onboarding form). */
+export async function createOffice(page: Page, name: string, templateId = 'loft', character = 'maya') {
+  const res = await page.context().request.post('/api/workspace', { data: { name, templateId, character } });
+  expect(res.ok(), `create office failed: ${res.status()}`).toBeTruthy();
+}
+
+/** A signed-in office owner, without the forms: dev user + office. */
+export async function devOwner(page: Page, name: string, officeName = 'Acme HQ', templateId = 'loft') {
+  await devUser(page, name);
+  await createOffice(page, officeName, templateId);
+}
+
+/** Opens /office and waits until it is live. */
+export async function gotoOffice(page: Page) {
+  await page.goto('/office');
+  await inOffice(page);
+}
+
+/** Moves the local player (dev sign-in mode only; the server resets its speed check). Pixels. */
+export async function teleport(page: Page, x: number, y: number) {
+  await page.waitForFunction(() => !!(window as unknown as { __devpulse?: unknown }).__devpulse, undefined, { timeout: 30_000 });
+  await page.evaluate(([x, y]) => (window as unknown as { __devpulse: { teleport(x: number, y: number): void } }).__devpulse.teleport(x, y), [x, y] as const);
+}
+
 export const workspace = (page: Page) => page.evaluate(() => fetch('/api/workspace').then((r) => r.json())) as Promise<Workspace>;
 
 /** Waits until the office is loaded (the canvas and the live connection are up). */

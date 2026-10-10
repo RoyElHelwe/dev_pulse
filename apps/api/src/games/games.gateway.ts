@@ -171,6 +171,7 @@ export class GamesGateway implements OnGatewayInit, OnGatewayDisconnect {
   @SubscribeMessage('game:leave')
   handleLeave(@ConnectedSocket() socket: Socket, @MessageBody() body: unknown) {
     const data = socket.data as Partial<SocketData> | undefined;
+    console.log('[DBG-FOOS] gateway handleLeave received:', data?.userId, body);
     if (!data?.userId || !data?.workspaceId) return;
 
     const payload = body as Partial<GameLeaveDto> | undefined;

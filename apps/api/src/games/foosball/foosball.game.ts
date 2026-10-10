@@ -129,6 +129,7 @@ export function createFoosballGame(
   }
 
   function handleGraceExpiry(): void {
+    console.log('[DBG-FOOS] handleGraceExpiry CALLED! graceSide=', graceSide, 'phase=', phase);
     graceTimeout = undefined;
     graceExpiresAt = null;
     const fSide = graceSide;
@@ -144,6 +145,7 @@ export function createFoosballGame(
 
     recordMatchResult(wSide, fSide);
     ctx.emitEvent('forfeit', { side: fSide });
+    console.log('[DBG-FOOS] handleGraceExpiry calling ctx.emitState() phase=', phase);
     ctx.emitState();
   }
 
@@ -251,6 +253,7 @@ export function createFoosballGame(
     },
 
     onJoin(p: GamePlayerRef, _intent: unknown): void {
+      console.log('[DBG-FOOS] onJoin player=', p.userId, p.name);
       if (disposed) return;
 
       const seatedA = seats.A.find((x) => x.userId === p.userId);
@@ -274,9 +277,11 @@ export function createFoosballGame(
     },
 
     onLeave(userId: string, _reason: 'left' | 'far' | 'disconnected'): void {
+      console.log('[DBG-FOOS] onLeave userId=', userId, 'reason=', _reason, 'phase=', phase, 'seatsA=', JSON.stringify(seats.A), 'seatsB=', JSON.stringify(seats.B));
       if (disposed) return;
 
       const side = getPlayerSide(userId);
+      console.log('[DBG-FOOS] onLeave side for user=', side);
       if (!side) {
         checkSessionClose();
         return;
@@ -300,9 +305,11 @@ export function createFoosballGame(
 
       // If no present player remains on that side, start grace timer
       const hasPresentPlayer = seats[side].some((p) => !p.away);
+      console.log('[DBG-FOOS] onLeave hasPresentPlayer=', hasPresentPlayer, 'graceTimeout=', !!graceTimeout);
       if (!hasPresentPlayer && graceTimeout === undefined) {
         graceSide = side;
         graceExpiresAt = now() + GRACE_MS;
+        console.log('[DBG-FOOS] onLeave starting graceTimeout for side=', side, 'GRACE_MS=', GRACE_MS);
         graceTimeout = setTimeout(() => {
           handleGraceExpiry();
         }, GRACE_MS);

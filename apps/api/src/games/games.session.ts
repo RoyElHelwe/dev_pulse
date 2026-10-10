@@ -84,6 +84,7 @@ export class GameSession {
   }
 
   leave(userId: string, reason: 'left' | 'far' | 'disconnected'): void {
+    console.log(`[DBG-FOOS] GameSession.leave called userId=${userId} reason=${reason} hasParticipant=${this.participantsMap.has(userId)}`);
     if (this.disposed) return;
     if (!this.participantsMap.has(userId)) return;
 
@@ -109,7 +110,10 @@ export class GameSession {
   emitState(): void {
     if (this.disposed) return;
     for (const player of this.participantsMap.values()) {
-      const state = this.instance.view(player.userId);
+      const state = this.instance.view(player.userId) as any;
+      if (state.phase !== 'playing' || state.graceLeft !== null) {
+        console.log(`[DBG-FOOS] GameSession.emitState to ${player.userId} (${player.name}): phase=${state.phase} winner=${state.winner} graceLeft=${state.graceLeft}`);
+      }
       this.transport.sendToUser(player.userId, 'game:state', {
         id: this.objectId,
         game: this.kind,
