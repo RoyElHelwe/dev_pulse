@@ -224,13 +224,28 @@ test('4b. Dragging the edge handle follows the pointer, snaps open past 35% and 
   await expect.poll(async () => (await board.boundingBox())?.x ?? 9999).toBeLessThan(view.width - 700);
 
   // Drag it back to the right: closes.
+  // Wait for the opening animation to finish: the handle must stand still before it is grabbed.
+  let still = -1;
+  await expect
+    .poll(async () => {
+      const x = (await closeHandle.boundingBox())?.x ?? -2;
+      const same = x === still;
+      still = x;
+      return same;
+    }, { intervals: [200], timeout: 10_000 })
+    .toBe(true);
   const c = (await closeHandle.boundingBox())!;
   const [cx, cy] = [c.x + c.width / 2, c.y + c.height / 2];
   await org.mouse.move(cx, cy);
   await org.mouse.down();
+  // Far past the threshold, with a pause before releasing (position decides, not the speed of a flick,
+  // which depends on how fast this machine delivers the mouse events).
+  const open = (await board.boundingBox())!;
   await org.mouse.move(cx + 120, cy, { steps: 6 });
-  await org.mouse.move(cx + 600, cy, { steps: 12 });
-  await org.mouse.up(); // a flick to the right
+  await org.waitForTimeout(100);
+  await org.mouse.move(cx + Math.min(open.width * 0.9, view.width - cx - 4), cy, { steps: 12 });
+  await org.waitForTimeout(150);
+  await org.mouse.up();
   await expect(openHandle).toBeVisible();
   await expect(board).toBeHidden();
   await expect.poll(async () => Math.round((await boardButton.boundingBox())?.x ?? -999), { timeout: 5000 }).toBe(Math.round(closedX));

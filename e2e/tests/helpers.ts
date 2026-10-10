@@ -47,6 +47,7 @@ export async function openPage(browser: Browser, name: string, options: BrowserC
   // Software-rendered canvases starve every page on the machine: cap the office at 15 fps (E2E_FPS to change).
   await page.addInitScript((fps) => {
     (window as unknown as { __devpulseFps: number }).__devpulseFps = fps;
+    (window as unknown as { __devpulseLowRes: boolean }).__devpulseLowRes = true;
   }, Number(process.env.E2E_FPS ?? 15));
   // Without a GPU, blurred overlays above an animated canvas cost ~1 s per frame: drop the blur (looks only).
   await page.addInitScript(() => {
