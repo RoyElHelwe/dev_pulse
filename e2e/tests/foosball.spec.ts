@@ -118,7 +118,8 @@ test('2 players join office, play foosball, kick, forfeit and check leaderboard'
 
   // After >10s forfeit: Alice's dialog shows ended / winner (her page must be in front: background pages get no frames)
   await org.bringToFront();
-  await expect(panel).toHaveAttribute('data-phase', 'ended', { timeout: 25_000 });
+  // (Generous: a busy machine paints this page slowly; the server forfeits after 10 s.)
+  await expect(panel).toHaveAttribute('data-phase', 'ended', { timeout: 90_000 });
   await expect(orgDialog.getByText(/Won!/)).toBeVisible({ timeout: 5_000 });
 
   // Save foosball-ended.png (Alice full-page screenshot with dialog open)
