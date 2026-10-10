@@ -26,6 +26,7 @@ import { EditorPanel } from './EditorPanel';
 import { officeEvents } from './events';
 import { MoveDeskPrompt } from './MoveDeskPrompt';
 import { OfficeHud } from './OfficeHud';
+import { OfficeNotices } from './OfficeNotices';
 import { TabLock } from './TabLock';
 
 interface Editing {
@@ -338,16 +339,28 @@ export function OfficeView() {
   }, [isEditing]);
   useKeybind('board', toggleBoard, !isEditing);
 
-  // Full-screen games (foosball/Uno/Lego): pause the office Phaser render loop while open
-  // to avoid dropped frames on software-rendered devices, without affecting socket/voice state.
+  // Something covers the office: take Phaser off the frame clock (people, voice proximity and timers keep ticking
+  // slowly; resuming is instant). A full-screen game: no rendering at all. The task board once it has finished
+  // sliding in (and the camera has followed the push): ~15 fps for the strip of office still showing.
   const [gameOpen, setGameOpen] = useState(false);
+  const boardShown = boardOpen && !isEditing;
+  const [boardSettled, setBoardSettled] = useState(false);
   useEffect(() => {
-    if (!gameOpen || !ready) return;
-    controllerRef.current?.setPaused(true);
+    if (!boardShown) return;
+    const timer = setTimeout(() => setBoardSettled(true), 900);
+    return () => {
+      clearTimeout(timer);
+      setBoardSettled(false);
+    };
+  }, [boardShown]);
+  const pauseMode = gameOpen ? 'hidden' : boardSettled ? 'throttled' : null;
+  useEffect(() => {
+    if (!pauseMode || !ready) return;
+    controllerRef.current?.setPaused(true, pauseMode);
     return () => {
       controllerRef.current?.setPaused(false);
     };
-  }, [gameOpen, ready]);
+  }, [pauseMode, ready]);
   const features = useMemo(
     () => ({
       socket,
@@ -389,8 +402,6 @@ export function OfficeView() {
           controller={ready ? controllerRef.current : null}
           workspace={workspace}
           people={people}
-          toast={toast}
-          online={online}
           editing={!!editing}
           onEdit={startEditing}
           boardOpen={boardOpen}
@@ -433,6 +444,8 @@ export function OfficeView() {
         )}
       </div>
       </BoardDrawer>
+      {/* Outside the pushed layer, so they stay visible while the board is open. */}
+      <OfficeNotices toast={toast} online={online} editing={isEditing} />
       <TabLock />
     </div>
   );

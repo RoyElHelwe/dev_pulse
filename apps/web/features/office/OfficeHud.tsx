@@ -1,6 +1,6 @@
 'use client';
 
-import { KanbanSquare, LocateFixed, MapPin, Minus, PencilRuler, Plus, UserPlus, WifiOff } from 'lucide-react';
+import { KanbanSquare, LocateFixed, MapPin, Minus, PencilRuler, Plus, UserPlus } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { IconButton } from '@/components/ui/IconButton';
@@ -32,9 +32,6 @@ interface OfficeHudProps {
   controller: OfficeController | null;
   workspace: MyWorkspace | null;
   people: Presence[];
-  toast: string;
-  /** False while the live connection is lost (it reconnects by itself). */
-  online: boolean;
   /** The office editor is open (it brings its own panels). */
   editing: boolean;
   onEdit(): void;
@@ -43,7 +40,7 @@ interface OfficeHudProps {
   onBoard(): void;
 }
 
-export function OfficeHud({ controller, workspace, people, toast, online, editing, onEdit, boardOpen, onBoard }: OfficeHudProps) {
+export function OfficeHud({ controller, workspace, people, editing, onEdit, boardOpen, onBoard }: OfficeHudProps) {
   const zone = useCurrentZone();
   const openCounts = useOpenTaskCounts();
   const myOpen = openCounts.get(useAuth().user?.id ?? '') ?? 0;
@@ -88,7 +85,6 @@ export function OfficeHud({ controller, workspace, people, toast, online, editin
             <Plus className="size-4" />
           </IconButton>
         </Panel>
-        {toast && <Toast text={toast} />}
       </>
     );
   }
@@ -203,16 +199,6 @@ export function OfficeHud({ controller, workspace, people, toast, online, editin
       {workspace && !touch && <Minimap controller={controller} layout={workspace.layout} />}
       <Joystick controller={controller} />
 
-      {!online && (
-        <Panel role="status" className="absolute top-20 left-1/2 flex -translate-x-1/2 items-center gap-2 px-4 py-2.5 text-sm font-medium text-amber-800">
-          <WifiOff className="size-4" aria-hidden="true" />
-          Connection lost. Reconnecting…
-          <span className="size-3.5 animate-spin rounded-full border-2 border-amber-200 border-t-amber-600" />
-        </Panel>
-      )}
-
-      {toast && <Toast text={toast} />}
-
       {/* Loading state. */}
       {!controller && (
         <div className="absolute inset-0 flex items-center justify-center">
@@ -223,14 +209,6 @@ export function OfficeHud({ controller, workspace, people, toast, online, editin
         </div>
       )}
     </>
-  );
-}
-
-function Toast({ text }: { text: string }) {
-  return (
-    <Panel role="status" className="absolute bottom-20 left-1/2 -translate-x-1/2 px-4 py-2.5 text-sm font-medium text-zinc-700">
-      {text}
-    </Panel>
   );
 }
 

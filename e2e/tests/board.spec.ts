@@ -1,5 +1,6 @@
 import { expect, type Locator, type Page, test } from '@playwright/test';
-import { closeContexts, devOwner, devUser, gotoOffice, openPage } from './helpers';
+import { closeContexts, devOwner, devUser, gotoOffice, openPage, workspace } from './helpers';
+import { position, walkTo } from './nav';
 
 // Serial run: two users collaborating on the task board.
 test.describe.configure({ mode: 'serial' });
@@ -409,5 +410,46 @@ test('7. + opens dialog: search input is focused; typing "Zebra" narrows rows to
   await expect(pressedFacesAfter).toHaveCount(0);
   await expect(board.getByText('Fix login bug')).toBeVisible();
   await expect(board.getByText('Zebra task for filter test')).toBeVisible();
+});
+
+test('8. a toast stays visible while the task board is open', async () => {
+  const board = org.getByRole('region', { name: 'Task board' });
+  if (await board.isVisible()) {
+    await org.keyboard.press('Escape');
+    await expect(board).toBeHidden();
+  }
+
+  const boardButton = org.getByRole('button', { name: /^Board/ });
+  await boardButton.click();
+  await expect(board).toBeVisible();
+
+  await org.context().setOffline(true);
+  const status = org.getByRole('status');
+  await expect(status).toBeVisible();
+  await expect(status).toContainText('Connection lost');
+
+  const view = org.viewportSize()!;
+  const box = (await status.boundingBox())!;
+  expect(box.x).toBeGreaterThanOrEqual(0);
+  expect(box.x + box.width).toBeLessThanOrEqual(view.width);
+  expect(box.y).toBeGreaterThanOrEqual(0);
+
+  await org.context().setOffline(false);
+  await expect(status).toBeHidden();
+
+  // With the board open and settled (wait ~1.5 s), canvas is paused-but-alive
+  await org.waitForTimeout(1500);
+
+  // Close the board, wait, then walk to assert canvas resumed
+  await org.keyboard.press('Escape');
+  await expect(board).toBeHidden();
+  await org.waitForTimeout(500);
+
+  const { layout } = await workspace(org);
+  const before = await position(org);
+  const targetY = before.y > 20 ? before.y - 2 : before.y + 2;
+  await walkTo(org, layout, before.x, targetY);
+  const after = await position(org);
+  expect(Math.hypot(after.x - before.x, after.y - before.y)).toBeGreaterThan(0.5);
 });
 
