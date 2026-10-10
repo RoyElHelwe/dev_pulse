@@ -71,9 +71,29 @@ export function useGameSession<S = unknown>(
   useEffect(() => {
     if (!socket) return;
 
+    // The server sends a state ~30 times a second. Rendering every one of them lets a slow machine fall
+    // further and further behind, so only the newest state is applied, at most once per frame (a timer is
+    // the fallback for pages that get no frames, e.g. in the background).
+    let latest: { state: S } | null = null;
+    let frame = 0;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const flush = () => {
+      cancelAnimationFrame(frame);
+      clearTimeout(timer);
+      frame = 0;
+      timer = undefined;
+      if (!latest) return;
+      const next = latest.state;
+      latest = null;
+      setState(next);
+    };
     const onState = (payload: { id: string; game?: string; state: S }) => {
       if (payload.id === objectId) {
-        setState(payload.state);
+        latest = { state: payload.state };
+        if (!frame) {
+          frame = requestAnimationFrame(flush);
+          timer = setTimeout(flush, 100);
+        }
         setStatus('joined');
         setError(null);
       }
@@ -127,6 +147,8 @@ export function useGameSession<S = unknown>(
     socket.emit('game:join', { game, id: objectId, intent: intentRef.current });
 
     return () => {
+      cancelAnimationFrame(frame);
+      clearTimeout(timer);
       socket.off('game:state', onState);
       socket.off('game:event', onEventMessage);
       socket.off('game:left', onLeft);

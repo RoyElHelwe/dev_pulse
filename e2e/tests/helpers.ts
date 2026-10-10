@@ -48,6 +48,14 @@ export async function openPage(browser: Browser, name: string, options: BrowserC
   await page.addInitScript((fps) => {
     (window as unknown as { __devpulseFps: number }).__devpulseFps = fps;
   }, Number(process.env.E2E_FPS ?? 15));
+  // Without a GPU, blurred overlays above an animated canvas cost ~1 s per frame: drop the blur (looks only).
+  await page.addInitScript(() => {
+    document.addEventListener('DOMContentLoaded', () => {
+      const style = document.createElement('style');
+      style.textContent = '*, *::before, *::after { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }';
+      document.head.appendChild(style);
+    });
+  });
   // Keep the voice connections, so tests can check that a call really connected.
   await page.addInitScript(() => {
     const calls: RTCPeerConnection[] = [];

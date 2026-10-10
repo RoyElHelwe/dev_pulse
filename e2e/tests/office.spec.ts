@@ -207,10 +207,12 @@ test('the organiser moves everyone to a bigger office', async () => {
   await org.goto('/team');
   await org.getByRole('radio', { name: /Campus/ }).click();
   await org.getByRole('button', { name: 'Move to Campus' }).click();
+  // The teammate's notice only shows for 4 s: start waiting for it before the move happens.
+  const noticed = expect(staff.getByRole('status').filter({ hasText: 'rearranged' })).toBeVisible();
   await org.getByRole('button', { name: 'Confirm' }).click();
   await expect(org.getByText('Your office is now Campus.')).toBeVisible();
   await expect.poll(async () => (await workspace(staff)).templateId).toBe('campus');
-  await expect(staff.getByRole('status').filter({ hasText: 'rearranged' })).toBeVisible();
+  await noticed;
 });
 
 test('on a phone, the joystick walks', async ({ browser }) => {
