@@ -1,30 +1,25 @@
 "use client";
-
 import { useState } from "react";
 import { authClient } from "@/lib/auth-client";
-
 type Provider = "google" | "github" | "fortytwo";
-
 const PROVIDERS: { id: Provider; label: string }[] = [
   { id: "google", label: "Continue with Google" },
   { id: "github", label: "Continue with GitHub" },
-  { id: "fortytwo", label: "Continue with 42" }, // 42 intra (genericOAuth on the backend)
+  { id: "fortytwo", label: "Continue with 42" }, //42 intra (genericOAuth on the backend)
 ];
 
-// Buttons that send the user to Google / GitHub / 42, then back to our app.
-// Used on both the login and the register page (OAuth creates the account if needed).
+//buttons that send the user to Google / GitHub / 42, then back to our app
+//used on both the login and the register page (OAuth creates the account if needed)
 export function OAuthButtons({ onError }: { onError: (msg: string) => void }) {
   const [loading, setLoading] = useState<Provider | null>(null);
 
   async function signInWith(provider: Provider) {
     setLoading(provider);
-    // The page's own address (http://localhost:3000 now, https://... later),
-    // so nothing changes here when we move to HTTPS.
     const origin = window.location.origin;
     const { error } = await authClient.signIn.social({
       provider,
-      callbackURL: `${origin}/after-login`, // success: /after-login decides dashboard or onboarding
-      errorCallbackURL: `${origin}/login`, // failure: back to login with ?error=...
+      callbackURL: `${origin}/after-login`, //success: /after-login decides dashboard or onboarding
+      errorCallbackURL: `${origin}/login`, //failure: back to login with ?error=...
     });
     // On success the browser leaves the page, so we only get here on error.
     if (error) {

@@ -1,8 +1,4 @@
 import type { CSSProperties, ReactNode } from "react";
-
-// Dev Pulse look for every auth page (login, register, 2FA, after-login).
-// Change the colors here once and every page follows.
-
 // Warm wooden floor, like the office
 export const floorStyle: CSSProperties = {
   backgroundColor: "#e8d4b2",
@@ -33,7 +29,6 @@ export function LockIcon() {
     </svg>
   );
 }
-
 // Green success / red error box under the form
 export function FormMessage({ message, isError }: { message: string; isError: boolean }) {
   if (!message) return null;
@@ -48,7 +43,6 @@ export function FormMessage({ message, isError }: { message: string; isError: bo
     </div>
   );
 }
-
 // Text field with a label that floats up when you type
 export function FloatingInput({
   id,

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { AuthShell } from "@/components/auth-shell";
 import { InviteForm } from "@/components/invite-form";
+import { PendingInvites } from "@/components/pending-invites";
 
 type MyWorkspace = { id: string; name: string; role: string };
 
@@ -12,6 +13,7 @@ export default function MembersPage() {
   const router = useRouter();
   const { workspaceId } = useParams<{ workspaceId: string }>();
   const [workspace, setWorkspace] = useState<MyWorkspace | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0); // +1 after each invite → pending list reloads
 
   useEffect(() => {
     async function load() {
@@ -32,10 +34,17 @@ export default function MembersPage() {
   const roles = workspace.role.split(",").map((r) => r.trim());
   const canInvite = roles.includes("owner") || roles.includes("admin");
 
+  // Hiding the form is only for comfort: the backend also refuses invites from members.
   return (
-    <AuthShell title={workspace.name} subtitle="Invite people to your office.">
+    <AuthShell
+      title={workspace.name}
+      subtitle={canInvite ? "Invite people to your office." : "You're a member of this office."}
+    >
       {canInvite ? (
-        <InviteForm workspaceId={workspace.id} />
+        <div className="space-y-8">
+          <InviteForm workspaceId={workspace.id} onInvited={() => setRefreshKey((k) => k + 1)} />
+          <PendingInvites workspaceId={workspace.id} refreshKey={refreshKey} />
+        </div>
       ) : (
         <p className="text-[#6b6257]">Only the owner or an admin can invite people.</p>
       )}

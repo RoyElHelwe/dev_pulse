@@ -1,11 +1,4 @@
-import {
-  BadRequestException,
-  CanActivate,
-  ExecutionContext,
-  ForbiddenException,
-  Injectable,
-  UnauthorizedException,
-} from "@nestjs/common";
+import {BadRequestException,CanActivate,ExecutionContext,ForbiddenException,Injectable,UnauthorizedException,} from "@nestjs/common";
 import { Reflector } from "@nestjs/core";
 import type { Request } from "express";
 import type { AuthUser } from "./auth-user.js";
@@ -51,3 +44,5 @@ export class WorkspaceMemberGuard implements CanActivate {
     return true;
   }
 }
+//401 not logged in
+//403 logged in but not allowed forbidden

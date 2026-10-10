@@ -1,14 +1,12 @@
 "use client";
-
 import { useState } from "react";
 import { z } from "zod";
 import { authClient } from "@/lib/auth-client";
 import { FloatingInput, FormMessage, btnPrimary } from "@/components/auth-shell";
 
-// Same email rule as register. The backend checks again.
+//same email rule as register. The backend checks again.
 const emailSchema = z.email("Invalid email");
 type InviteRole = "member" | "admin";
-
 //invite someone to this workspace by email.
 export function InviteForm({ workspaceId, onInvited }: { workspaceId: string; onInvited?: () => void }) {
   const [email, setEmail] = useState("");
@@ -30,7 +28,7 @@ export function InviteForm({ workspaceId, onInvited }: { workspaceId: string; on
     if (!check.success) return show(check.error.issues[0].message, true);
 
     setLoading(true);
-    // Better Auth saves the invitation, then calls sendInvitationEmail in auth.ts
+    //better Auth saves the invitation, then calls sendInvitationEmail in auth.ts
     const { error } = await authClient.organization.inviteMember({
       email: check.data,
       role,

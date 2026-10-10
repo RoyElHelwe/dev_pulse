@@ -15,7 +15,7 @@ export default function DashboardPage() {
       router.replace("/login");
       return;
     }
-    // 2FA is mandatory: first login -> set it up before using the app
+    //2FA is mandatory:first login -> set it up before using the app
     if (!session.user.twoFactorEnabled) {
       router.replace("/two-factor/setup");
     }

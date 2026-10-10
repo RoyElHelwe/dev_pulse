@@ -3,14 +3,11 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { floorStyle } from "@/components/auth-shell";
-
-// Every login ends here (email + password, Google/GitHub/42, 2FA, the verify-email link).
-// We ask the backend who the user is, then send them to the dashboard,
-// or to onboarding if they are not in any workspace yet.
+import { takePendingInvite } from "@/lib/pending-invite";
 export default function AfterLoginPage() {
   const router = useRouter();
-
   useEffect(() => {
+    let cancelled = false; // React runs effects twice in dev: only the last run decides
     async function decide() {
       try {
         const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/auth/me`, {
@@ -21,14 +18,24 @@ export default function AfterLoginPage() {
           router.replace("/login"); // 401 = not logged in
           return;
         }
-
         const me = await res.json();
+        if (cancelled) return;
+        // Came from an invite link? Go back to it (works only once, only "/invite/<id>").
+        const invite = takePendingInvite();
+        if (invite) {
+          router.replace(invite);
+          return;
+        }
         router.replace(me.workspaces.length > 0 ? "/dashboard" : "/onboarding");
       } catch {
         router.replace("/login"); // backend not reachable
       }
     }
     decide();
+
+    return () => {
+      cancelled = true;
+    };
   }, [router]);
 
   return (
@@ -40,3 +47,8 @@ export default function AfterLoginPage() {
     </main>
   );
 }
+// Every login ends here (email + password, Google/GitHub/42, 2FA, the verify-email link)
+// We ask the backend who the user is, then send them:
+//1-back to an invite, if they came from /invite/<id>
+//2-to the dashboard, if they are in a workspace
+//3-to onboarding, if they are not in any workspace yet
