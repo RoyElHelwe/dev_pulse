@@ -71,9 +71,14 @@ export class RemotePlayer {
       current = b;
     }
     const moved = Math.abs(x - this.avatar.x) + Math.abs(y - this.avatar.y) > 0.3;
-    this.avatar.setPosition(x, y);
+    if (x !== this.avatar.x || y !== this.avatar.y) {
+      this.avatar.setPosition(x, y);
+    }
     this.avatar.setSeated(current.seated);
-    this.avatar.setDepth(this.depthOf(x, y, current.seated));
+    const depth = this.depthOf(x, y, current.seated);
+    if (depth !== this.avatar.depth) {
+      this.avatar.setDepth(depth);
+    }
     this.avatar.animateAs(current.dir, !current.seated && (current.moving || moved), deltaMs);
   }
 

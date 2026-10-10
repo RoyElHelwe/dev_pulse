@@ -174,6 +174,7 @@ export class Avatar extends Phaser.GameObjects.Container {
   }
 
   setSeated(seated: boolean) {
+    if (seated === this._seated) return;
     this._seated = seated;
     this.shadow.setVisible(!seated);
     this.redraw();
