@@ -1,6 +1,6 @@
 import { expect, type Page, test } from '@playwright/test';
-import { closeContexts, inOffice, invite, openPage, register, shotPath, workspace, type Layout } from './helpers';
-import { position, walkTo } from './nav';
+import { closeContexts, devOwner, devUser, gotoOffice, inOffice, openPage, shotPath, workspace, type Layout } from './helpers';
+import { jumpTo } from './nav';
 
 test.describe.configure({ mode: 'serial' });
 
@@ -20,63 +20,15 @@ test.beforeAll(async ({ browser }) => {
 });
 
 async function navigateToLegoWall(page: Page, layout: Layout, legoX = 26.5) {
-  await walkTo(page, layout, 23.5, 10.5);
-
-  // Walk west into the corridor
-  for (let i = 0; i < 20; i++) {
-    const pos = await position(page);
-    if (pos.x <= 21.9) break;
-    await page.keyboard.down('ArrowLeft');
-    await page.waitForTimeout(150);
-    await page.keyboard.up('ArrowLeft');
-    await page.waitForTimeout(60);
-  }
-
-  // Walk north past foosball up to y <= 2.0
-  for (let i = 0; i < 30; i++) {
-    const pos = await position(page);
-    if (pos.y <= 2.0) break;
-    await page.keyboard.down('ArrowUp');
-    await page.waitForTimeout(150);
-    await page.keyboard.up('ArrowUp');
-    await page.waitForTimeout(60);
-  }
-
-  // Walk east along the north corridor
-  for (let i = 0; i < 25; i++) {
-    const pos = await position(page);
-    if (pos.x >= legoX - 0.2) break;
-    await page.keyboard.down('ArrowRight');
-    await page.waitForTimeout(150);
-    await page.keyboard.up('ArrowRight');
-    await page.waitForTimeout(60);
-  }
-
-  // Fine tune y ~ 1.8
-  for (let i = 0; i < 10; i++) {
-    const pos = await position(page);
-    if (pos.y <= 1.8) break;
-    await page.keyboard.down('ArrowUp');
-    await page.waitForTimeout(100);
-    await page.keyboard.up('ArrowUp');
-    await page.waitForTimeout(60);
-  }
+  await jumpTo(page, legoX, 1.8);
 }
 
 test('Loft office has chill room, take chill-room screenshot, Lego live miniature updates for Bob', async () => {
   test.setTimeout(600_000);
   const stamp = Date.now();
-  console.log('[CHILL] Registering Alice...');
-  await register(org, 'Alice', `alice${stamp}@example.com`);
-  await org.getByRole('button', { name: /Create an office/ }).click();
-  await org.getByLabel('Office name').fill('ChillHQ');
-  await org.getByRole('button', { name: 'Continue' }).click();
-  // Template step: Loft
-  await org.getByRole('button', { name: 'Continue' }).click();
-  // Character step
-  await org.getByRole('button', { name: 'Create the office' }).click();
-  console.log('[CHILL] Waiting for Alice inOffice...');
-  await inOffice(org);
+  console.log('[CHILL] Setting up Alice with devOwner...');
+  await devOwner(org, `Alice${stamp}`, 'ChillHQ', 'loft');
+  await gotoOffice(org);
 
   // (a) fresh Loft office has a room with kind 'chill' and furniture kinds foosball, cardTable, legoBoard
   const ws = await workspace(org);
@@ -86,21 +38,16 @@ test('Loft office has chill room, take chill-room screenshot, Lego live miniatur
   expect(ws.layout.furniture.some((f) => f.kind === 'legoBoard')).toBe(true);
 
   // Alice walks into chill room near the doorway
-  console.log('[CHILL] Alice walking into chill room doorway...');
-  await walkTo(org, ws.layout, 23.5, 10.5);
+  console.log('[CHILL] Alice jumping into chill room doorway...');
+  await jumpTo(org, 23.5, 10.5);
 
   // Screenshot chill-room.png
   await org.screenshot({ path: shotPath('chill-room.png') });
 
-  // Invite Bob
-  console.log('[CHILL] Inviting Bob...');
-  const link = await invite(org, `bob${stamp}@example.com`);
-  console.log('[CHILL] Registering Bob...');
-  await register(staff, 'Bob', `bob${stamp}@example.com`);
-  await staff.goto(link);
-  await staff.getByRole('button', { name: /^Join / }).click();
-  console.log('[CHILL] Waiting for Bob inOffice...');
-  await inOffice(staff);
+  // Bob joins office
+  console.log('[CHILL] Setting up Bob with devUser...');
+  await devUser(staff, `Bob${stamp}`, org);
+  await gotoOffice(staff);
 
   // (c) Lego live miniature for the OTHER user:
   // Alice and Bob both in Loft office near the Lego wall (Bob where the wall is visible)
@@ -166,8 +113,9 @@ test('Loft office has chill room, take chill-room screenshot, Lego live miniatur
 
 test('Create office with Studio template without chill room, add chill room via Team page', async () => {
   const stamp = Date.now();
-  console.log('[CHILL] Registering Carol for Studio office...');
-  await register(owner, 'Carol', `carol${stamp}@example.com`);
+  console.log('[CHILL] Setting up Carol for Studio office with devUser...');
+  await devUser(owner, `Carol${stamp}`);
+  await owner.goto('/onboarding');
   await owner.getByRole('button', { name: /Create an office/ }).click();
   await owner.getByLabel('Office name').fill('StudioHQ');
   await owner.getByRole('button', { name: 'Continue' }).click();

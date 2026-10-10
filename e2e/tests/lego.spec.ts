@@ -1,6 +1,6 @@
 import { expect, type Page, test } from '@playwright/test';
-import { closeContexts, inOffice, openPage, shotPath, workspace, type Workspace, type Layout } from './helpers';
-import { position, walkTo } from './nav';
+import { closeContexts, devOwner, gotoOffice, openPage, shotPath, workspace, type Workspace } from './helpers';
+import { jumpTo } from './nav';
 
 test.describe.configure({ mode: 'serial' });
 
@@ -15,96 +15,10 @@ test.beforeAll(async ({ browser }) => {
 
 test.afterAll(closeContexts);
 
-async function navigateToLegoWall(page: Page, layout: Layout, legoX = 26.5) {
-  // Step 1: Walk to chill room doorway using walkTo
-  console.log('[LEGO-NAV] Starting at:', await position(page));
-  await walkTo(page, layout, 23.5, 10.5);
-  console.log('[LEGO-NAV] After walkTo doorway:', await position(page));
-
-  // Step 2: Walk west into the clear corridor between west wall (x: 21.0) and foosball (x: 22.7)
-  for (let i = 0; i < 20; i++) {
-    const pos = await position(page);
-    if (pos.x <= 21.9) break;
-    await page.keyboard.down('ArrowLeft');
-    await page.waitForTimeout(150);
-    await page.keyboard.up('ArrowLeft');
-    await page.waitForTimeout(60);
-  }
-  console.log('[LEGO-NAV] After walking west:', await position(page));
-
-  // Step 3: Walk north past foosball (ends at y: 3.7) up to y <= 2.0
-  for (let i = 0; i < 30; i++) {
-    const pos = await position(page);
-    if (pos.y <= 2.0) break;
-    await page.keyboard.down('ArrowUp');
-    await page.waitForTimeout(150);
-    await page.keyboard.up('ArrowUp');
-    await page.waitForTimeout(60);
-  }
-  console.log('[LEGO-NAV] After walking north:', await position(page));
-
-  // Step 4: Walk east along the open north corridor to align with Lego wall (x ~ legoX)
-  for (let i = 0; i < 25; i++) {
-    const pos = await position(page);
-    if (pos.x >= legoX - 0.2) break;
-    await page.keyboard.down('ArrowRight');
-    await page.waitForTimeout(150);
-    await page.keyboard.up('ArrowRight');
-    await page.waitForTimeout(60);
-  }
-  console.log('[LEGO-NAV] After walking east:', await position(page));
-
-  // Step 5: Fine-tune standing position (y ~ 1.8..2.0)
-  for (let i = 0; i < 10; i++) {
-    const pos = await position(page);
-    if (pos.y <= 1.8) break;
-    await page.keyboard.down('ArrowUp');
-    await page.waitForTimeout(100);
-    await page.keyboard.up('ArrowUp');
-    await page.waitForTimeout(60);
-  }
-  console.log('[LEGO-NAV] Final standing position:', await position(page));
-}
-
 test('dev-login as owner, walk to Lego wall, place and erase brick', async () => {
-  // 1. Dev-login as an owner who has a legoBoard in their office layout
-  const devRes = await page.request.get('/api/auth/dev');
-  expect(devRes.ok()).toBe(true);
-  const devData = await devRes.json();
-  const users: Array<{ id: string; displayName: string; email: string; officeName: string | null; role: string | null }> = devData.users || [];
-  const owners = users.filter((u) => u.role === 'OWNER' && u.officeName).reverse();
-
-  let selectedOwnerId: string | null = null;
-  for (const o of owners) {
-    const loginRes = await page.request.post('/api/auth/dev/login', { data: { userId: o.id } });
-    if (!loginRes.ok()) continue;
-    const wsRes = await page.request.get('/api/workspace');
-    if (!wsRes.ok()) continue;
-    const ws = await wsRes.json();
-    if (ws.templateId === 'loft' && (!ws.wings || ws.wings.length === 0) && ws.layout?.furniture?.some((f: { kind: string }) => f.kind === 'legoBoard')) {
-      selectedOwnerId = o.id;
-      break;
-    }
-  }
-
-  let w: Workspace;
-
-  if (selectedOwnerId) {
-    await page.goto('/office');
-    await inOffice(page);
-    w = await workspace(page);
-  } else {
-    // If no existing owner with a legoBoard exists, create a new dev user and loft office
-    await page.request.post('/api/auth/dev/users', { data: { name: 'Lego Owner' } });
-    await page.goto('/onboarding');
-    await page.getByRole('button', { name: /Create an office/ }).click();
-    await page.getByLabel('Office name').fill(`Lego HQ ${Date.now()}`);
-    await page.getByRole('button', { name: 'Continue' }).click();
-    await page.getByRole('button', { name: 'Continue' }).click();
-    await page.getByRole('button', { name: 'Create the office' }).click();
-    await inOffice(page);
-    w = await workspace(page);
-  }
+  await devOwner(page, 'Lego Owner', 'Lego HQ', 'loft');
+  await gotoOffice(page);
+  const w: Workspace = await workspace(page);
 
   // 2. Locate legoBoard in workspace layout
   const legoBoard = w.layout.furniture.find((f) => f.kind === 'legoBoard');
@@ -112,7 +26,7 @@ test('dev-login as owner, walk to Lego wall, place and erase brick', async () =>
   if (!legoBoard) throw new Error('legoBoard not found in layout');
 
   // Navigate next to the chill room's Lego wall
-  await navigateToLegoWall(page, w.layout, legoBoard.x);
+  await jumpTo(page, legoBoard.x, 1.8);
 
   // Focus canvas to ensure Phaser captures key inputs
   await page.locator('canvas').first().click({ position: { x: 600, y: 300 } }).catch(() => undefined);

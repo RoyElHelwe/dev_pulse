@@ -24,8 +24,9 @@ export default defineConfig({
       executablePath: process.env.CHROMIUM_PATH || undefined,
       // WebGL without a GPU (CI machines, containers); a fake microphone for voice.
       args: [
-        '--use-angle=swiftshader',
-        '--enable-unsafe-swiftshader',
+        // No WebGL by default: Phaser falls back to its canvas renderer, which is ~10x cheaper than
+        // software WebGL (swiftshader) and keeps parallel workers fast. E2E_WEBGL=1 tests the WebGL path.
+        ...(process.env.E2E_WEBGL ? ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'] : ['--disable-gpu', '--disable-3d-apis']),
         '--no-proxy-server',
         '--use-fake-ui-for-media-stream',
         '--use-fake-device-for-media-stream',

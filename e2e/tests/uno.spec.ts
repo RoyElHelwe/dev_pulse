@@ -1,6 +1,6 @@
 import { expect, type Page, test } from '@playwright/test';
-import { closeContexts, inOffice, invite, openPage, register, shotPath, workspace } from './helpers';
-import { position, walkTo } from './nav';
+import { closeContexts, devOwner, devUser, gotoOffice, openPage, shotPath } from './helpers';
+import { jumpTo } from './nav';
 
 test.describe.configure({ mode: 'serial' });
 
@@ -18,54 +18,21 @@ test.beforeAll(async ({ browser }) => {
 });
 
 test('2 players join office, walk to Uno table, start game and take turn', async () => {
-  const stamp = Date.now();
-  console.log('[E2E] Registering Alice...');
-  await register(org, 'Alice', `alice${stamp}@example.com`);
-  await org.getByRole('button', { name: /Create an office/ }).click();
-  await org.getByLabel('Office name').fill('UnoHQ');
-  await org.getByRole('button', { name: 'Continue' }).click();
-  // Office template step: Loft is selected by default
-  await org.getByRole('button', { name: 'Continue' }).click();
-  // Character step
-  await org.getByRole('button', { name: 'Create the office' }).click();
-  console.log('[E2E] Waiting for Alice inOffice...');
-  await inOffice(org);
+  console.log('[E2E] Setting up Alice and UnoHQ...');
+  await devOwner(org, 'Alice', 'UnoHQ', 'loft');
+  await gotoOffice(org);
 
-  console.log('[E2E] Inviting Bob...');
-  const link = await invite(org, `bob${stamp}@example.com`);
-  console.log('[E2E] Registering Bob...');
-  await register(staff, 'Bob', `bob${stamp}@example.com`);
-  await staff.goto(link);
-  await staff.getByRole('button', { name: /^Join / }).click();
-  console.log('[E2E] Waiting for Bob inOffice...');
-  await inOffice(staff);
+  console.log('[E2E] Setting up Bob...');
+  await devUser(staff, 'Bob', org);
+  await gotoOffice(staff);
 
   // User A walks to card table
   console.log('[E2E] Alice walking into chill room...');
-  const w = await workspace(org);
-  await walkTo(org, w.layout, 25.5, 7.5);
-  for (let i = 0; i < 25; i++) {
-    const pos = await position(org);
-    if (pos.x >= 26.8) break;
-    await org.keyboard.down('ArrowRight');
-    await org.waitForTimeout(60);
-    await org.keyboard.up('ArrowRight');
-    await org.waitForTimeout(60);
-  }
-  console.log('[E2E] Alice arrived at:', await position(org));
+  await jumpTo(org, 27.5, 7.5); // beside the card table, in reach of E
 
   // User B walks to card table BEFORE any modals open
   console.log('[E2E] Bob walking into chill room...');
-  await walkTo(staff, w.layout, 25.5, 7.5);
-  for (let i = 0; i < 25; i++) {
-    const pos = await position(staff);
-    if (pos.x >= 26.8) break;
-    await staff.keyboard.down('ArrowRight');
-    await staff.waitForTimeout(60);
-    await staff.keyboard.up('ArrowRight');
-    await staff.waitForTimeout(60);
-  }
-  console.log('[E2E] Bob arrived at:', await position(staff));
+  await jumpTo(staff, 27.5, 7.5);
 
   // User A opens Uno panel
   console.log('[E2E] Alice pressing E to open Uno...');
@@ -116,6 +83,11 @@ test('2 players join office, walk to Uno table, start game and take turn', async
   const orgTurn = org.getByTestId('uno-turn');
   const staffTurn = staff.getByTestId('uno-turn');
 
+  await expect.poll(async () => {
+    const [o, s] = await Promise.all([orgTurn.isVisible(), staffTurn.isVisible()]);
+    return (o && !s) || (s && !o);
+  }, { timeout: 15_000 }).toBe(true);
+
   const orgHasTurn = await orgTurn.isVisible();
   if (orgHasTurn) {
     await expect(orgTurn).toBeVisible();
@@ -129,7 +101,7 @@ test('2 players join office, walk to Uno table, start game and take turn', async
   const waitingPage = orgHasTurn ? staff : org;
 
   // The player on turn clicks draw (uno-draw)
-  await expect(activePage.getByTestId('uno-draw')).toBeEnabled();
+  await expect(activePage.getByTestId('uno-draw')).toBeEnabled({ timeout: 10_000 });
   await activePage.getByTestId('uno-draw').click();
 
   // Assert active player hand count increased to 8
