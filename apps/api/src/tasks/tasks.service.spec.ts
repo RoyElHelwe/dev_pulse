@@ -1,3 +1,4 @@
+/** Unit tests for task orchestration: membership validation, deletion rights, and member removal unassignment. */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { FormError } from '../common/form-error';
 import { WorkspaceEvents } from '../workspace/workspace-events';

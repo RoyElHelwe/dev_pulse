@@ -13,6 +13,7 @@ import { WorkspaceEvents } from '../workspace/workspace-events';
 import type { CreateTaskDto, UpdateTaskDto } from './tasks.dto';
 import { canDeleteTask, needsRebalance, taskKey, workspacePrefix } from './tasks.rules';
 
+/** Serialized task payload broadcast to office clients and returned by issue tracker APIs. */
 export interface TaskView {
   id: string;
   key: string;

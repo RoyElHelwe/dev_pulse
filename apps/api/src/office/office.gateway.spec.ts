@@ -1,3 +1,4 @@
+/** Unit tests for office gateway player teleportation, coordinate clamping, and movement broadcasts. */
 import { describe, expect, it, vi } from 'vitest';
 import type { Socket } from 'socket.io';
 import { SessionEvents } from '../auth/session-events';

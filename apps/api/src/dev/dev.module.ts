@@ -10,12 +10,12 @@ import { DevController } from './dev.controller';
 import { DevGateway } from './dev.gateway';
 import { DevService } from './dev.service';
 
+/** Packages development identity switcher and test socket gateways for non-production environments. */
 @Module({
   imports: [AuthModule, OfficeModule],
   controllers: [DevController],
   providers: [DevService, DevGateway],
 })
-/** Module packaging dev-only controllers and gateways for non-production environments. */
 export class DevModule {}
 
 /** Returns [DevModule] when dev login is enabled outside production, otherwise an empty array. */

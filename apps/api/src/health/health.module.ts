@@ -7,11 +7,11 @@ import { AuthModule } from '../auth/auth.module';
 import { HealthController } from './health.controller';
 import { HealthGateway } from './health.gateway';
 
+/** Wires HTTP and WebSocket health inspection endpoints for container orchestration probes. */
 @Module({
   imports: [AuthModule],
   controllers: [HealthController],
   providers: [HealthGateway],
 })
-/** Module providing HTTP and WebSocket health inspection endpoints. */
 export class HealthModule {}
 

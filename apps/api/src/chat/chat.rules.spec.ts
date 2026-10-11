@@ -1,3 +1,4 @@
+/** Unit tests for chat message sanitization, channel access rules, and client rate limiting. */
 import { describe, expect, it } from 'vitest';
 import { channelAccess, cleanText, isChannel, MAX_LENGTH, RateLimiter } from './chat.rules';
 

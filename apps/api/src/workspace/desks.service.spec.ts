@@ -1,3 +1,4 @@
+/** Unit tests for desk assignment operations, concurrency collision handling, and event publishing. */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { FormError } from '../common/form-error';
 import { WorkspaceEvents } from './workspace-events';

@@ -1,3 +1,4 @@
+/** Unit tests for procedurally generated office layouts across team sizes and random seeds. */
 import { describe, expect, it } from 'vitest';
 import { numberedDesks } from '../layout/geometry';
 import { validateLayout } from '../layout/validate';

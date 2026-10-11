@@ -10,8 +10,8 @@ import { authenticateSocket } from '../common/auth/socket-auth';
 // Smallest possible Socket.IO gateway: proves websockets work through nginx.
 // Feature gateways should use their own namespace, e.g.
 // @WebSocketGateway({ namespace: '/office' }), and disconnect anonymous users.
+/** Minimal gateway testing WebSocket upgrade and reverse-proxy transport connectivity. */
 @WebSocketGateway()
-/** Minimal gateway testing WebSocket connectivity and optional socket authentication. */
 export class HealthGateway implements OnGatewayConnection {
   constructor(private readonly tokens: TokensService) {}
 

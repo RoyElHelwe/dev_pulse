@@ -6,11 +6,11 @@ import { Global, Module } from '@nestjs/common';
 import { PrismaService } from './prisma.service';
 
 // Global: inject PrismaService anywhere without importing this module again.
+/** Globally provides the shared PrismaClient database connection instance. */
 @Global()
 @Module({
   providers: [PrismaService],
   exports: [PrismaService],
 })
-/** Global module providing database access via Prisma Client. */
 export class PrismaModule {}
 

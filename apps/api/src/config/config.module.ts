@@ -5,11 +5,11 @@
 import { Global, Module } from '@nestjs/common';
 import { AppConfig } from './app-config';
 
+/** Globally provides validated environment configuration across all application domains. */
 @Global()
 @Module({
   providers: [{ provide: AppConfig, useFactory: () => new AppConfig(process.env) }],
   exports: [AppConfig],
 })
-/** Global module providing application-wide environment configuration. */
 export class ConfigModule {}
 

@@ -5,8 +5,8 @@
 import { Global, Module } from '@nestjs/common';
 import { MailService } from './mail.service';
 
+/** Globally provides transactional email delivery services across all application domains. */
 @Global()
 @Module({ providers: [MailService], exports: [MailService] })
-/** Global module providing transactional email sending capabilities. */
 export class MailModule {}
 

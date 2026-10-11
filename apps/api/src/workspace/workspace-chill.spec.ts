@@ -1,3 +1,4 @@
+/** Unit tests for workspace chill wing addition, permission checks, and room constraints. */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { FormError } from '../common/form-error';
 import { studio } from '../office/templates/studio';

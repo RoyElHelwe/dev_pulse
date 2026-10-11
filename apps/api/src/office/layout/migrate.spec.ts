@@ -1,3 +1,4 @@
+/** Unit tests for office layout migration: snapping wall-mounted items and dropping orphaned furniture. */
 import { describe, expect, it } from 'vitest';
 import { migrateWallMounted } from './migrate';
 import { studio } from '../templates/studio';

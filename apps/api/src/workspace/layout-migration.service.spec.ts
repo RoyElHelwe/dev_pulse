@@ -1,3 +1,4 @@
+/** Unit tests for layout migration startup service: snapping wall items and database fault tolerance. */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { LayoutMigrationService } from './layout-migration.service';
 import { studio } from '../office/templates/studio';

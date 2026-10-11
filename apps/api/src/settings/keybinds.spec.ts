@@ -1,3 +1,4 @@
+/** Unit tests for user keybinding resolution, conflict validation, and settings persistence. */
 import { describe, expect, it, vi } from 'vitest';
 import { VoiceMode } from '@prisma/client';
 import { FormError } from '../common/form-error';

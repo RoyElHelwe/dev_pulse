@@ -1,3 +1,4 @@
+/** Unit tests for procedural office wing expansion: side placement, desk counts, and chill wings. */
 import { describe, expect, it } from 'vitest';
 import { campus } from '../templates/campus';
 import { generatedOffice } from '../templates/generated';

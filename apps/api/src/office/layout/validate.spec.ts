@@ -1,3 +1,4 @@
+/** Unit tests for office layout validation rules: bounds, collisions, reachability, and wall placement. */
 import { describe, expect, it } from 'vitest';
 import { studio } from '../templates/studio';
 import { validateLayout } from './validate';
