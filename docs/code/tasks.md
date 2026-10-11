@@ -24,7 +24,7 @@ The tasks subsystem provides issue tracking directly integrated into the virtual
 | `apps/web/features/tasks/types.ts` | Domain types (`TaskView`, `TaskStatus`, `TaskPriority`, `TaskType`), filter shapes, labels |
 | `apps/web/features/tasks/taskStore.ts` | Reactive store (`useSyncExternalStore`), socket listeners (`task:*`), optimistic mutations |
 | `apps/web/features/tasks/useBoardDrag.ts` | Drag-and-drop gesture management, column midpoint caching, instant rank calculation |
-| `apps/web/features/tasks/useBoardMembers.ts` | SWR hook fetching active workspace members for assignee pickers and filter faces |
+| `apps/web/features/tasks/useBoardMembers.ts` | React hook fetching active workspace members via api client for assignee pickers and filter faces |
 | `apps/web/features/tasks/boardFilterUtils.ts` | Pure matching logic checking tasks against query strings and assignee selections |
 | `apps/web/features/tasks/taskDialogUtils.ts` | Form draft lifecycle, dirty check comparisons, and partial patch payload builders |
 | `apps/web/features/tasks/TaskBoard.tsx` | Kanban container coordinating columns, board filters, search, and modal states |
@@ -107,7 +107,7 @@ flowchart TD
 ```
 
 ### Live Events & Web Store
-- **Transport**: Broadcasts travel over the `/office` Socket.IO namespace to room `office:${workspaceId}` via `OfficeGateway.broadcast(workspaceId, event, payload)`.
+- **Transport**: Broadcasts travel over the `/office` Socket.IO namespace to room `ws:${workspaceId}` via `OfficeGateway.broadcast(workspaceId, event, payload)`.
 - **Events & Payloads**:
   - `task:created`: Full `TaskView`.
   - `task:updated`: Full `TaskView`.

@@ -78,11 +78,11 @@ Escape handling is centralized in `apps/web/lib/escape.ts`:
 ### Keybind System
 - **Definitions & Rules (`features/settings/keybinds.ts`)**: Defines `KEYBIND_ACTIONS` (`interact`, `mute`, `deafen`, `pushToTalk`, `chat`, `board`, `rooms`, `people`), layout-agnostic `DEFAULT_KEYBINDS` (`KeyE`, `KeyM`, `KeyH`, `KeyV`, `KeyC`, `KeyB`, `KeyT`, `KeyP`), and unbindable `RESERVED_KEYS` (WASD, arrows, Escape, Enter, Tab).
 - **Store & Hook (`features/settings/keybindStore.ts`)**: Loads user preferences lazily via `GET /settings`. `rebind(action, code, { swap })` validates input, resolves collisions, optimistically updates state, and persists with `PATCH /settings`.
-- **Input Guarding**: `useKeybind(action, handler, enabled)` skips execution if `isTyping()` (`lib/dom.ts`) detects focus inside an input, textarea, select, or contenteditable element.
+- **Input Guarding**: `useKeybind(action, handler, enabled)` skips execution if `isTyping()` (`lib/dom.ts`) detects focus inside an input, textarea, or contenteditable element (or inside an element with `data-captures-keys`).
 - **Adding an Action**: Add the key to `KEYBIND_ACTIONS`, `DEFAULT_KEYBINDS`, and `KEYBIND_LABELS` in `features/settings/keybinds.ts` (and mirror in backend `apps/api/src/settings/keybinds.ts`), then invoke `useKeybind(action, ...)` in consumer components.
 
 ### Dev/Test-Only Code (`features/dev/`)
-- **What exists**: `useDevHooks.ts` injects `window.__devpulse` (`teleport(x, y)` and `position()`), frame-rate cap `__devpulseFps`, and `__devpulseLowRes` for Playwright E2E automation (`e2e/tests/helpers.ts`). `DevSwitcher.tsx` and `useDevLogin.ts` render an instant user-switching modal on `/login` and `/register`.
+- **What exists**: `devHooks.ts` (`useDevHooks`) injects `window.__devpulse` (`teleport(x, y)` and `position()`), frame-rate cap `__devpulseFps`, and `__devpulseLowRes` for Playwright E2E automation (`e2e/tests/support/office.ts`). `DevSwitcher.tsx` and `useDevLogin.ts` render an instant user-switching modal on `/login` and `/register`.
 - **Why never in production**: On mount, `useDevLogin` queries `GET /auth/dev`. The backend only enables `DevModule` when `DEV_LOGIN=true` (never set in production). If disabled, `useDevHooks` removes `window.__devpulse`, `DevSwitcherGate` renders regular auth forms, and `dev:teleport` socket events are rejected by the server.
 
 ### OfficeView Composition
@@ -134,4 +134,4 @@ Escape handling is centralized in `apps/web/lib/escape.ts`:
 - **Test Commands**:
   - Type checking: `pnpm --filter web typecheck` (runs `tsc --noEmit`).
   - Playwright E2E suite: `pnpm --filter e2e test` or `pnpm test`.
-- **Test Automation Hooks**: E2E tests bypass character walking collisions by calling `window.__devpulse.teleport(x, y)` installed by `useDevHooks.ts` when `DEV_LOGIN=true`.
+- **Test Automation Hooks**: E2E tests bypass character walking collisions by calling `window.__devpulse.teleport(x, y)` installed by `devHooks.ts` (`useDevHooks`) when `DEV_LOGIN=true`.

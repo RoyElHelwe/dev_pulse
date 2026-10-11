@@ -35,7 +35,7 @@ The office game engine resides in `apps/web/game/` and integrates with React UI 
 | `objects/RoomBadges.ts` | Meeting room occupancy and schedule badges mounted above glass and solid meeting room walls. |
 | `render/draw.ts` | Canvas drawing primitives (rounded rectangles, circles, color shading) and deterministic seeded PRNG utilities. |
 | `render/floors.ts` | Procedural floor pattern graphics rendering for oak planks, carpet tile grids, and speckled terrazzo chips. |
-| `render/furniture.ts` | Procedural drawing recipes, solid flags, and layer specifications for all 22 furniture kinds in `FURNITURE`. |
+| `render/furniture.ts` | Procedural drawing recipes, solid flags, and layer specifications for all 21 furniture kinds in `FURNITURE`. |
 | `render/legoArt.ts` | Lego stud grid data models, palette definitions, and canvas drawing routines for dynamic collaborative lego walls. |
 | `render/scenery.ts` | Static scenery baking pipeline caching floors and room text labels into 512 px render textures. |
 | `render/shapes.ts` | Ref-counted dynamic texture cache for avatar shadows, badges, and bubbles preventing repeated graphics tessellation. |
@@ -72,7 +72,7 @@ OfficeView.tsx ──> useOfficeConnection ──> createGame(parent, options)
           OfficeScene.init() ──> create() ──> update()
 ```
 
-`createGame()` returns an imperative `OfficeController` handle with 26 methods consumed by React:
+`createGame()` returns an imperative `OfficeController` handle with 27 methods consumed by React:
 - **Camera & View**: `zoomIn()`, `zoomOut()`, `resetView()`, `setViewShift(cssPx)`
 - **Remote Roster**: `setPlayers(list)`, `upsertPlayer(p)`, `movePlayer(id, x, y, dir, moving, seated)`, `removePlayer(id)`
 - **Avatar Look & State**: `setPlayerCharacter(id, char)`, `setOwnCharacter(char)`, `setPlayerZone(id, zone)`, `setPlayerStatus(id, status)`, `setOwnStatus(status)`, `setVoice(id, inCall, talking)`

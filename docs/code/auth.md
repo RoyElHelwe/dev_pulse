@@ -73,7 +73,7 @@ The authentication subsystem provides secure identity management, credential ver
 | `apps/web/features/auth/AuthShell.tsx` | Layout container providing consistent styling and responsive artwork for auth views. |
 | `apps/web/features/auth/OfficeIllustration.tsx` | Pixel art SVG graphic rendered alongside authentication forms. |
 | `apps/web/features/dev/DevSwitcher.tsx` | Persona switcher modal shown on `/login` and `/register` when dev login is enabled. |
-| `apps/web/features/dev/useDevLogin.ts` | SWR hook checking `/api/auth/dev` status and querying test personas. |
+| `apps/web/features/dev/useDevLogin.ts` | React hook checking `/api/auth/dev` status and querying test personas via api client. |
 | `apps/web/features/dev/devHooks.ts` | Exposes `window.__devpulse` automation helpers (teleport, frame cap) for Playwright tests. |
 | `apps/web/lib/api.ts` | Central HTTP client managing cookie authentication, Web Locks token refresh, and FormError conversion. |
 | `apps/web/proxy.ts` | Next.js Edge middleware inspecting the `signed_in` cookie hint to redirect unauthenticated visits to protected routes. |
