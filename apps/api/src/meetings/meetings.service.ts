@@ -55,7 +55,20 @@ export class MeetingsService {
       where: { workspaceId, roomId, startsAt: { lte: now }, endsAt: { gt: now } },
       select: { id: true, attendeeIds: true },
     });
-    if (this.active.size > MAX_ACTIVE_CACHE_ENTRIES) this.active.clear();
+    if (this.active.size >= MAX_ACTIVE_CACHE_ENTRIES) {
+      const nowMs = Date.now();
+      for (const [k, entry] of this.active) {
+        if (nowMs - entry.at >= ACTIVE_CACHE_MS) {
+          this.active.delete(k);
+        }
+      }
+      if (this.active.size >= MAX_ACTIVE_CACHE_ENTRIES) {
+        const oldestKey = this.active.keys().next().value;
+        if (oldestKey !== undefined) {
+          this.active.delete(oldestKey);
+        }
+      }
+    }
     this.active.set(key, { at: Date.now(), booking });
     return booking;
   }
