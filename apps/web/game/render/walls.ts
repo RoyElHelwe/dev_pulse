@@ -8,15 +8,15 @@ type G = Phaser.GameObjects.Graphics;
 // you see is the wall standing up from its base line: a painted front face
 // rising `height` px above the base, topped by a thin dark cap. Tall faces
 // cover the floor behind them, so game/render/wallFaces.ts fades them near people.
-export const WALL = {
+const WALL = {
   solid: { thickness: 10, height: 80 },
   glass: { thickness: 6, height: 80 },
 };
 
 /** Extra pixels drawn under the base line (contact shadow). */
-export const WALL_SHADOW = 6;
+const WALL_SHADOW = 6;
 
-export interface Rect {
+interface Rect {
   x: number;
   y: number;
   w: number;

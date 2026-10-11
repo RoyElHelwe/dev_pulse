@@ -14,7 +14,7 @@ interface Sprite {
   key: string;
 }
 
-export interface EditModeHost {
+interface EditModeHost {
   scene: Phaser.Scene;
   textureScale: number;
   /** The furniture images the scene created, by id (edit mode takes them over). */

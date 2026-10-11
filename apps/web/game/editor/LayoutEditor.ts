@@ -5,15 +5,15 @@ import { catalogEntry } from './catalog';
 import { placementProblem, type PlacementProblem } from './rules';
 
 /** Positions snap to a quarter of a tile. */
-export const SNAP = 0.25;
-export const snap = (v: number) => Math.round(v / SNAP) * SNAP;
+const SNAP = 0.25;
+const snap = (v: number) => Math.round(v / SNAP) * SNAP;
 
 interface Snapshot {
   furniture: Furniture[];
   rooms: Record<string, string>;
 }
 
-export interface EditorState {
+interface EditorState {
   furniture: Furniture[];
   roomNames: Record<string, string>;
   /** The piece shown in the inspector (the last one clicked). */
