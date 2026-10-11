@@ -103,7 +103,7 @@ export interface OfficeLayout {
 
 ### Furniture kinds
 
-The catalog in `FURNITURE_KINDS` defines 22 supported kinds:
+The catalog in `FURNITURE_KINDS` defines 21 supported kinds:
 - Work: `'desk'`, `'chair'`, `'divider'`, `'bookshelf'`, `'board'`
 - Meetings: `'meetingTable'`, `'tv'`
 - Lounge: `'sofa'`, `'armchair'`, `'coffeeTable'`, `'rug'`, `'floorLamp'`, `'beanbag'`

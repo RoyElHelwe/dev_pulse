@@ -195,8 +195,8 @@ This section documents the WebSocket events and HTTP endpoints that manage offic
 | `PUT /workspace/template` | Client &rarr; API (HTTP) | `SwitchTemplateDto`<br>`{ templateId: string, teamSize?: number, version: number }` | Calling client (receives updated `MyWorkspace`) | `WorkspaceController.switchTemplate`<br>&rarr; `WorkspaceService.switchTemplate`<br>in `apps/api/src/workspace/workspace.service.ts` | `apply()` in `apps/web/features/team/TemplateSwitcher.tsx` |
 | `PUT /workspace/me/desk` | Client &rarr; API (HTTP) | `MyDeskDto`<br>`{ deskId: string }` | Calling client (receives HTTP 204 No Content) | `WorkspaceController.moveDesk`<br>&rarr; `DesksService.move`<br>in `apps/api/src/workspace/desks.service.ts` | `claimDesk()` in `apps/web/features/office/useDeskInteractions.ts` |
 | `PUT /workspace/members/:userId/desk` | Client &rarr; API (HTTP) | `DeskDto`<br>`{ deskId: string \| null }` | Calling client (receives HTTP 204 No Content) | `WorkspaceController.assignDesk`<br>&rarr; `DesksService.assign`<br>in `apps/api/src/workspace/desks.service.ts` | Member desk picker in `apps/web/features/team/MembersCard.tsx` |
-| `office:layout` | Server &rarr; Client (WebSocket) | `{ layout: OfficeLayout, version: number, by: string }` | All clients in workspace room (`workspace:<workspaceId>`) | Emitted by `OfficeGateway.onWorkspaceEvent`<br>in `apps/api/src/office/office.gateway.ts`<br>(subscribed to `WorkspaceEvents.events$`) | Listener in `apps/web/features/office/connection.ts`<br>&rarr; `onLayout` in `apps/web/features/office/useOfficeConnection.ts` |
-| `office:desks` | Server &rarr; Client (WebSocket) | `{ desks: DeskOwner[] }`<br>where each item is `{ deskId: string, userId: string, name: string, character: string }` | All clients in workspace room (`workspace:<workspaceId>`) | Emitted by `OfficeGateway.onWorkspaceEvent`<br>in `apps/api/src/office/office.gateway.ts`<br>(subscribed to `WorkspaceEvents.events$`) | Listener in `apps/web/features/office/connection.ts`<br>&rarr; `onDesks` in `apps/web/features/office/useOfficeConnection.ts` |
+| `office:layout` | Server &rarr; Client (WebSocket) | `{ layout: OfficeLayout, version: number, by: string }` | All clients in workspace room (`ws:<workspaceId>`) | Emitted by `OfficeGateway.onWorkspaceEvent`<br>in `apps/api/src/office/office.gateway.ts`<br>(subscribed to `WorkspaceEvents.events$`) | Listener in `apps/web/features/office/connection.ts`<br>&rarr; `onLayout` in `apps/web/features/office/useOfficeConnection.ts` |
+| `office:desks` | Server &rarr; Client (WebSocket) | `{ desks: DeskOwner[] }`<br>where each item is `{ deskId: string, userId: string, name: string, character: string }` | All clients in workspace room (`ws:<workspaceId>`) | Emitted by `OfficeGateway.onWorkspaceEvent`<br>in `apps/api/src/office/office.gateway.ts`<br>(subscribed to `WorkspaceEvents.events$`) | Listener in `apps/web/features/office/connection.ts`<br>&rarr; `onDesks` in `apps/web/features/office/useOfficeConnection.ts` |
 
 ---
 
@@ -235,8 +235,8 @@ This section documents the WebSocket events and HTTP endpoints that manage offic
 [OfficeGateway.onWorkspaceEvent]
   - Updates in-memory office cache: office.layout = event.layout
   - Broadcasts via Socket.IO:
-      server.to("workspace:" + workspaceId).emit('office:layout', { layout, version, by })
-      server.to("workspace:" + workspaceId).emit('office:desks', { desks })
+      server.to("ws:" + workspaceId).emit('office:layout', { layout, version, by })
+      server.to("ws:" + workspaceId).emit('office:desks', { desks })
         |
         v
 [Browser WebSocket connection (features/office/connection.ts)]
