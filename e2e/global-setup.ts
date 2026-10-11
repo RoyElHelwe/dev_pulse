@@ -1,3 +1,7 @@
+// Playwright global setup script warming up HTTP routes before test suites run.
+// Disables TLS rejection for local testing certificates during route pre-fetching.
+
+/** Application routes pre-warmed before launching test suites to prime bundler caches. */
 export const routes = [
   '/',
   '/login',
@@ -21,6 +25,7 @@ export const routes = [
   '/status',
 ];
 
+/** Sequentially pings application routes to warm up compilation caches before testing. */
 export default async function globalSetup() {
   const baseURL = process.env.E2E_BASE_URL || 'http://localhost:8080';
   const prevTls = process.env.NODE_TLS_REJECT_UNAUTHORIZED;

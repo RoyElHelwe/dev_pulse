@@ -1,6 +1,11 @@
+// Serial E2E test covering the slide-over task board and Kanban workflows.
+// Validates sliding panel animations, drag-and-drop task movements, member filtering, and offline resilience.
+
 import { expect, type Locator, type Page, test } from '@playwright/test';
-import { closeContexts, devOwner, devUser, gotoOffice, openPage, workspace } from './helpers';
-import { position, walkTo } from './nav';
+import { closeContexts, openPage } from './support/browser';
+import { gotoOffice, workspace } from './support/office';
+import { devOwner, devUser } from './support/users';
+import { position, walkTo } from './support/walker';
 
 // Serial run: two users collaborating on the task board.
 test.describe.configure({ mode: 'serial' });
@@ -201,7 +206,8 @@ test('4b. Dragging the edge handle follows the pointer, snaps open past 35% and 
   await org.mouse.move(hx, hy);
   await org.mouse.down();
   await org.mouse.move(hx - 60, hy, { steps: 6 });
-  await org.waitForTimeout(250); // pause: no flick
+  // Pause briefly so drag velocity drops to zero, ensuring spring-back triggers by position rather than inertia
+  await org.waitForTimeout(250);
   await org.mouse.up();
   await expect(openHandle).toBeVisible();
   await expect(board).toBeHidden();
@@ -211,14 +217,17 @@ test('4b. Dragging the edge handle follows the pointer, snaps open past 35% and 
   await org.mouse.move(hx, hy);
   await org.mouse.down();
   await org.mouse.move(hx - 120, hy, { steps: 8 });
+  // Hold pointer mid-drag during slow drag to let the HUD offset track drag position
   await org.waitForTimeout(150);
   await org.mouse.move(hx - 400, hy, { steps: 12 });
+  // Allow HUD displacement to settle before sampling intermediate bounding box
   await org.waitForTimeout(100);
   const mid = (await boardButton.boundingBox())!;
   expect(mid.x).toBeLessThan(closedX - 380); // the HUD moved with the pointer (office pushed a bit further than it)
   expect(mid.x).toBeGreaterThan(closedX - 520);
   if (SHOTS) await org.screenshot({ path: `${SHOTS}/board-2-half-dragged.png` });
-  await org.waitForTimeout(150); // pause: no flick
+  // Pause before mouse release past the 35% threshold to snap open without flick momentum
+  await org.waitForTimeout(150);
   await org.mouse.up();
   await expect(closeHandle).toBeVisible();
   await expect(board).toBeVisible();
@@ -243,8 +252,10 @@ test('4b. Dragging the edge handle follows the pointer, snaps open past 35% and 
   // which depends on how fast this machine delivers the mouse events).
   const open = (await board.boundingBox())!;
   await org.mouse.move(cx + 120, cy, { steps: 6 });
+  // Pause mid-drag while pulling handle to the right to simulate deliberate gesture
   await org.waitForTimeout(100);
   await org.mouse.move(cx + Math.min(open.width * 0.9, view.width - cx - 4), cy, { steps: 12 });
+  // Pause past closing threshold before mouse release to ensure closing snaps cleanly
   await org.waitForTimeout(150);
   await org.mouse.up();
   await expect(openHandle).toBeVisible();
@@ -437,12 +448,13 @@ test('8. a toast stays visible while the task board is open', async () => {
   await org.context().setOffline(false);
   await expect(status).toBeHidden();
 
-  // With the board open and settled (wait ~1.5 s), canvas is paused-but-alive
+  // Wait for the office canvas game loop to settle into its background paused state while board is open
   await org.waitForTimeout(1500);
 
   // Close the board, wait, then walk to assert canvas resumed
   await org.keyboard.press('Escape');
   await expect(board).toBeHidden();
+  // Wait for the canvas game loop and input event listeners to resume after closing the board
   await org.waitForTimeout(500);
 
   const { layout } = await workspace(org);

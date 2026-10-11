@@ -1,8 +1,12 @@
 # Production-like stack (what evaluators run):  make   or   docker compose up --build
 # Development with hot reload:                   make dev
+# Wires postgres db, NestJS api, Next.js web frontend, and nginx reverse proxy on a shared network.
 name: dev_pulse
 
 services:
+  # PostgreSQL database storing persistent relational application data (users, office state, tasks).
+  # Runs postgres:16-alpine on internal port 5432 with no host ports exposed in production.
+  # Persistent data is stored in the db_data volume; healthcheck waits for pg_isready before api connects.
   db:
     image: postgres:16-alpine
     restart: unless-stopped
@@ -18,6 +22,10 @@ services:
       timeout: 5s
       retries: 10
 
+  # NestJS backend service providing REST API endpoints (/api/*) and WebSockets (/socket.io/*).
+  # Built using the prod multi-stage target and runs on internal port 4000 without exposing host ports.
+  # Loads .env for secrets and OAuth; dev-login flag is ignored in production (requires NODE_ENV!=production).
+  # Waits for db healthcheck before running prisma db push and launching the application.
   api:
     build:
       context: ./apps/api
@@ -34,6 +42,9 @@ services:
       db:
         condition: service_healthy
 
+  # Next.js frontend serving web pages and the Phaser 2D virtual office client.
+  # Built using the prod standalone target and runs on internal port 3000.
+  # Communicates with api internally and is accessed publicly exclusively through the proxy service.
   web:
     build:
       context: ./apps/web
@@ -42,6 +53,10 @@ services:
     depends_on:
       - api
 
+  # Nginx reverse proxy acting as the single public TLS entry point on port 8443 (maps to 443).
+  # TLS is required for WebRTC microphone access in proximity voice chat.
+  # Generates a self-signed certificate for SERVER_NAME stored in the certs volume.
+  # Routes /api and /socket.io to api, and all other traffic to web.
   proxy:
     build: ./nginx
     restart: unless-stopped
@@ -55,6 +70,9 @@ services:
       - api
       - web
 
+# Named volumes for data persistence across container restarts and rebuilds.
 volumes:
+  # Named volume for persistent PostgreSQL database files.
   db_data:
+  # Named volume storing generated TLS certificates (cert.pem and key.pem).
   certs:

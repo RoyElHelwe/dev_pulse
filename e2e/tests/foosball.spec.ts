@@ -1,6 +1,11 @@
+// E2E test for the interactive foosball mini-game in the chill room.
+// Validates two-player lobby match start, rod physics controls, match forfeit, and leaderboard updates.
+
 import { expect, type Page, test } from '@playwright/test';
-import { closeContexts, devOwner, devUser, gotoOffice, openPage, shotPath } from './helpers';
-import { jumpTo } from './nav';
+import { closeContexts, openPage, shotPath } from './support/browser';
+import { gotoOffice } from './support/office';
+import { devOwner, devUser } from './support/users';
+import { jumpTo } from './support/walker';
 
 test.describe.configure({ mode: 'serial' });
 
@@ -107,7 +112,7 @@ test('2 players join office, play foosball, kick, forfeit and check leaderboard'
   await org.mouse.move(cb.x + cb.width * 0.5, cb.y + cb.height * 0.3, { steps: 6 });
   await org.mouse.down();
   await org.mouse.up();
-  // A quick flick up and down (kick by velocity).
+  // Pause briefly after selecting rod before executing mouse flick motion
   await org.waitForTimeout(500);
   await org.mouse.move(cb.x + cb.width * 0.5, cb.y + cb.height * 0.9);
   await org.mouse.move(cb.x + cb.width * 0.5, cb.y + cb.height * 0.1);
