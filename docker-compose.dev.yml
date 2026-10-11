@@ -1,10 +1,15 @@
 # Dev override: hot reload for api + web, database reachable from the host.
 # Used by `make dev` (docker compose -f docker-compose.yml -f docker-compose.dev.yml up).
+# Overrides db, api, and web services with development targets, volume mounts, and host ports.
 services:
+  # PostgreSQL override: binds port 5432 to the host for direct access with database GUI tools (DBeaver, psql).
   db:
     ports:
       - '5432:5432'
 
+  # NestJS api override: runs the dev stage (pnpm dev) with Prisma migrations and hot reload.
+  # Setting NODE_ENV=development activates the DEV_LOGIN switcher if set in .env for passwordless local testing.
+  # Publishes port 5555 for Prisma Studio; mounts host source code into /app while isolating node_modules and dist in container volumes.
   api:
     build:
       target: dev
@@ -17,6 +22,9 @@ services:
       - /app/node_modules
       - /app/dist
 
+  # Next.js web override: runs dev server with Fast Refresh.
+  # WATCHPACK_POLLING ensures file change detection in Docker/WSL; ALLOWED_DEV_ORIGINS allows LAN/host cross-origin access.
+  # Mounts host source into /app while isolating container node_modules and .next build cache in anonymous volumes.
   web:
     build:
       target: dev

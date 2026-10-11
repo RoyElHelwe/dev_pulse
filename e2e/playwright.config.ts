@@ -1,8 +1,10 @@
+// End-to-end tests configuration for Playwright.
+// Drives real browser sessions against the running API, web app, and same-origin proxy.
+
 import { defineConfig } from '@playwright/test';
 
-// End-to-end tests: real browsers against the running app.
-//   CI:     the API, the web app and serve.mjs (same-origin proxy) on :8080.
-//   Docker: E2E_BASE_URL=https://localhost:8443 pnpm test (after `make`).
+// CI: the API, the web app and serve.mjs (same-origin proxy) on :8080.
+// Docker: E2E_BASE_URL=https://localhost:8443 pnpm test (after `make`).
 export default defineConfig({
   testDir: './tests',
   globalSetup: './global-setup.ts',

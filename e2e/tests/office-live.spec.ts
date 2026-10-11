@@ -1,8 +1,13 @@
+// Serial E2E test validating real-time collaboration features in the office.
+// Tests chat speech bubbles, desk paper stack updates from tasks, and moving desk assignments.
+
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { expect, type Page, test } from '@playwright/test';
-import { closeContexts, devOwner, devUser, gotoOffice, openPage, userId, workspace } from './helpers';
+import { closeContexts, openPage } from './support/browser';
+import { gotoOffice, workspace } from './support/office';
+import { devOwner, devUser, userId } from './support/users';
 
 // Serial run: two users collaborating in the office.
 test.describe.configure({ mode: 'serial' });
@@ -66,7 +71,7 @@ test('1. CHAT BUBBLE: speech bubble over Alice appears and fades after ~12s', as
     await closeChat.click();
   }
 
-  // Wait ~12 s for speech bubble to fade completely
+  // Wait 12 seconds for the avatar speech bubble animation to completely fade out
   await staff.waitForTimeout(12_000);
 
   // Take another screenshot of Bob's page (bubble should be gone)
@@ -90,7 +95,7 @@ test('2. PAPER STACK: tasks assigned to Alice increase paper stack on her desk',
   });
   expect(taskRes1.ok()).toBe(true);
 
-  // Give socket / canvas a moment to update desk texture
+  // Allow socket task event propagation and canvas redraw to display 1 task on desk
   await org.waitForTimeout(1500);
 
   const shot1 = path.join(SCREENSHOT_DIR, '02-alice-desk-1task.png');
@@ -107,6 +112,7 @@ test('2. PAPER STACK: tasks assigned to Alice increase paper stack on her desk',
     expect(res.ok()).toBe(true);
   }
 
+  // Allow socket task batch events and canvas redraw to display 4 tasks on desk
   await org.waitForTimeout(1500);
 
   const shot4 = path.join(SCREENSHOT_DIR, '02-alice-desk-4tasks.png');
@@ -132,16 +138,19 @@ test('3. DESK MOVE: Alice walks to a free desk and moves seat', async () => {
 
   // Walk right towards column 19.5
   await org.keyboard.down('ArrowRight');
+  // Hold right arrow key to traverse toward column 19.5 desk zone
   await org.waitForTimeout(500);
   await org.keyboard.up('ArrowRight');
 
   // Walk up towards row 19.4
   await org.keyboard.down('ArrowUp');
+  // Hold up arrow key to traverse toward row 19.4 desk zone
   await org.waitForTimeout(1200);
   await org.keyboard.up('ArrowUp');
 
   // Check hint and press e
   await org.keyboard.press('e');
+  // Wait for the desk interaction trigger and "Move here" button to mount
   await org.waitForTimeout(500);
 
   let uiWorked = await moveBtn.isVisible();
@@ -157,9 +166,11 @@ test('3. DESK MOVE: Alice walks to a free desk and moves seat', async () => {
     ];
     for (const nudge of nudges) {
       await org.keyboard.down(nudge.key);
+      // Step avatar in nudge direction to align with desk proximity zone
       await org.waitForTimeout(nudge.ms);
       await org.keyboard.up(nudge.key);
       await org.keyboard.press('e');
+      // Allow desk interact action to register after nudge press
       await org.waitForTimeout(300);
       if (await moveBtn.isVisible()) {
         uiWorked = true;

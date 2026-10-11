@@ -1,6 +1,11 @@
+// E2E test verifying chill room features in the office.
+// Validates room furniture, real-time multiplayer Lego brick updates, and adding chill rooms via team settings.
+
 import { expect, type Page, test } from '@playwright/test';
-import { closeContexts, devOwner, devUser, gotoOffice, inOffice, openPage, shotPath, workspace, type Layout } from './helpers';
-import { jumpTo } from './nav';
+import { closeContexts, openPage, shotPath } from './support/browser';
+import { gotoOffice, inOffice, workspace, type Layout } from './support/office';
+import { devOwner, devUser } from './support/users';
+import { jumpTo } from './support/walker';
 
 test.describe.configure({ mode: 'serial' });
 
@@ -61,6 +66,7 @@ test('Loft office has chill room, take chill-room screenshot, Lego live miniatur
   // Bob focuses canvas, takes canvas screenshot before Alice places a brick
   const bobCanvas = staff.locator('canvas').first();
   await bobCanvas.click({ position: { x: 300, y: 200 } }).catch(() => undefined);
+  // Wait for Bob's office canvas to settle after click focus before taking baseline screenshot
   await staff.waitForTimeout(500);
 
   const beforeShot = await bobCanvas.screenshot();
@@ -84,6 +90,7 @@ test('Loft office has chill room, take chill-room screenshot, Lego live miniatur
   await legoDialog.getByRole('button', { name: '2×4' }).click();
   for (const fx of [0.25, 0.5, 0.75]) {
     await legoCanvas.click({ position: { x: Math.round(box!.width * fx), y: clickPos.y } });
+    // Pause briefly between clicks to allow socket brick placement events to complete
     await org.waitForTimeout(400);
   }
   await expect.poll(async () => {

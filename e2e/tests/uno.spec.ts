@@ -1,6 +1,11 @@
+// E2E test for the multi-player Uno card game in the office chill room.
+// Tests lobby readiness, synchronized card dealing, turn indicators, and drawing cards from the deck.
+
 import { expect, type Page, test } from '@playwright/test';
-import { closeContexts, devOwner, devUser, gotoOffice, openPage, shotPath } from './helpers';
-import { jumpTo } from './nav';
+import { closeContexts, openPage, shotPath } from './support/browser';
+import { gotoOffice } from './support/office';
+import { devOwner, devUser } from './support/users';
+import { jumpTo } from './support/walker';
 
 test.describe.configure({ mode: 'serial' });
 

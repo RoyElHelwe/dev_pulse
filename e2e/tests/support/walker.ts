@@ -1,5 +1,8 @@
+// Pathfinding and keyboard navigation driver for moving player avatars in the office.
+// Uses an A* grid planner over layout obstacles and drives arrow keys with minimap feedback.
+
 import { expect, type Page } from '@playwright/test';
-import { type Layout, teleport } from './helpers';
+import { type Layout, teleport } from './office';
 
 // Walks a player somewhere in the office: a path on the layout (same
 // obstacles as the game), then arrow keys with the minimap as position
@@ -212,6 +215,7 @@ export async function position(page: Page) {
 async function settled(page: Page) {
   let last = await position(page);
   for (let i = 0; i < 12; i++) {
+    // Poll interval between minimap marker reads to ensure avatar motion has stopped
     await page.waitForTimeout(60);
     const now = await position(page);
     if (Math.hypot(now.x - last.x, now.y - last.y) < 0.01) return now;
@@ -229,6 +233,7 @@ async function holdToward(page: Page, key: string, axis: 'x' | 'y', target: { x:
   await page.keyboard.down(key);
   try {
     while (Date.now() - started < 5000) {
+      // Sampling interval while holding key toward target tile
       await page.waitForTimeout(30);
       const p = await position(page);
       const remaining = (axis === 'x' ? target.x - p.x : target.y - p.y) * sign;
@@ -299,6 +304,7 @@ async function along(
     if (seated && !isSeatTarget && stuckCount >= 1) {
       const standKey = axis === 'x' ? (d < 0 ? 'ArrowLeft' : 'ArrowRight') : (d < 0 ? 'ArrowUp' : 'ArrowDown');
       await page.keyboard.down(standKey);
+      // Hold key past STAND_HOLD_MS (500 ms) to trigger avatar stand-up animation from seat
       await page.waitForTimeout(600);
       await page.keyboard.up(standKey);
       await settled(page);
@@ -318,6 +324,7 @@ async function along(
     if (noProgressCount >= 6) {
       const backKey = axis === 'x' ? (d < 0 ? 'ArrowRight' : 'ArrowLeft') : (d < 0 ? 'ArrowDown' : 'ArrowUp');
       await page.keyboard.down(backKey);
+      // Tap opposite direction to dislodge avatar when movement progress is blocked
       await page.waitForTimeout(250);
       await page.keyboard.up(backKey);
       await settled(page);
@@ -340,6 +347,7 @@ async function along(
     const pressTime = Math.min(700, base * (1 + noProgressCount));
 
     await page.keyboard.down(key);
+    // Dynamic micro-step key press duration scaled by distance to waypoint
     await page.waitForTimeout(pressTime);
     await page.keyboard.up(key);
     await settled(page);
@@ -359,6 +367,7 @@ async function along(
     const lastD = axis === 'x' ? target.x - endAt.x : target.y - endAt.y;
     const backKey = axis === 'x' ? (lastD < 0 ? 'ArrowRight' : 'ArrowLeft') : (lastD < 0 ? 'ArrowDown' : 'ArrowUp');
     await page.keyboard.down(backKey);
+    // Back off step when leg navigation fails before re-planning
     await page.waitForTimeout(200);
     await page.keyboard.up(backKey);
     await settled(page);
@@ -425,18 +434,19 @@ export async function walkTo(page: Page, layout: Layout, tx: number, ty: number)
 
     const at = await position(page);
     if (reached(at)) {
+      // Allow seat sit-down animation (500 ms) to complete before sampling position
       if (isSeatTarget) await page.waitForTimeout(550);
       return position(page);
     }
 
     let path = planner(layout, tx, ty, extraObstacles);
     let planRes = path(at.x, at.y, tx, ty);
-    while (!planRes.route && extraObstacles.length > 0) {
+    while (!planRes?.route && extraObstacles.length > 0) {
       extraObstacles.pop();
       path = planner(layout, tx, ty, extraObstacles);
       planRes = path(at.x, at.y, tx, ty);
     }
-    if (!planRes.route) {
+    if (!planRes?.route) {
       throw new Error(`No path from ${at.x},${at.y} to ${tx},${ty}`);
     }
     plannedGoal = planRes.goal;
@@ -451,6 +461,7 @@ export async function walkTo(page: Page, layout: Layout, tx: number, ty: number)
 
       const curCheck = await position(page);
       if (reached(curCheck)) {
+        // Allow sit-down animation to settle before returning
         if (isSeatTarget) await page.waitForTimeout(550);
         return position(page);
       }
@@ -465,6 +476,7 @@ export async function walkTo(page: Page, layout: Layout, tx: number, ty: number)
         const cur = await position(page);
         if (isNearSeat(layout, cur) && !isSeatTarget) {
           await page.keyboard.down('ArrowDown');
+          // Hold arrow key past STAND_HOLD_MS to stand up from chair after blocking
           await page.waitForTimeout(600);
           await page.keyboard.up('ArrowDown');
           await settled(page);
@@ -490,6 +502,7 @@ export async function walkTo(page: Page, layout: Layout, tx: number, ty: number)
       continue;
     }
 
+    // Allow sit-down animation to finish at final goal
     if (isSeatTarget) await page.waitForTimeout(550);
     const end = await position(page);
     if (reached(end)) {

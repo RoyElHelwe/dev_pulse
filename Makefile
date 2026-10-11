@@ -1,3 +1,6 @@
+# Dev Pulse project management Makefile.
+# Used for build, startup, development, log inspection, and teardown workflows.
+# Wires db (PostgreSQL), api (NestJS), web (Next.js), and proxy (nginx) via Docker Compose.
 COMPOSE     = docker compose
 COMPOSE_DEV = docker compose -f docker-compose.yml -f docker-compose.dev.yml
 
@@ -7,8 +10,10 @@ URL = https://$(or $(SERVER_NAME),localhost):$(or $(HTTPS_PORT),8443)
 
 .PHONY: all up dev down logs ps db studio clean re
 
+## all: build and start the production-like stack in the background (default target)
 all: up
 
+## .env: create local .env from .env.example with random secrets if missing
 # First run: copy the example and fill the secrets with random values.
 .env:
 	cp .env.example .env
@@ -35,6 +40,7 @@ down:
 logs:
 	$(COMPOSE_DEV) logs -f $(s)
 
+## ps: list running containers and their status across the dev stack
 ps:
 	$(COMPOSE_DEV) ps
 
@@ -50,4 +56,5 @@ studio:
 clean:
 	$(COMPOSE_DEV) down -v --remove-orphans
 
+## re: clean all containers and volumes, then rebuild and start the production stack
 re: clean up

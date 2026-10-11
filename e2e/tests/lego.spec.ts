@@ -1,6 +1,11 @@
+// E2E test verifying Lego wall interaction in the office chill room.
+// Tests brick placement, canvas re-rendering across viewports, and brick erasure.
+
 import { expect, type Page, test } from '@playwright/test';
-import { closeContexts, devOwner, gotoOffice, openPage, shotPath, workspace, type Workspace } from './helpers';
-import { jumpTo } from './nav';
+import { closeContexts, openPage, shotPath } from './support/browser';
+import { gotoOffice, workspace, type Workspace } from './support/office';
+import { devOwner } from './support/users';
+import { jumpTo } from './support/walker';
 
 test.describe.configure({ mode: 'serial' });
 
@@ -40,6 +45,7 @@ test('dev-login as owner, walk to Lego wall, place and erase brick', async () =>
 
   const legoCanvas = dialog.locator('canvas');
   await expect(legoCanvas).toBeVisible();
+  // Wait for the Lego board canvas to complete initial render before capturing screenshot
   await page.waitForTimeout(500);
   await page.screenshot({ path: shotPath('lego-panel.png') });
 
@@ -48,6 +54,7 @@ test('dev-login as owner, walk to Lego wall, place and erase brick', async () =>
     // The browser's own fullscreen (requested by the game) blocks resizing: leave it, the in-page layout stays.
     await page.evaluate(() => (document.fullscreenElement ? document.exitFullscreen() : undefined));
     await page.setViewportSize(vp);
+    // Allow dialog layout and canvas scaling to settle after viewport resize
     await page.waitForTimeout(300);
     const dbox = await dialog.boundingBox();
     expect(dbox?.width).toBe(vp.width);
@@ -57,6 +64,7 @@ test('dev-login as owner, walk to Lego wall, place and erase brick', async () =>
     await page.screenshot({ path: shotPath(`lego-panel-${vp.width}x${vp.height}.png`) });
   }
   await page.setViewportSize({ width: 1280, height: 720 });
+  // Allow dialog layout to settle after restoring standard test viewport
   await page.waitForTimeout(300);
 
   // Pick a free cell to place a brick (stud 24, 16 is near the center)
