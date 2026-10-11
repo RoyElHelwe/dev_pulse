@@ -23,6 +23,8 @@ interface ChatMessageItemProps {
   character: string | undefined;
 }
 
+// Browser-local time on purpose: each reader sees when a message arrived on their own clock. (Meetings differ: a
+// booking has a fixed start in a stated timezone, so it sends the booker's zone to the server.)
 const timeOf = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
 /** Renders an individual chat message entry with optional author header and avatar. */
