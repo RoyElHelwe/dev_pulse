@@ -1,3 +1,4 @@
+/** Unit tests for task business rules: issue prefixes, key formatting, deletion rights, and rank gaps. */
 import { describe, expect, it } from 'vitest';
 import { canDeleteTask, needsRebalance, RANK_GAP_MIN, taskKey, workspacePrefix } from './tasks.rules';
 

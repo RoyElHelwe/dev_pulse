@@ -25,6 +25,7 @@ import { WorkspaceModule } from './workspace/workspace.module';
 const DEFAULT_THROTTLE_TTL_MS = 60_000;
 const DEFAULT_THROTTLE_LIMIT = 300;
 
+/** Root NestJS module wiring core infrastructure, feature domains, and global middleware. */
 @Module({
   imports: [
     // Baseline rate limit per client IP; sensitive auth endpoints override this with strict @Throttle limits.
@@ -48,7 +49,6 @@ const DEFAULT_THROTTLE_LIMIT = 300;
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })
-/** Root application module wiring feature domains and global middleware. */
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
     // CSRF protection: verify Origin header on state-changing requests across all API routes.

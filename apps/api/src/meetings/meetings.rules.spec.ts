@@ -1,3 +1,4 @@
+/** Unit tests for meeting slot scheduling rules, duration limits, and timezone formatting. */
 import { describe, expect, it } from 'vitest';
 import { clock, slotProblem, slotStart } from './meetings.rules';
 

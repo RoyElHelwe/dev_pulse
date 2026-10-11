@@ -1,3 +1,4 @@
+/** Unit tests for proximity voice rules: earshot distance, room boundaries, and meeting attendee checks. */
 import { describe, expect, it } from 'vitest';
 import type { Room } from '../office/layout/types';
 import { bookingAllows, EARSHOT_PX, withinEarshot } from './voice.rules';

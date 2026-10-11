@@ -1,3 +1,4 @@
+/** Unit tests for character avatar validation: preset names, DNA recipe codes, and bounds checks. */
 import { describe, expect, it } from 'vitest';
 import { DNA_SIZES, isCharacter } from './characters';
 

@@ -1,3 +1,4 @@
+/** Unit tests for built-in office layout templates, validation compliance, and furniture constraints. */
 import { describe, expect, it } from 'vitest';
 import { numberedDesks } from '../layout/geometry';
 import { validateLayout } from '../layout/validate';

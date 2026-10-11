@@ -21,6 +21,7 @@ import { TokensService } from './tokens.service';
 import { TwoFactorService } from './two-factor.service';
 import { VerificationService } from './verification.service';
 
+/** Wires JWT cryptography, credential controllers, OAuth providers, and session guards. */
 @Module({
   imports: [
     JwtModule.registerAsync({
@@ -51,6 +52,5 @@ import { VerificationService } from './verification.service';
   // AuthService is exported for the dev sign-in in DevModule (dev/dev.service.ts).
   exports: [AuthService, TokensService, SessionEvents],
 })
-/** Module bundling core user authentication, OAuth flows, and session management. */
 export class AuthModule {}
 

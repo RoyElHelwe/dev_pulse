@@ -1,3 +1,4 @@
+/** Unit tests for office simulation rules: rate budgeting, zone identifiers, movement limits, and tab claiming. */
 import { describe, expect, it } from 'vitest';
 import { TILE } from './layout/geometry';
 import { Budget, claimOffice, limitMove, WALK_SPEED, ZONE_ID } from './office.rules';

@@ -6,8 +6,8 @@ import { Controller, Get, ServiceUnavailableException } from '@nestjs/common';
 import { Public } from '../common/auth/public.decorator';
 import { PrismaService } from '../prisma/prisma.service';
 
+/** Exposes public liveness probes verifying database connectivity for container health checks. */
 @Controller('health')
-/** Public controller exposing stack health and database connectivity status. */
 export class HealthController {
   constructor(private readonly prisma: PrismaService) {}
 

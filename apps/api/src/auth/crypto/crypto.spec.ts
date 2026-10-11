@@ -1,3 +1,4 @@
+/** Unit tests for authentication cryptography: TOTP generation, password hashing, authenticated encryption, and redirect safety. */
 import { describe, expect, it } from 'vitest';
 import { hashPassword, verifyPassword } from './password';
 import { safeRedirect } from './redirect';
