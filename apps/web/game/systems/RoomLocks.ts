@@ -34,7 +34,7 @@ export function playerBody(x: number, y: number): Rect {
   };
 }
 
-export interface RoomLocksOptions {
+interface RoomLocksOptions {
   scene: Phaser.Scene;
   getLayout: () => OfficeLayout;
   getPlayerPos: () => { x: number; y: number };

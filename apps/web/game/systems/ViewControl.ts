@@ -21,7 +21,7 @@ import {
 } from '../constants';
 import type { OfficeLayout } from '../layout/types';
 
-export interface ViewControlOptions {
+interface ViewControlOptions {
   scene: Phaser.Scene;
   getLayout: () => OfficeLayout;
   getDpr: () => number;

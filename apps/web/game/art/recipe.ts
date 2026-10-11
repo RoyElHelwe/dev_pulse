@@ -5,25 +5,25 @@ import { BOTTOM, CLOTH, DYED_FROM, HAIR, SHOES, SKIN } from './palette';
 // as a short code ("DNA") in WorkspaceMember.character, next to the 8 named
 // presets that existed before, so old members keep their look.
 
-export const BUILDS = ['slim', 'regular', 'broad'] as const;
-export const HAIR_STYLES = ['short', 'buzz', 'sidepart', 'long', 'bob', 'bun', 'ponytail', 'curly', 'afro', 'mohawk', 'braids', 'bald'] as const;
-export const BEARDS = ['none', 'stubble', 'full', 'moustache'] as const;
-export const GLASSES = ['none', 'round', 'square', 'shades'] as const;
-export const TOPS = ['tee', 'hoodie', 'shirt', 'sweater', 'blazer'] as const;
-export const PATTERNS = ['plain', 'stripes', 'logo'] as const;
-export const BOTTOMS = ['trousers', 'shorts', 'skirt'] as const;
-export const HATS = ['none', 'beanie', 'cap'] as const;
+const BUILDS = ['slim', 'regular', 'broad'] as const;
+const HAIR_STYLES = ['short', 'buzz', 'sidepart', 'long', 'bob', 'bun', 'ponytail', 'curly', 'afro', 'mohawk', 'braids', 'bald'] as const;
+const BEARDS = ['none', 'stubble', 'full', 'moustache'] as const;
+const GLASSES = ['none', 'round', 'square', 'shades'] as const;
+const TOPS = ['tee', 'hoodie', 'shirt', 'sweater', 'blazer'] as const;
+const PATTERNS = ['plain', 'stripes', 'logo'] as const;
+const BOTTOMS = ['trousers', 'shorts', 'skirt'] as const;
+const HATS = ['none', 'beanie', 'cap'] as const;
 /** How someone keeps their desk (see desk.ts). */
-export const VIBES = ['minimal', 'cozy', 'gamer', 'artist', 'scholar'] as const;
+const VIBES = ['minimal', 'cozy', 'gamer', 'artist', 'scholar'] as const;
 
-export type Build = (typeof BUILDS)[number];
-export type HairStyle = (typeof HAIR_STYLES)[number];
-export type Beard = (typeof BEARDS)[number];
-export type Glasses = (typeof GLASSES)[number];
-export type Top = (typeof TOPS)[number];
-export type Pattern = (typeof PATTERNS)[number];
-export type Bottom = (typeof BOTTOMS)[number];
-export type Hat = (typeof HATS)[number];
+type Build = (typeof BUILDS)[number];
+type HairStyle = (typeof HAIR_STYLES)[number];
+type Beard = (typeof BEARDS)[number];
+type Glasses = (typeof GLASSES)[number];
+type Top = (typeof TOPS)[number];
+type Pattern = (typeof PATTERNS)[number];
+type Bottom = (typeof BOTTOMS)[number];
+type Hat = (typeof HATS)[number];
 export type Vibe = (typeof VIBES)[number];
 
 export interface Recipe {
@@ -74,8 +74,6 @@ export const FIELDS: { key: Key; size: number; options?: readonly string[] }[] =
   { key: 'vibe', size: VIBES.length, options: VIBES },
 ];
 
-/** Field sizes in DNA order. The API keeps a copy to validate codes (apps/api/src/workspace/characters.ts). */
-export const DNA_SIZES = FIELDS.map((f) => f.size);
 const DNA_VERSION = '1';
 
 const indexOf = (recipe: Recipe, field: (typeof FIELDS)[number]) => {
@@ -150,7 +148,7 @@ export function recipeOf(character: string | null | undefined): Recipe {
 const indexes = (n: number) => Array.from({ length: n }, (_, i) => i);
 
 /** Rules every generated character follows (the "harmony" rules). */
-export const RULES = {
+const RULES = {
   /** Hair must stand out from the skin, or the head reads as one blob at 30 px. */
   hairVsSkin: 0.12,
   /** The outfit splits in two: top and bottom differ in lightness. */

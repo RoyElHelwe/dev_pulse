@@ -26,7 +26,7 @@ export interface PlayerState {
 }
 
 /** Last broadcast movement state of the local player. */
-export interface SentState {
+interface SentState {
   at: number;
   moving: boolean;
   dir: Direction;
@@ -34,7 +34,7 @@ export interface SentState {
 }
 
 /** Dependencies and callbacks required by the NetSync system. */
-export interface NetSyncOptions {
+interface NetSyncOptions {
   scene: Phaser.Scene;
   player: Avatar;
   fontFamily: string;

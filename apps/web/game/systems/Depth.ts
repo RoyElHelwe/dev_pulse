@@ -34,7 +34,7 @@ export const DEPTH = {
   hints: 900,
 } as const;
 
-export interface SeatDepthTarget {
+interface SeatDepthTarget {
   centerX: number;
   centerY: number;
   item: Furniture;

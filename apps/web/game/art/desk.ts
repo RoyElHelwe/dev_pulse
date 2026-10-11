@@ -13,7 +13,7 @@ import type { Recipe, Vibe } from './recipe';
 // Seen from above, centred on (0, 0): the back (-y) holds the screens, the
 // person sits at the front (+y).
 
-export interface DeskOptions {
+interface DeskOptions {
   /** Desk id: the same desk always gets the same things. */
   seed: string;
   /** Who sits here (null or missing: a free desk). */

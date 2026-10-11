@@ -18,7 +18,7 @@ const FURNITURE_ALPHA = 0.5;
 const FADE_MS = 110;
 
 /** A room name, shown on the wall face above the room. Tile units. */
-export interface FaceLabel {
+interface FaceLabel {
   text: string;
   /** Floor spot used when there is no wall to hang it on. */
   x: number;

@@ -6,7 +6,7 @@
 /** A colour as the game uses it: 0xRRGGBB. */
 export type Hex = number;
 
-export interface Oklch {
+interface Oklch {
   l: number;
   c: number;
   h: number;
@@ -98,7 +98,7 @@ export interface Ramp {
   glint: Hex;
 }
 
-export interface RampOptions {
+interface RampOptions {
   /** Lightness change per step (default 0.075). */
   step?: number;
   /** Hue change per step, in degrees (default 9). */
@@ -129,7 +129,7 @@ export function mix(a: Hex, b: Hex, t: number): Hex {
 }
 
 /** The old way of shading (straight towards black or white), kept to compare. */
-export function flatShade(color: Hex, amount: number): Hex {
+function flatShade(color: Hex, amount: number): Hex {
   const channel = (v: number) => Math.round(amount < 0 ? v * (1 + amount) : v + (255 - v) * amount);
   return (channel((color >> 16) & 255) << 16) | (channel((color >> 8) & 255) << 8) | channel(color & 255);
 }

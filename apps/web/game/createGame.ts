@@ -1,11 +1,12 @@
 import * as Phaser from 'phaser';
+import { devFpsCap } from '@/features/dev/devHooks';
 import type { LayoutEditor } from './editor/LayoutEditor';
 import type { OfficeLayout } from './layout/types';
 import type { DeskOwner } from './objects/DeskPlates';
 import type { RoomBooking } from './objects/RoomBadges';
 import { OfficeScene, type OfficeSceneData, type OfficeSnapshot, type PlayerState } from './scenes/OfficeScene';
 
-export type { DeskOwner, OfficeSnapshot, PlayerState, RoomBooking };
+export type { DeskOwner, OfficeSnapshot, PlayerState };
 
 export interface OfficeController {
   zoomIn(): void;
@@ -78,12 +79,6 @@ interface GameOptions {
  * pixel ratio and scaled down with CSS, so everything stays sharp on retina
  * screens. Import this file dynamically: Phaser only runs in the browser.
  */
-/** Frame-rate cap requested by a test browser (0: none). */
-function fpsCap(): number {
-  const cap = (window as unknown as { __devpulseFps?: unknown }).__devpulseFps;
-  return typeof cap === 'number' && cap >= 5 && cap <= 60 ? cap : 0;
-}
-
 export function createGame(parent: HTMLElement, options: GameOptions): OfficeController {
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
   const size = () => ({
@@ -129,7 +124,7 @@ export function createGame(parent: HTMLElement, options: GameOptions): OfficeCon
     physics: { default: 'arcade', arcade: { debug: false } },
     render: { antialias: true },
     // Test browsers render in software: e2e sets `window.__devpulseFps` to cap the frame rate.
-    ...(fpsCap() ? { fps: { limit: fpsCap() } } : {}),
+    ...(devFpsCap() ? { fps: { limit: devFpsCap() } } : {}),
   });
   game.scene.add('office', OfficeScene, true, data);
 

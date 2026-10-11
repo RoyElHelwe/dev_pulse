@@ -20,7 +20,7 @@ import type { Avatar, Direction } from '../objects/Avatar';
 import { pixels } from './RoomLocks';
 
 /** Representation of an interactive seat placed in the office layout. */
-export interface Seat {
+interface Seat {
   id: string;
   item: Furniture;
   x: number;
@@ -31,12 +31,12 @@ export interface Seat {
 }
 
 /** Active seat occupied by a player, requiring a defined facing direction. */
-export interface ActiveSeat extends Seat {
+interface ActiveSeat extends Seat {
   dir: Direction;
 }
 
 /** Dependencies and callbacks required by the Seating system. */
-export interface SeatingOptions {
+interface SeatingOptions {
   player: Avatar;
   layout: OfficeLayout;
   isFree: (x: number, y: number) => boolean;
@@ -45,7 +45,7 @@ export interface SeatingOptions {
 }
 
 /** Step-off offsets in pixels when standing up toward each cardinal direction. */
-export const STEP_OFF_OFFSETS: Record<Direction, { dx: number; dy: number }> = {
+const STEP_OFF_OFFSETS: Record<Direction, { dx: number; dy: number }> = {
   up: { dx: 0, dy: -STEP_OFF_DISTANCE_PX },
   down: { dx: 0, dy: STEP_OFF_DISTANCE_PX },
   left: { dx: -STEP_OFF_DISTANCE_PX, dy: 0 },
@@ -53,7 +53,7 @@ export const STEP_OFF_OFFSETS: Record<Direction, { dx: number; dy: number }> = {
 };
 
 /** Determines avatar facing direction from chair rotation in degrees. */
-export function chairFacing(deg = 0): Direction {
+function chairFacing(deg = 0): Direction {
   const r = ((deg % 360) + 360) % 360;
   if (r === 90) return 'right';
   if (r === 180) return 'down';
@@ -62,7 +62,7 @@ export function chairFacing(deg = 0): Direction {
 }
 
 /** Checks if world pixel coordinates fall within the sitting trigger zone for a seat. */
-export function inSeatZone(seat: Seat, px: number, py: number): boolean {
+function inSeatZone(seat: Seat, px: number, py: number): boolean {
   if (seat.item.kind === 'armchair') {
     const b = pixels(itemBounds(seat.item));
     return (
@@ -76,7 +76,7 @@ export function inSeatZone(seat: Seat, px: number, py: number): boolean {
 }
 
 /** Determines primary cardinal direction from horizontal and vertical input axes. */
-export function inputDirection(ix: number, iy: number): Direction | null {
+function inputDirection(ix: number, iy: number): Direction | null {
   if (ix === 0 && iy === 0) return null;
   if (Math.abs(ix) > Math.abs(iy)) {
     return ix > 0 ? 'right' : 'left';

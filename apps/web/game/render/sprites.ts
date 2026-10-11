@@ -48,7 +48,7 @@ function deskPapers(scene: Phaser.Scene, item: Furniture) {
   return (scene.registry.get(PAPERS) as Map<string, number> | undefined)?.get(item.id) ?? 0;
 }
 
-export function furnitureTextureKey(item: Furniture, owner?: string, papers = 0) {
+function furnitureTextureKey(item: Furniture, owner?: string, papers = 0) {
   const seed = VARIES.has(item.kind) ? item.id : '';
   const legoSuffix = item.kind === 'legoBoard' && legoArt.get(item.id) !== undefined ? `:${item.id}:lego${legoArt.version(item.id)}` : '';
   return `furniture:${item.kind}:${item.w}:${item.h}:${item.color ?? ''}:${seed}:${owner ?? ''}${owner && papers ? `:p${papers}` : ''}${legoSuffix}`;

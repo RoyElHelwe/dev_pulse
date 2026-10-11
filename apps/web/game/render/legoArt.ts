@@ -25,7 +25,7 @@ export const LEGO_PALETTE = [
   '#991b1b', // 15: Dark Red
 ] as const;
 
-export const LEGO_SIZES: ReadonlyArray<readonly [number, number]> = [
+const LEGO_SIZES: ReadonlyArray<readonly [number, number]> = [
   [1, 1],
   [1, 2],
   [2, 1],
@@ -44,7 +44,7 @@ export const LEGO_BASE_SHAPES: ReadonlyArray<readonly [number, number]> = [
   [2, 4],
 ] as const;
 
-export function isAllowedSize(w: number, h: number): boolean {
+function isAllowedSize(w: number, h: number): boolean {
   return LEGO_SIZES.some(([sw, sh]) => sw === w && sh === h);
 }
 
@@ -52,7 +52,7 @@ export function brickAt(bricks: LegoBrick[], x: number, y: number): LegoBrick | 
   return bricks.find(([bx, by, bw, bh]) => x >= bx && x < bx + bw && y >= by && y < by + bh);
 }
 
-export function bricksOverlap(
+function bricksOverlap(
   b1: { x: number; y: number; w: number; h: number },
   b2: { x: number; y: number; w: number; h: number },
 ): boolean {

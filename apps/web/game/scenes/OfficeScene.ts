@@ -1,3 +1,8 @@
+/**
+ * Main office scene lifecycle, coordinating rendering, physics, systems, and networking.
+ * Delegates specialized behaviors to dedicated systems and exposes the public office API.
+ */
+
 import * as Phaser from 'phaser';
 import { officeEvents } from '@/features/office/events';
 import { getKeybinds } from '@/features/settings/keybindStore';
@@ -14,7 +19,7 @@ import {
 import { EditMode } from '../editor/EditMode';
 import type { LayoutEditor } from '../editor/LayoutEditor';
 import { deriveZones, itemBounds, type Rect } from '../layout/derive';
-import type { Furniture, OfficeLayout, Zone } from '../layout/types';
+import type { OfficeLayout, Zone } from '../layout/types';
 import { Avatar, beginTextureBudget, type Direction } from '../objects/Avatar';
 import { DeskPlates, type DeskOwner } from '../objects/DeskPlates';
 import { recipeOf } from '../art/recipe';
@@ -24,26 +29,30 @@ import { Proximity } from '../systems/Proximity';
 import { roomFinder } from '../systems/rooms';
 import { FURNITURE } from '../render/furniture';
 import { legoArt } from '../render/legoArt';
-import {
-  ensureFurnitureTexture,
-  ensureShadowTexture,
-  furnitureCenter,
-  setDeskOwners,
-  setDeskPapers,
-  textureScale,
-  wallArtSize,
-} from '../render/sprites';
+import { textureScale } from '../render/sprites';
 import type { WallFaces } from '../render/wallFaces';
 import { wallCollider } from '../render/walls';
-import { faceBase, isWallMounted, mountWall } from '../layout/mount';
 import { DEPTH, furnitureDepth, peopleDepth } from '../systems/Depth';
 import { bakeStaticScenery, createWallFaces } from '../render/scenery';
 import { ViewControl } from '../systems/ViewControl';
 import { overlapsRect, pixels, playerBody, RoomLocks } from '../systems/RoomLocks';
 import { NetSync, type PlayerState } from '../systems/NetSync';
 import { Seating } from '../systems/Seating';
+import { FurnitureSprites } from '../systems/FurnitureSprites';
 
 export type { PlayerState };
+
+/** Inset in pixels applied to solid furniture colliders to allow smoother walking nearby. */
+const FURNITURE_COLLIDER_INSET_PX = 2;
+
+/** Number of random spawn attempts when finding an arrival spot near the entrance. */
+const SPAWN_ATTEMPTS = 20;
+
+/** Margin in pixels from the bottom map edge when choosing a spawn spot. */
+const SPAWN_BOTTOM_MARGIN_PX = 4;
+
+/** Resolution scale multiplier for crisp high-DPI text badges and avatar labels. */
+const TEXT_RESOLUTION_SCALE = 2;
 
 export interface OfficeSceneData {
   layout: OfficeLayout;
@@ -93,11 +102,10 @@ export class OfficeScene extends Phaser.Scene {
   private viewControl!: ViewControl;
   private seating!: Seating;
   private netSync!: NetSync;
+  private furnitureSprites!: FurnitureSprites;
   private currentZone: Zone | null = null;
   private desks: DeskOwner[] = [];
   private taskCounts: ReadonlyMap<string, number> = new Map();
-  private sprites = new Map<string, { image: Phaser.GameObjects.Image; shadow?: Phaser.GameObjects.Image; key: string }>();
-  private wallMounted: Array<{ image: Phaser.GameObjects.Image; xa: number; xb: number; basePx: number }> = [];
   private editMode: EditMode | null = null;
   private proximity!: Proximity;
   private roomAt!: (x: number, y: number) => string | null;
@@ -112,29 +120,343 @@ export class OfficeScene extends Phaser.Scene {
   private readonly moveVec = new Phaser.Math.Vector2();
   private lastZoneX = NaN;
   private lastZoneY = NaN;
+  /** True while a full-screen game covers the office: the scene keeps ticking but ignores the keyboard. */
+  private inputBlocked = false;
 
   constructor() {
     super('office');
   }
 
+  // ---- lifecycle --------------------------------------------------------------
+
+  /** Initializes the scene state with incoming office data before creation. */
   init(data: OfficeSceneData) {
     this.opts = data;
     this.desks = [];
-    this.sprites = new Map();
-    this.wallMounted = [];
+    this.furnitureSprites = new FurnitureSprites({
+      scene: this,
+      getLayout: () => this.opts.layout,
+      getDpr: () => this.opts.dpr,
+      isEditing: () => Boolean(this.editMode),
+    });
     this.editMode = null;
     this.badgesDirty = true;
     this.joystick = { x: 0, y: 0 };
     this.currentZone = null;
     this.lastZoneX = NaN;
     this.lastZoneY = NaN;
+    this.inputBlocked = false;
   }
 
+  /** Builds scenery, physics solids, player avatar, systems, view controls, and event listeners. */
   create() {
     const { layout } = this.opts;
     const worldW = layout.width * TILE;
     const worldH = layout.height * TILE;
     const solids = this.physics.add.staticGroup();
+
+    this.setupScenery(worldW, worldH, solids);
+    this.setupFurniture(solids);
+    this.setupPlayer(worldW, worldH, solids);
+    this.setupSystems();
+    this.setupInput();
+    this.setupView();
+    this.setupEventHandlers();
+    this.netSync.sendPosition(true);
+  }
+
+  // ---- input ------------------------------------------------------------------
+
+  /** Blocks or unblocks local player keyboard movement (e.g. while a modal or mini-game is open). */
+  setInputBlocked(blocked: boolean) {
+    this.inputBlocked = blocked;
+  }
+
+  /** Sets virtual touch joystick input vector (-1..1 on each axis). */
+  setJoystick(x: number, y: number) {
+    this.joystick = { x, y };
+  }
+
+  // ---- update loop ------------------------------------------------------------
+
+  /** Per-frame game loop updating player motion, network synchronization, scenery, and systems. */
+  update(time: number, delta: number) {
+    beginTextureBudget();
+    this.updatePlayerMovement(delta);
+    this.netSync.update(delta);
+    this.updateScenery(delta);
+    this.updateSystems(time);
+  }
+
+  private updatePlayerMovement(delta: number) {
+    const body = this.player.body as Phaser.Physics.Arcade.Body;
+    const typing = isTyping() || this.inputBlocked;
+    const canAct = !typing && !this.editMode;
+
+    let ix = 0;
+    let iy = 0;
+    let speed = WALK_SPEED;
+    if (canAct) {
+      const k = this.keys;
+      ix = Number(k.right.isDown || k.d.isDown) - Number(k.left.isDown || k.a.isDown);
+      iy = Number(k.down.isDown || k.s.isDown) - Number(k.up.isDown || k.w.isDown);
+      if (ix === 0 && iy === 0 && (this.joystick.x !== 0 || this.joystick.y !== 0)) {
+        ix = this.joystick.x;
+        iy = this.joystick.y;
+        speed = WALK_SPEED * Math.min(1, Math.hypot(ix, iy));
+      }
+    }
+
+    if (this.seating.isSeated) {
+      this.seating.update(delta, ix, iy, canAct);
+    } else {
+      const v = this.moveVec.set(ix, iy).normalize().scale(speed);
+      body.setVelocity(v.x, v.y);
+      this.player.animate(body.velocity.x, body.velocity.y, delta);
+      this.seating.update(delta, ix, iy, canAct);
+    }
+
+    const depth = peopleDepth(this.player.x, this.player.y, this.player.seated, this.seating.seats, this.opts.layout.walls);
+    if (depth !== this.player.depth) {
+      this.player.setDepth(depth);
+    }
+  }
+
+  private updateScenery(delta: number) {
+    this.crowd.length = 0;
+    this.crowd.push(this.player);
+    for (const remote of this.netSync.remotes.values()) this.crowd.push(remote.avatar);
+    this.wallFaces.update(delta, this.crowd);
+    this.furnitureSprites.updateWallAlpha(this.wallFaces);
+  }
+
+  private updateSystems(time: number) {
+    const body = this.player.body as Phaser.Physics.Arcade.Body;
+    this.netSync.maybeSend(time, body.velocity.x !== 0 || body.velocity.y !== 0);
+    this.updateZone();
+    this.interactions.update(this.player.x, this.player.y, !this.editMode);
+    this.netSync.updateProximity(time, { x: this.player.x / TILE, y: this.player.y / TILE }, this.proximity);
+    if (this.badgesDirty) this.refreshBadges();
+  }
+
+  // ---- remote players & chat --------------------------------------------------
+
+  /** Adds a remote player or updates their existing entry. */
+  upsertPlayer(p: PlayerState) {
+    this.netSync.upsertPlayer(p);
+  }
+
+  /** Updates position and animation state for a remote player. */
+  movePlayer(id: string, x: number, y: number, dir: number, moving: boolean, seated = false) {
+    this.netSync.movePlayer(id, x, y, dir, moving, seated);
+  }
+
+  /** Removes a remote player and destroys their avatar. */
+  removePlayer(id: string) {
+    this.netSync.removePlayer(id);
+  }
+
+  /** Updates character appearance recipe for a remote player and their desk. */
+  setPlayerCharacter(id: string, character: string) {
+    this.netSync.setLook(id, character);
+    this.ownerChanged(id, character);
+  }
+
+  /** Updates the active zone identifier for a remote player. */
+  setPlayerZone(id: string, zone: string | null) {
+    this.netSync.setZone(id, zone);
+  }
+
+  /** Updates the status emoji/bubble displayed above a remote player. */
+  setPlayerStatus(id: string, status: string | null) {
+    this.netSync.setStatus(id, status);
+  }
+
+  /** Sets voice activity (headset indicator and talking pulse) for a player. */
+  setVoice(id: string, inCall: boolean, talking: boolean) {
+    const avatar = id === this.opts.myId ? this.player : this.netSync.remotes.get(id)?.avatar;
+    avatar?.setInCall(inCall, talking);
+  }
+
+  /** Displays a temporary speech bubble with chat text over a player's head. */
+  showChat(userId: string, message: string) {
+    const avatar = userId === this.opts.myId ? this.player : this.netSync.remotes.get(userId)?.avatar;
+    avatar?.say(message);
+  }
+
+  // ---- local player -----------------------------------------------------------
+
+  /** Updates the local player character appearance recipe and desk customization. */
+  setOwnLook(character: string) {
+    this.player.setLook(recipeOf(character));
+    this.opts.character = character;
+    this.ownerChanged(this.opts.myId, character);
+  }
+
+  /** Sets the status emoji/bubble displayed above the local player. */
+  setOwnStatus(status: string | null) {
+    this.opts.status = status;
+    this.player.setStatus(status);
+  }
+
+  /** Returns current local player feet coordinates in pixels. */
+  localPosition() {
+    return { x: this.player.x, y: this.player.y };
+  }
+
+  /** Moves the local player instantly. Used by the dev/test hook (features/dev/devHooks.ts) and room-lock eviction. */
+  teleportTo(x: number, y: number) {
+    if (this.seating.isSeated) this.seating.standUp(true);
+    const body = this.player.body as Phaser.Physics.Arcade.Body;
+    body.setVelocity(0, 0);
+    body.reset(x, y);
+    this.player.setPosition(x, y);
+    this.player.animate(0, 0, 0);
+    this.cameras.main.centerOn(x, y);
+    this.netSync.sendPosition();
+    this.lastZoneX = NaN;
+    this.lastZoneY = NaN;
+    this.updateZone();
+  }
+
+  // ---- desks & tasks ----------------------------------------------------------
+
+  /** Updates desk assignments, name plates, interaction targets, and desk decorations. */
+  setDesks(desks: DeskOwner[]) {
+    this.desks = desks;
+    this.plates.set(desks);
+    this.interactions.setOwners(desks);
+    this.furnitureSprites.redecorateDesks(this.desks, this.taskCounts);
+  }
+
+  /** Updates open task counts per user, updating paper stacks on their desks. */
+  setTaskCounts(counts: ReadonlyMap<string, number>) {
+    this.taskCounts = counts;
+    this.furnitureSprites.redecorateDesks(this.desks, this.taskCounts);
+  }
+
+  /** Someone changed character: their avatar and their desk follow. */
+  private ownerChanged(userId: string, character: string) {
+    if (!this.desks.some((d) => d.userId === userId)) return;
+    this.desks = this.desks.map((d) => (d.userId === userId ? { ...d, character } : d));
+    this.furnitureSprites.redecorateDesks(this.desks, this.taskCounts);
+  }
+
+  // ---- meeting rooms & zones --------------------------------------------------
+
+  /** Sets meeting room locks, blocking entry and evicting local player if currently inside. */
+  setLockedRooms(roomIds: string[]): string | null {
+    const insideRoomId = this.roomLocks.set(roomIds);
+    if (!insideRoomId) return null;
+    if (this.seating.isSeated) this.seating.standUp(true);
+    const to = this.arrivalPoint(this.opts.layout);
+    (this.player.body as Phaser.Physics.Arcade.Body).reset(to.x, to.y);
+    this.cameras.main.centerOn(to.x, to.y);
+    this.netSync.sendPosition();
+    this.lastZoneX = NaN;
+    this.lastZoneY = NaN;
+    this.updateZone();
+    return insideRoomId;
+  }
+
+  /** Updates meeting room booking badges displayed on walls. */
+  setRoomBookings(bookings: RoomBooking[]) {
+    this.badges.setBookings(bookings);
+  }
+
+  /** People per meeting room, from everyone's reported zone (and ours). */
+  private refreshBadges() {
+    this.badgesDirty = false;
+    const counts = new Map<string, number>();
+    const add = (zone: string | null | undefined) => zone && counts.set(zone, (counts.get(zone) ?? 0) + 1);
+    for (const zone of this.netSync.remoteZones.values()) add(zone);
+    add(this.currentZone?.id);
+    this.badges.update(counts);
+  }
+
+  /** Emits zone:leave / zone:enter when the player's feet cross into a zone. */
+  private updateZone() {
+    if (this.player.x === this.lastZoneX && this.player.y === this.lastZoneY) return;
+    this.lastZoneX = this.player.x;
+    this.lastZoneY = this.player.y;
+    const px = this.player.x / TILE;
+    const py = this.player.y / TILE;
+    let zone: Zone | null = null;
+    for (const z of this.zones) {
+      if (px >= z.x && px < z.x + z.w && py >= z.y && py < z.y + z.h) {
+        zone = z;
+        break;
+      }
+    }
+    if (zone?.id === this.currentZone?.id) return;
+    if (this.currentZone) officeEvents.emit('zone:leave', toEvent(this.currentZone));
+    if (zone) officeEvents.emit('zone:enter', toEvent(zone));
+    this.currentZone = zone;
+    this.opts.onZone(zone?.id ?? null);
+    this.badgesDirty = true;
+  }
+
+  // ---- snapshot & minimap -----------------------------------------------------
+
+  /** Captures current office positions, rooms, facing directions, and camera view for minimap. */
+  snapshot(): OfficeSnapshot {
+    const cam = this.cameras.main.worldView;
+    const at = (avatar: Avatar) => ({
+      x: avatar.x / TILE,
+      y: avatar.y / TILE,
+      room: this.roomAt(avatar.x / TILE, avatar.y / TILE),
+      dir: avatar.facing,
+      seated: avatar.seated,
+    });
+    return {
+      me: at(this.player),
+      others: [...this.netSync.remotes].map(([id, r]) => ({ id, ...at(r.avatar) })),
+      view: { x: cam.x / TILE, y: cam.y / TILE, w: cam.width / TILE, h: cam.height / TILE },
+    };
+  }
+
+  // ---- layout editing ---------------------------------------------------------
+
+  /** Switches the scene to interactive layout editing mode. */
+  startEditing(editor: LayoutEditor, onProblem: (text: string) => void) {
+    if (this.editMode) return;
+    if (this.seating.isSeated) this.seating.standUp(true);
+    this.cameras.main.stopFollow();
+    this.plates.setVisible(false);
+    this.editMode = new EditMode(
+      {
+        scene: this,
+        textureScale: textureScale(this.opts.dpr),
+        sprites: this.furnitureSprites.sprites,
+        depthOf: (item) => furnitureDepth(item, this.opts.layout.walls),
+        shadowDepth: DEPTH.shadow,
+      },
+      editor,
+      onProblem,
+    );
+  }
+
+  // ---- camera view ------------------------------------------------------------
+
+  /** Adjusts the camera zoom level by multiplying with the given factor. */
+  zoomBy(factor: number) {
+    this.viewControl.zoomBy(factor);
+  }
+
+  /** Resets camera zoom and view shift to default settings. */
+  resetView() {
+    this.viewControl.resetView();
+  }
+
+  /** Horizontally offsets the camera follow center by the specified CSS pixel amount. */
+  setViewShift(cssPx: number) {
+    this.viewControl.setViewShift(cssPx);
+  }
+
+  // ---- scene setup & physics --------------------------------------------------
+
+  private setupScenery(worldW: number, worldH: number, solids: Phaser.Physics.Arcade.StaticGroup) {
+    const { layout } = this.opts;
     this.obstacles = [];
     this.zones = deriveZones(layout);
 
@@ -144,49 +466,24 @@ export class OfficeScene extends Phaser.Scene {
     }
     this.wallFaces = createWallFaces(this, layout, worldW, worldH, this.opts.dpr, this.opts.fontFamily);
     bakeStaticScenery(this, layout, this.wallFaces.leftover, this.opts.dpr, this.opts.fontFamily);
-
-    this.setupFurniture(solids);
-    this.setupPlayer(worldW, worldH, solids);
-    this.setupSystems();
-    this.setupInput();
-
-    this.viewControl = new ViewControl({
-      scene: this,
-      getLayout: () => this.opts.layout,
-      getDpr: () => this.opts.dpr,
-    });
-    this.viewControl.setup(this.player);
-
-    const unsubLego = legoArt.subscribe((objectId) => {
-      this.updateLegoBoard(objectId);
-    });
-    this.events.once('shutdown', () => {
-      unsubLego();
-      this.viewControl.destroy();
-      this.wallFaces.destroy();
-      this.netSync.destroy();
-      this.wallMounted = [];
-      this.editMode?.destroy();
-      this.editMode = null;
-      this.proximity.clear();
-      this.interactions.destroy();
-      this.opts.onZone(null);
-      if (this.currentZone) officeEvents.emit('zone:leave', toEvent(this.currentZone));
-    });
-    this.netSync.sendPosition(true);
   }
 
   private setupFurniture(solids: Phaser.Physics.Arcade.StaticGroup) {
     const { layout } = this.opts;
     this.taskCounts = this.opts.taskCounts();
-    setDeskOwners(this, ownersOf(this.opts.desks()));
-    setDeskPapers(this, papersOf(this.opts.desks(), this.taskCounts));
+    this.furnitureSprites.redecorateDesks(this.opts.desks(), this.taskCounts);
     const scale = textureScale(this.opts.dpr);
     for (const item of layout.furniture) {
-      this.addFurniture(item, scale);
+      this.furnitureSprites.addFurniture(item, scale);
       if (FURNITURE[item.kind].solid) {
         const b = pixels(itemBounds(item));
-        this.addCollider(solids, b.x + 2, b.y + 2, b.w - 4, b.h - 4);
+        this.addCollider(
+          solids,
+          b.x + FURNITURE_COLLIDER_INSET_PX,
+          b.y + FURNITURE_COLLIDER_INSET_PX,
+          b.w - 2 * FURNITURE_COLLIDER_INSET_PX,
+          b.h - 2 * FURNITURE_COLLIDER_INSET_PX,
+        );
       }
     }
     this.wallFaces.setFurnitureBehind(
@@ -204,7 +501,15 @@ export class OfficeScene extends Phaser.Scene {
 
     const start =
       this.opts.startAt && this.isFree(this.opts.startAt.x, this.opts.startAt.y) ? this.opts.startAt : this.arrivalPoint(layout);
-    this.player = new Avatar(this, start.x, start.y, recipeOf(this.opts.character), this.opts.name, this.opts.fontFamily, this.opts.dpr * 2);
+    this.player = new Avatar(
+      this,
+      start.x,
+      start.y,
+      recipeOf(this.opts.character),
+      this.opts.name,
+      this.opts.fontFamily,
+      this.opts.dpr * TEXT_RESOLUTION_SCALE,
+    );
     this.player.prebake();
     this.player.show();
     this.physics.add.existing(this.player);
@@ -219,7 +524,7 @@ export class OfficeScene extends Phaser.Scene {
 
   private setupSystems() {
     const { layout } = this.opts;
-    const text = { fontFamily: this.opts.fontFamily, resolution: this.opts.dpr * 2 };
+    const text = { fontFamily: this.opts.fontFamily, resolution: this.opts.dpr * TEXT_RESOLUTION_SCALE };
     this.roomAt = roomFinder(layout);
     this.proximity = new Proximity(this.roomAt);
     this.plates = new DeskPlates(this, layout, { ...text, myId: this.opts.myId, depth: DEPTH.sorted + DESK_PLATE_DEPTH_OFFSET });
@@ -279,302 +584,32 @@ export class OfficeScene extends Phaser.Scene {
     });
   }
 
-  /** True while a full-screen game covers the office: the scene keeps ticking but ignores the keyboard. */
-  private inputBlocked = false;
-
-  setInputBlocked(blocked: boolean) {
-    this.inputBlocked = blocked;
-  }
-
-  update(time: number, delta: number) {
-    beginTextureBudget();
-    const body = this.player.body as Phaser.Physics.Arcade.Body;
-    const typing = isTyping() || this.inputBlocked;
-    const canAct = !typing && !this.editMode;
-
-    let ix = 0;
-    let iy = 0;
-    let speed = WALK_SPEED;
-    if (canAct) {
-      const k = this.keys;
-      ix = Number(k.right.isDown || k.d.isDown) - Number(k.left.isDown || k.a.isDown);
-      iy = Number(k.down.isDown || k.s.isDown) - Number(k.up.isDown || k.w.isDown);
-      if (ix === 0 && iy === 0 && (this.joystick.x !== 0 || this.joystick.y !== 0)) {
-        ix = this.joystick.x;
-        iy = this.joystick.y;
-        speed = WALK_SPEED * Math.min(1, Math.hypot(ix, iy));
-      }
-    }
-
-    if (this.seating.isSeated) {
-      this.seating.update(delta, ix, iy, canAct);
-    } else {
-      const v = this.moveVec.set(ix, iy).normalize().scale(speed);
-      body.setVelocity(v.x, v.y);
-      this.player.animate(body.velocity.x, body.velocity.y, delta);
-      this.seating.update(delta, ix, iy, canAct);
-    }
-
-    const depth = peopleDepth(this.player.x, this.player.y, this.player.seated, this.seating.seats, this.opts.layout.walls);
-    if (depth !== this.player.depth) {
-      this.player.setDepth(depth);
-    }
-
-    this.netSync.update(delta);
-
-    this.crowd.length = 0;
-    this.crowd.push(this.player);
-    for (const remote of this.netSync.remotes.values()) this.crowd.push(remote.avatar);
-    this.wallFaces.update(delta, this.crowd);
-    for (const m of this.wallMounted) {
-      m.image.setAlpha(this.wallFaces.alphaFor(m.xa, m.xb, m.basePx));
-    }
-
-    this.netSync.maybeSend(time, body.velocity.x !== 0 || body.velocity.y !== 0);
-    this.updateZone();
-    this.interactions.update(this.player.x, this.player.y, !this.editMode);
-    this.netSync.updateProximity(time, { x: this.player.x / TILE, y: this.player.y / TILE }, this.proximity);
-    if (this.badgesDirty) this.refreshBadges();
-  }
-
-  // ---- other people ----------------------------------------------------------
-
-  upsertPlayer(p: PlayerState) {
-    this.netSync.upsertPlayer(p);
-  }
-
-  setPlayerZone(id: string, zone: string | null) {
-    this.netSync.setZone(id, zone);
-  }
-
-  setPlayerStatus(id: string, status: string | null) {
-    this.netSync.setStatus(id, status);
-  }
-
-  setVoice(id: string, inCall: boolean, talking: boolean) {
-    const avatar = id === this.opts.myId ? this.player : this.netSync.remotes.get(id)?.avatar;
-    avatar?.setInCall(inCall, talking);
-  }
-
-  setOwnStatus(status: string | null) {
-    this.opts.status = status;
-    this.player.setStatus(status);
-  }
-
-  setDesks(desks: DeskOwner[]) {
-    this.desks = desks;
-    this.plates.set(desks);
-    this.interactions.setOwners(desks);
-    this.redecorateDesks();
-  }
-
-  /** Chat: `message` appears over `userId`'s head (yours or someone else's). */
-  showChat(userId: string, message: string) {
-    const avatar = userId === this.opts.myId ? this.player : this.netSync.remotes.get(userId)?.avatar;
-    avatar?.say(message);
-  }
-
-  /** Open tasks per user: each desk's paper stack follows its owner's count. */
-  setTaskCounts(counts: ReadonlyMap<string, number>) {
-    this.taskCounts = counts;
-    this.redecorateDesks();
-  }
-
-  /** Desks show their owner's things (mug in their colour, their kind of clutter...). */
-  private redecorateDesks() {
-    setDeskOwners(this, ownersOf(this.desks));
-    setDeskPapers(this, papersOf(this.desks, this.taskCounts));
-    const scale = textureScale(this.opts.dpr);
-    const items = this.editMode ? [] : this.opts.layout.furniture.filter((f) => f.kind === 'desk');
-    for (const item of items) {
-      const sprite = this.sprites.get(item.id);
-      if (!sprite) continue;
-      const key = ensureFurnitureTexture(this, item, scale);
-      if (key === sprite.key) continue;
-      const old = sprite.key;
-      sprite.image.setTexture(key);
-      sprite.key = key;
-      // Desk textures are per desk and owner: nobody else uses the old one.
-      if (this.textures.exists(old)) this.textures.remove(old);
-    }
-  }
-
-  /** Lego wall boards redraw when art is placed/erased. */
-  private updateLegoBoard(objectId?: string) {
-    const scale = textureScale(this.opts.dpr);
-    const items = this.editMode ? [] : this.opts.layout.furniture.filter((f) => f.kind === 'legoBoard' && (!objectId || f.id === objectId));
-    for (const item of items) {
-      const sprite = this.sprites.get(item.id);
-      if (!sprite) continue;
-      const key = ensureFurnitureTexture(this, item, scale);
-      const pos = furnitureCenter(item);
-      sprite.image.setPosition(pos.x, pos.y);
-      if (key === sprite.key) continue;
-      const old = sprite.key;
-      sprite.image.setTexture(key);
-      sprite.key = key;
-      if (old.includes(':lego') && this.textures.exists(old)) {
-        this.textures.remove(old);
-      }
-    }
-  }
-
-  /** Someone changed character: their avatar and their desk follow. */
-  private ownerChanged(userId: string, character: string) {
-    if (!this.desks.some((d) => d.userId === userId)) return;
-    this.desks = this.desks.map((d) => (d.userId === userId ? { ...d, character } : d));
-    this.redecorateDesks();
-  }
-
-  // ---- booked meeting rooms ---------------------------------------------------------
-
-  /**
-   * Rooms booked without us become solid: a collider covers the whole room, so
-   * its doorways are closed. Someone already inside is sent back to the entrance.
-   * Returns the id of the room they were moved out of, or null.
-   */
-  setLockedRooms(roomIds: string[]): string | null {
-    const insideRoomId = this.roomLocks.set(roomIds);
-    if (!insideRoomId) return null;
-    if (this.seating.isSeated) this.seating.standUp(true);
-    const to = this.arrivalPoint(this.opts.layout);
-    (this.player.body as Phaser.Physics.Arcade.Body).reset(to.x, to.y);
-    this.cameras.main.centerOn(to.x, to.y);
-    this.netSync.sendPosition();
-    this.lastZoneX = NaN;
-    this.lastZoneY = NaN;
-    this.updateZone();
-    return insideRoomId;
-  }
-
-  setRoomBookings(bookings: RoomBooking[]) {
-    this.badges.setBookings(bookings);
-  }
-
-  setJoystick(x: number, y: number) {
-    this.joystick = { x, y };
-  }
-
-  snapshot(): OfficeSnapshot {
-    const cam = this.cameras.main.worldView;
-    const at = (avatar: Avatar) => ({
-      x: avatar.x / TILE,
-      y: avatar.y / TILE,
-      room: this.roomAt(avatar.x / TILE, avatar.y / TILE),
-      dir: avatar.facing,
-      seated: avatar.seated,
+  private setupView() {
+    this.viewControl = new ViewControl({
+      scene: this,
+      getLayout: () => this.opts.layout,
+      getDpr: () => this.opts.dpr,
     });
-    return {
-      me: at(this.player),
-      others: [...this.netSync.remotes].map(([id, r]) => ({ id, ...at(r.avatar) })),
-      view: { x: cam.x / TILE, y: cam.y / TILE, w: cam.width / TILE, h: cam.height / TILE },
-    };
+    this.viewControl.setup(this.player);
   }
 
-  movePlayer(id: string, x: number, y: number, dir: number, moving: boolean, seated = false) {
-    this.netSync.movePlayer(id, x, y, dir, moving, seated);
-  }
-
-  removePlayer(id: string) {
-    this.netSync.removePlayer(id);
-  }
-
-  setPlayerCharacter(id: string, character: string) {
-    this.netSync.setLook(id, character);
-    this.ownerChanged(id, character);
-  }
-
-  setOwnLook(character: string) {
-    this.player.setLook(recipeOf(character));
-    this.opts.character = character;
-    this.ownerChanged(this.opts.myId, character);
-  }
-
-  /** Current local position (kept when the layout reloads). */
-  localPosition() {
-    return { x: this.player.x, y: this.player.y };
-  }
-
-  /** Moves the local player instantly. Used by the dev/test hook (features/dev/devHooks.ts) and room-lock eviction. */
-  teleportTo(x: number, y: number) {
-    if (this.seating.isSeated) this.seating.standUp(true);
-    const body = this.player.body as Phaser.Physics.Arcade.Body;
-    body.setVelocity(0, 0);
-    body.reset(x, y);
-    this.player.setPosition(x, y);
-    this.player.animate(0, 0, 0);
-    this.cameras.main.centerOn(x, y);
-    this.netSync.sendPosition();
-    this.lastZoneX = NaN;
-    this.lastZoneY = NaN;
-    this.updateZone();
-  }
-
-  // ---- editing -----------------------------------------------------------------
-
-  /** Organisers: switch to editing (the player stops, the camera is free). */
-  startEditing(editor: LayoutEditor, onProblem: (text: string) => void) {
-    if (this.editMode) return;
-    if (this.seating.isSeated) this.seating.standUp(true);
-    this.cameras.main.stopFollow();
-    this.plates.setVisible(false);
-    this.editMode = new EditMode(
-      {
-        scene: this,
-        textureScale: textureScale(this.opts.dpr),
-        sprites: this.sprites,
-        depthOf: (item) => furnitureDepth(item, this.opts.layout.walls),
-        shadowDepth: DEPTH.shadow,
-      },
-      editor,
-      onProblem,
-    );
-  }
-
-  // ---- view --------------------------------------------------------------------
-
-  zoomBy(factor: number) {
-    this.viewControl.zoomBy(factor);
-  }
-
-  resetView() {
-    this.viewControl.resetView();
-  }
-
-  setViewShift(cssPx: number) {
-    this.viewControl.setViewShift(cssPx);
-  }
-
-  // ---- internals ---------------------------------------------------------------
-
-  private addFurniture(item: Furniture, scale: number) {
-    const isWall = isWallMounted(item.kind);
-    const b = pixels(itemBounds(item));
-    const shadow = FURNITURE[item.kind].solid && !isWall
-      ? this.add
-          .image(b.x + 1, b.y + 4, ensureShadowTexture(this, item, scale))
-          .setOrigin(0)
-          .setScale(1 / scale)
-          .setDepth(DEPTH.shadow)
-      : undefined;
-    const key = ensureFurnitureTexture(this, item, scale);
-    const pos = furnitureCenter(item);
-    const image = this.add
-      .image(pos.x, pos.y, key)
-      .setScale(1 / scale)
-      .setRotation(isWall ? 0 : Phaser.Math.DegToRad(item.rotation ?? 0))
-      .setDepth(furnitureDepth(item, this.opts.layout.walls))
-      .setData('furnitureId', item.id);
-    this.sprites.set(item.id, { image, shadow, key });
-    if (isWall) {
-      const art = wallArtSize(item);
-      const wall = mountWall(item, this.opts.layout.walls);
-      const base = wall ? faceBase(wall) : null;
-      const basePx = (base ?? (item.y - item.h / 2)) * TILE;
-      const xa = item.x * TILE - art.w / 2;
-      const xb = item.x * TILE + art.w / 2;
-      this.wallMounted.push({ image, xa, xb, basePx });
-    }
+  private setupEventHandlers() {
+    const unsubLego = legoArt.subscribe((objectId) => {
+      this.furnitureSprites.updateLegoBoard(objectId);
+    });
+    this.events.once('shutdown', () => {
+      unsubLego();
+      this.viewControl.destroy();
+      this.wallFaces.destroy();
+      this.netSync.destroy();
+      this.furnitureSprites.destroy();
+      this.editMode?.destroy();
+      this.editMode = null;
+      this.proximity.clear();
+      this.interactions.destroy();
+      this.opts.onZone(null);
+      if (this.currentZone) officeEvents.emit('zone:leave', toEvent(this.currentZone));
+    });
   }
 
   private addCollider(group: Phaser.Physics.Arcade.StaticGroup, x: number, y: number, w: number, h: number) {
@@ -585,13 +620,13 @@ export class OfficeScene extends Phaser.Scene {
   /** A free spot around the entrance, so people arriving together don't stand on each other. */
   private arrivalPoint(layout: OfficeLayout) {
     const spawn = { x: layout.spawn.x * TILE, y: layout.spawn.y * TILE };
-    for (let attempt = 0; attempt < 20; attempt++) {
+    for (let attempt = 0; attempt < SPAWN_ATTEMPTS; attempt++) {
       const angle = Math.random() * Math.PI * 2;
       // Close to the door: two people arriving together are within earshot (< 3 tiles apart).
       const distance = TILE * (0.5 + Math.random() * 0.9);
       const x = spawn.x + Math.cos(angle) * distance;
       const y = spawn.y + Math.sin(angle) * distance * 0.6;
-      if (this.isFree(x, y) && y < layout.height * TILE - 4) return { x, y };
+      if (this.isFree(x, y) && y < layout.height * TILE - SPAWN_BOTTOM_MARGIN_PX) return { x, y };
     }
     return spawn;
   }
@@ -603,52 +638,10 @@ export class OfficeScene extends Phaser.Scene {
     const body = playerBody(x, y);
     return !this.obstacles.some((o) => overlapsRect(body, o)) && !this.roomLocks.blocks(body);
   }
-
-  /** People per meeting room, from everyone's reported zone (and ours). */
-  private refreshBadges() {
-    this.badgesDirty = false;
-    const counts = new Map<string, number>();
-    const add = (zone: string | null | undefined) => zone && counts.set(zone, (counts.get(zone) ?? 0) + 1);
-    for (const zone of this.netSync.remoteZones.values()) add(zone);
-    add(this.currentZone?.id);
-    this.badges.update(counts);
-  }
-
-  /** Emits zone:leave / zone:enter when the player's feet cross into a zone. */
-  private updateZone() {
-    if (this.player.x === this.lastZoneX && this.player.y === this.lastZoneY) return;
-    this.lastZoneX = this.player.x;
-    this.lastZoneY = this.player.y;
-    const px = this.player.x / TILE;
-    const py = this.player.y / TILE;
-    let zone: Zone | null = null;
-    for (const z of this.zones) {
-      if (px >= z.x && px < z.x + z.w && py >= z.y && py < z.y + z.h) {
-        zone = z;
-        break;
-      }
-    }
-    if (zone?.id === this.currentZone?.id) return;
-    if (this.currentZone) officeEvents.emit('zone:leave', toEvent(this.currentZone));
-    if (zone) officeEvents.emit('zone:enter', toEvent(zone));
-    this.currentZone = zone;
-    this.opts.onZone(zone?.id ?? null);
-    this.badgesDirty = true;
-  }
 }
 
 // (helpers)
 
 function toEvent(zone: Zone) {
   return { type: zone.type, id: zone.id, name: zone.name };
-}
-
-/** Desk id → its owner's character. */
-function ownersOf(desks: DeskOwner[]) {
-  return new Map(desks.filter((d) => d.character).map((d) => [d.deskId, d.character!]));
-}
-
-/** Desk id → how many open tasks its owner has. */
-function papersOf(desks: DeskOwner[], counts: ReadonlyMap<string, number>) {
-  return new Map(desks.map((d) => [d.deskId, counts.get(d.userId) ?? 0]));
 }
