@@ -7,7 +7,7 @@ import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { LayoutPreview } from '@/features/workspace/LayoutPreview';
 import type { MyWorkspace } from '@/features/workspace/types';
-import { numberedDesks } from '@/game/layout/derive';
+import { numberedDesks } from '@/game/layout/geometry';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { getErrorMessage, type OfficeTemplate } from './teamHelpers';

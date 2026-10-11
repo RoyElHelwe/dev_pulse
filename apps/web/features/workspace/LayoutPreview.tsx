@@ -2,7 +2,7 @@
 // Used in office template previews, minimaps, and layout cards.
 
 import { memo } from 'react';
-import { itemBounds } from '@/game/layout/derive';
+import { itemBounds } from '@/game/layout/geometry';
 import type { FurnitureKind, OfficeLayout } from '@/game/layout/types';
 import { cn } from '@/lib/cn';
 import { hexColor } from '@/lib/color';

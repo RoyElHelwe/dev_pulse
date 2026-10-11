@@ -1,3 +1,8 @@
+/**
+ * Core business logic for office workspaces, managing creation, layout
+ * updates, wings expansion, and template switches.
+ */
+
 import { randomBytes } from 'crypto';
 import { Injectable } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
@@ -13,6 +18,13 @@ import type { CreateWorkspaceDto, SwitchTemplateDto, UpdateLayoutDto, UpdateMeDt
 import { CAN_MANAGE, MembershipService } from './membership.service';
 import { WorkspaceEvents } from './workspace-events';
 
+const COORD_PRECISION = 100;
+const WING_SEED_BYTES = 4;
+const round = (n: number) => Math.round(n * COORD_PRECISION) / COORD_PRECISION;
+const concurrentSaveError = () =>
+  new FormError('LAYOUT_CHANGED', 'Someone else saved the office meanwhile. Reload to see their changes.');
+
+/** Manages workspace lifecycles, layout persistence, and office wing expansions. */
 @Injectable()
 export class WorkspaceService {
   constructor(
@@ -40,7 +52,7 @@ export class WorkspaceService {
     return this.mine(userId);
   }
 
-  /** Everything the office page needs. */
+  /** Retrieves workspace details, layout state, member permissions, and desk allocations. */
   async mine(userId: string) {
     let member = await this.membership.require(userId);
     // No desk yet (offices created before desks existed, or a desk freed up since): try again.
@@ -76,6 +88,7 @@ export class WorkspaceService {
     };
   }
 
+  /** Renames the workspace for managers and returns updated office details. */
   async rename(userId: string, name: string) {
     const member = await this.membership.require(userId, CAN_MANAGE);
     await this.prisma.workspace.update({ where: { id: member.workspaceId }, data: { name } });
@@ -92,12 +105,7 @@ export class WorkspaceService {
     this.events.emit({ type: 'deleted', workspaceId: member.workspaceId });
   }
 
-  /**
-   * Owner: move the whole office to another template (or back to the original
-   * furniture of the same one). The generated office is made for `teamSize`, or
-   * for the people already in it. Everyone gets the new office live; desks are
-   * handed out again in joining order.
-   */
+  /** Switches the workspace template, rebuilding layout and reassigning member desks. */
   async switchTemplate(userId: string, dto: SwitchTemplateDto) {
     const member = await this.membership.require(userId, ['OWNER']);
     const current = member.workspace;
@@ -136,7 +144,7 @@ export class WorkspaceService {
     return this.mine(userId);
   }
 
-  /** Your character and status in the office (both shown to everyone, live). */
+  /** Updates the calling user's avatar character and status message. */
   async updateMe(userId: string, dto: UpdateMeDto) {
     const member = await this.membership.require(userId);
     const status = dto.status === undefined ? undefined : dto.status || null;
@@ -148,16 +156,12 @@ export class WorkspaceService {
     return { character: updated.character, status: updated.status };
   }
 
-  /**
-   * Saves the office editor's changes: furniture and room names only, so the
-   * walls and rooms of the template can't be broken. Refused if the office
-   * no longer works (see validateLayout) or someone else saved in between.
-   */
+  /** Applies furniture position and room name updates while preserving structural walls. */
   async updateLayout(userId: string, dto: UpdateLayoutDto) {
     const member = await this.membership.require(userId, CAN_MANAGE);
     const current = member.workspace;
     if (dto.version !== current.layoutVersion) {
-      throw new FormError('LAYOUT_CHANGED', 'Someone else saved the office meanwhile. Reload to see their changes.');
+      throw concurrentSaveError();
     }
     const ids = new Set(dto.furniture.map((f) => f.id));
     if (ids.size !== dto.furniture.length) throw new FormError('DUPLICATE_ID', 'Two pieces of furniture have the same id.');
@@ -190,7 +194,7 @@ export class WorkspaceService {
       data: { layout: layout as unknown as Prisma.InputJsonValue, layoutVersion: { increment: 1 } },
     });
     if (count !== 1) {
-      throw new FormError('LAYOUT_CHANGED', 'Someone else saved the office meanwhile. Reload to see their changes.');
+      throw concurrentSaveError();
     }
     const version = current.layoutVersion + 1;
     this.events.emit({ type: 'layout', workspaceId: current.id, layout, version, by: userId });
@@ -208,9 +212,13 @@ export class WorkspaceService {
     return this.applyWing(userId, dto, true);
   }
 
-  private async applyWing(userId: string, dto: WingDto, isChill: boolean) {
-    const member = await this.membership.require(userId, CAN_MANAGE);
-    const current = member.workspace;
+  /** Checks template suitability, chill room presence, and layout version match. */
+  private assertCanAddWing(
+    current: { templateId: string; layout: unknown; layoutVersion: number; version?: number },
+    isChill: boolean,
+    version?: number,
+  ) {
+    const expectedVersion = version ?? current.version;
     const currentLayout = current.layout as unknown as OfficeLayout;
     if (!isChill && current.templateId !== 'loft') {
       throw new FormError('WINGS_UNSUPPORTED', 'Only the Loft office can be expanded.');
@@ -218,31 +226,44 @@ export class WorkspaceService {
     if (isChill && currentLayout.rooms?.some((r) => r.kind === 'chill')) {
       throw new FormError('CHILL_EXISTS', 'This office already has a chill room.');
     }
-    if (dto.version !== current.layoutVersion) {
+    if (expectedVersion !== undefined && expectedVersion !== current.layoutVersion) {
       throw new FormError('LAYOUT_CHANGED', 'The office was changed meanwhile. Reload the page and try again.');
     }
-    const existing = await this.prisma.officeWing.findMany({ where: { workspaceId: current.id } });
-    const seed = randomBytes(4).toString('hex');
-    const index = existing.length + 1;
+  }
 
-    let result: WingResult;
+  /** Generates procedural rooms and furniture for an attached wing or maps domain errors. */
+  private generateWing(
+    currentLayout: OfficeLayout,
+    side: WingDto['side'],
+    seed: string,
+    index: number,
+    isChill: boolean,
+  ): WingResult {
     try {
-      result = addWing(
+      return addWing(
         currentLayout,
-        dto.side,
+        side,
         seed,
         index,
         isChill ? { special: 'chill' } : undefined,
       );
     } catch (err) {
-      const e = err as any;
-      if (e instanceof WingError || e?.code === 'NO_DOOR' || e?.code === 'WING_INVALID') {
-        throw new FormError(e.code, e.message, 'side');
+      if (err instanceof WingError) {
+        throw new FormError(err.code, err.message, 'side');
       }
       throw err;
     }
+  }
 
+  /** Persists layout changes, shifts existing wings, and records the new wing in a transaction. */
+  private async saveWing(
+    current: { id: string; layoutVersion: number },
+    result: WingResult,
+    side: WingDto['side'],
+    seed: string,
+  ): Promise<void> {
     await this.prisma.$transaction(async (tx) => {
+      // WHY: updateMany with layoutVersion in the where ensures only one concurrent save wins
       const { count } = await tx.workspace.updateMany({
         where: { id: current.id, layoutVersion: current.layoutVersion },
         data: {
@@ -253,6 +274,7 @@ export class WorkspaceService {
       if (count !== 1) {
         throw new FormError('LAYOUT_CHANGED', 'The office was changed meanwhile. Reload the page and try again.');
       }
+      // WHY: a LEFT wing moves everything east so earlier wings' stored coordinates must move too
       if (result.shift.x !== 0 || result.shift.y !== 0) {
         await tx.officeWing.updateMany({
           where: { workspaceId: current.id },
@@ -262,15 +284,32 @@ export class WorkspaceService {
           },
         });
       }
+      // WHY: the seed is random per wing and stored so the wing can be reproduced
       await tx.officeWing.create({
         data: {
           workspaceId: current.id,
-          side: dto.side,
+          side,
           seed,
           ...result.wing,
         },
       });
     });
+  }
+
+  private async applyWing(userId: string, dto: WingDto, isChill: boolean) {
+    const member = await this.membership.require(userId, CAN_MANAGE);
+    const current = member.workspace;
+    const currentLayout = current.layout as unknown as OfficeLayout;
+
+    this.assertCanAddWing(current, isChill, dto.version);
+
+    const existing = await this.prisma.officeWing.findMany({ where: { workspaceId: current.id } });
+    const seed = randomBytes(WING_SEED_BYTES).toString('hex');
+    const index = existing.length + 1;
+
+    const result = this.generateWing(currentLayout, dto.side, seed, index, isChill);
+
+    await this.saveWing(current, result, dto.side, seed);
 
     const version = current.layoutVersion + 1;
     this.events.emit({
@@ -285,4 +324,3 @@ export class WorkspaceService {
   }
 }
 
-const round = (n: number) => Math.round(n * 100) / 100;

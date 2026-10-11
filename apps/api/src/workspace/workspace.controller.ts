@@ -1,3 +1,8 @@
+/**
+ * REST controller exposing endpoints for workspace configuration, layout
+ * management, member settings, and desk assignments.
+ */
+
 import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Put } from '@nestjs/common';
 import { IsIn, IsString, MaxLength } from 'class-validator';
 import type { AuthUser } from '../common/auth/auth-user';
@@ -7,18 +12,22 @@ import { DesksService } from './desks.service';
 import { MembersService } from './members.service';
 import { WorkspaceService } from './workspace.service';
 
+const MAX_CONFIRM_NAME_LENGTH = 60;
+
+/** Payload specifying an updated member role. */
 class RoleDto {
   @IsIn(['ADMIN', 'MEMBER'])
   role: 'ADMIN' | 'MEMBER';
 }
 
+/** Confirmation payload requiring the exact office name before deletion. */
 class DeleteWorkspaceDto {
   @IsString()
-  @MaxLength(60)
+  @MaxLength(MAX_CONFIRM_NAME_LENGTH)
   confirmName: string;
 }
 
-/** "My workspace": every user belongs to at most one. */
+/** Exposes HTTP endpoints for managing workspace resources, layouts, and members. */
 @Controller('workspace')
 export class WorkspaceController {
   constructor(
@@ -102,3 +111,4 @@ export class WorkspaceController {
     return this.members.remove(user.id, target);
   }
 }
+

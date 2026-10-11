@@ -3,7 +3,7 @@ import { drawDesk } from '../art/desk';
 import { phaserPen } from '../art/pen';
 import { recipeOf } from '../art/recipe';
 import { TILE } from '../constants';
-import { itemBounds } from '../layout/derive';
+import { itemBounds } from '../layout/geometry';
 import { isWallMounted } from '../layout/mount';
 import type { Furniture } from '../layout/types';
 import { rr, seededRandom } from './draw';

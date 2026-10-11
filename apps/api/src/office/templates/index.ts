@@ -1,3 +1,6 @@
+// Registry of built-in and procedural office layout templates.
+// Exposes predefined configurations for different team sizes.
+
 import type { OfficeLayout } from '../layout/types';
 import { campus } from './campus';
 import { generatedOffice } from './generated';
@@ -5,7 +8,8 @@ import { hq } from './hq';
 import { loft } from './loft';
 import { studio } from './studio';
 
-export interface OfficeTemplate {
+/** Office template descriptor defining metadata and layout builder function. */
+interface OfficeTemplate {
   id: string;
   name: string;
   description: string;
@@ -19,6 +23,7 @@ export interface OfficeTemplate {
 /** Team size used when none is given (previews, the art lab). */
 export const DEFAULT_TEAM = 12;
 
+/** Available office templates for workspace creation and layout switching. */
 export const TEMPLATES: OfficeTemplate[] = [
   {
     id: 'generated',
@@ -34,6 +39,7 @@ export const TEMPLATES: OfficeTemplate[] = [
   { id: 'hq', name: 'Headquarters', description: 'A whole floor: four meeting rooms, a long lounge with two chill corners and 100 desks.', minTeam: 40, maxTeam: 100, build: hq },
 ];
 
+/** Looks up an office template by its unique identifier. */
 export function findTemplate(id: string) {
   return TEMPLATES.find((t) => t.id === id);
 }

@@ -1,7 +1,8 @@
 import type * as Phaser from 'phaser';
 import { officeEvents } from '@/features/office/events';
 import { TILE } from '../constants';
-import { deriveZones, itemBounds, numberedDesks, type Rect, seatPoint } from '../layout/derive';
+import { deriveZones } from '../layout/derive';
+import { itemBounds, numberedDesks, type Rect, seatPoint } from '../layout/geometry';
 import type { OfficeLayout } from '../layout/types';
 import { Bubble } from '../objects/Bubble';
 import type { DeskOwner } from '../objects/DeskPlates';

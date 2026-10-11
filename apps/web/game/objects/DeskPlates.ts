@@ -1,6 +1,6 @@
 import type * as Phaser from 'phaser';
 import { TILE } from '../constants';
-import { numberedDesks, seatPoint } from '../layout/derive';
+import { numberedDesks, seatPoint } from '../layout/geometry';
 import type { OfficeLayout } from '../layout/types';
 import { Bubble } from './Bubble';
 

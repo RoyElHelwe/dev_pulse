@@ -1,7 +1,6 @@
-// The office layout, loaded from the API (GET /api/workspace). Same shape as
-// apps/api/src/office/layout/types.ts (keep both in sync). Units are tiles.
+// Mirror of apps/api/src/office/layout/types.ts (plus web-only Zone types): change both together.
 
-export type FloorKind = 'oak' | 'carpet' | 'terrazzo';
+type FloorKind = 'oak' | 'carpet' | 'terrazzo';
 
 /** Meeting rooms and lounges become zones (voice calls, chill room...). */
 export type RoomKind = 'open' | 'meeting' | 'lounge' | 'chill';

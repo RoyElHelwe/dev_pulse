@@ -1,15 +1,22 @@
+/**
+ * Startup service that checks existing workspace layouts and migrates
+ * legacy wall-mounted furniture to conform to updated wall alignment rules.
+ */
+
 import { Injectable, Logger, type OnModuleInit } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { migrateWallMounted } from '../office/layout/migrate';
 import type { OfficeLayout } from '../office/layout/types';
 
+/** Runs on module initialization to fix unaligned wall-mounted furniture across workspaces. */
 @Injectable()
 export class LayoutMigrationService implements OnModuleInit {
   private readonly logger = new Logger(LayoutMigrationService.name);
 
   constructor(private readonly prisma: PrismaService) {}
 
+  /** Migrates unaligned wall-mounted furniture across all workspaces on application startup. */
   async onModuleInit() {
     try {
       if (!this.prisma?.workspace?.findMany) return;
@@ -37,3 +44,4 @@ export class LayoutMigrationService implements OnModuleInit {
     }
   }
 }
+

@@ -11,7 +11,7 @@ import {
   PLAYER_BODY_WIDTH_PX,
   TILE,
 } from '../constants';
-import type { Rect } from '../layout/derive';
+import type { Rect } from '../layout/geometry';
 import type { OfficeLayout } from '../layout/types';
 
 /** Converts a bounding box in grid tiles to world pixel coordinates. */

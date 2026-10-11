@@ -1,11 +1,12 @@
-// The office layout, stored as JSON on the workspace. Same shape as
-// apps/web/game/layout/types.ts (keep both in sync). Units are tiles (32 px).
+// Mirror of apps/web/game/layout/types.ts, which also holds web-only Zone types.
+// The office layout data structures stored as JSON on the workspace. Units are tiles (32 px).
 
-export type FloorKind = 'oak' | 'carpet' | 'terrazzo';
+type FloorKind = 'oak' | 'carpet' | 'terrazzo';
 
 /** Meeting rooms and lounges become zones in the game (voice, chill room...). */
-export type RoomKind = 'open' | 'meeting' | 'lounge' | 'chill';
+type RoomKind = 'open' | 'meeting' | 'lounge' | 'chill';
 
+/** Defined room or zone within the office building. */
 export interface Room {
   id: string;
   name: string;
@@ -18,6 +19,7 @@ export interface Room {
   color?: number;
 }
 
+/** Structural wall boundary with rendering and collision properties. */
 export interface Wall {
   x1: number;
   y1: number;
@@ -27,6 +29,7 @@ export interface Wall {
   face?: boolean;
 }
 
+/** Catalog of supported furniture item kinds. */
 export const FURNITURE_KINDS = [
   'desk',
   'chair',
@@ -51,8 +54,10 @@ export const FURNITURE_KINDS = [
   'legoBoard',
 ] as const;
 
+/** Specific kind of furniture item. */
 export type FurnitureKind = (typeof FURNITURE_KINDS)[number];
 
+/** Placed furniture item within the office layout. */
 export interface Furniture {
   id: string;
   kind: FurnitureKind;
@@ -65,6 +70,7 @@ export interface Furniture {
   color?: number;
 }
 
+/** Full office layout specification including dimensions, rooms, walls, and furniture. */
 export interface OfficeLayout {
   width: number;
   height: number;

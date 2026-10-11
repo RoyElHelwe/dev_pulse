@@ -1,3 +1,8 @@
+/**
+ * NestJS module wiring workspace controllers, services, desk tracking,
+ * and layout migration for the application.
+ */
+
 import { Global, Module } from '@nestjs/common';
 import { DesksService } from './desks.service';
 import { LayoutMigrationService } from './layout-migration.service';
@@ -7,6 +12,7 @@ import { WorkspaceController } from './workspace.controller';
 import { WorkspaceEvents } from './workspace-events';
 import { WorkspaceService } from './workspace.service';
 
+/** Configures dependency injection and exports shared workspace providers. */
 @Global()
 @Module({
   controllers: [WorkspaceController],
@@ -14,3 +20,4 @@ import { WorkspaceService } from './workspace.service';
   exports: [MembershipService, DesksService, WorkspaceEvents],
 })
 export class WorkspaceModule {}
+

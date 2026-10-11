@@ -5,7 +5,7 @@
 
 import * as Phaser from 'phaser';
 import { TILE } from '../constants';
-import { itemBounds } from '../layout/derive';
+import { itemBounds } from '../layout/geometry';
 import { faceBase, isWallMounted, mountWall } from '../layout/mount';
 import type { Furniture, OfficeLayout } from '../layout/types';
 import type { DeskOwner } from '../objects/DeskPlates';

@@ -18,7 +18,8 @@ import {
 } from '../constants';
 import { EditMode } from '../editor/EditMode';
 import type { LayoutEditor } from '../editor/LayoutEditor';
-import { deriveZones, itemBounds, type Rect } from '../layout/derive';
+import { deriveZones } from '../layout/derive';
+import { itemBounds, type Rect } from '../layout/geometry';
 import type { OfficeLayout, Zone } from '../layout/types';
 import { Avatar, beginTextureBudget, type Direction } from '../objects/Avatar';
 import { DeskPlates, type DeskOwner } from '../objects/DeskPlates';

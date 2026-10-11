@@ -1,9 +1,7 @@
-import type { Furniture, FurnitureKind, Wall } from './types';
+// Mirror of apps/api/src/office/layout/mount.ts: change both together, byte-identical on purpose.
+// Wall-mounted kinds hang on the tall south-facing face of a solid horizontal wall instead of standing on the floor.
 
-// Wall-mounted kinds hang on the tall south-facing face of a solid horizontal wall
-// instead of standing on the floor. Their 'footprint' (w x h) is a thin strip on the
-// floor right in front of the wall, flush with its base line; the art is drawn on the
-// face above it. Same file in apps/web/game/layout/mount.ts and apps/api/src/office/layout/mount.ts.
+import type { Furniture, FurnitureKind, Wall } from './types';
 
 export const WALL_MOUNTED: ReadonlySet<FurnitureKind> = new Set<FurnitureKind>(['tv', 'board', 'legoBoard']);
 export const isWallMounted = (kind: FurnitureKind) => WALL_MOUNTED.has(kind);

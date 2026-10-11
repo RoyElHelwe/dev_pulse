@@ -1,6 +1,10 @@
+// Layout migration utilities for legacy offices. Snaps wall-mounted items flush against
+// nearest valid solid walls or drops unmountable items.
+
 import { isWallMounted, mountWall, snapToWall } from './mount';
 import type { Furniture, OfficeLayout } from './types';
 
+/** Migrates legacy wall-mounted items to sit flush on wall faces, dropping items that cannot be mounted. */
 export function migrateWallMounted(layout: OfficeLayout): {
   layout: OfficeLayout;
   changed: boolean;

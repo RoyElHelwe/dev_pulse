@@ -1,4 +1,6 @@
-// Procedural office wing expansion: frames, plans, shared wall preparation, and door routing.
+// Grows the building by one wing on LEFT, RIGHT, or BOTTOM through six pipeline steps:
+// frame -> shift existing -> plan wing rooms/walls/furniture -> seal gaps ->
+// cut a 4-tile door in the shared wall at the position removing least furniture -> validate.
 
 import type { Furniture, OfficeLayout, Room, Wall } from './types';
 import { validateLayout } from './validate';
@@ -18,33 +20,44 @@ import {
   type AddWingOptions,
   type Span,
   WingError,
-  type WingInfo,
   type WingPlan,
   type WingResult,
   type WingSide,
 } from './wings.types';
 
-export type { WingSide, WingInfo, WingResult, AddWingOptions } from './wings.types';
+export type { WingSide, WingResult, AddWingOptions } from './wings.types';
 export { WingError } from './wings.types';
 
+/** Bounding box, shift offset, and shared wall coordinates for an attached wing. */
 interface WingFrame {
+  /** Depth of the newly added wing in tiles. */
   depth: number;
+  /** Shift applied to all existing layout coordinates. */
   shift: { x: number; y: number };
+  /** Total building width after attaching the wing. */
   newW: number;
+  /** Total building height after attaching the wing. */
   newH: number;
+  /** X origin of the new wing bounding box. */
   wingX: number;
+  /** Y origin of the new wing bounding box. */
   wingY: number;
+  /** Width of the new wing bounding box. */
   wingW: number;
+  /** Height of the new wing bounding box. */
   wingH: number;
+  /** Coordinate of the shared boundary between the existing office and the wing. */
   sharedCoord: number;
 }
 
+/** Computes the geometric frame, shift offset, and shared boundary for an attached wing. */
 function computeWingFrame(layout: OfficeLayout, side: WingSide): WingFrame {
   const isLeft = side === 'LEFT';
   const isRight = side === 'RIGHT';
   const isBottom = side === 'BOTTOM';
 
   const depth = isBottom ? BOTTOM_WING_DEPTH : SIDE_WING_DEPTH;
+  // Building origin is top-left (0, 0), so growing west moves existing content east by the wing depth.
   const shift = { x: isLeft ? depth : 0, y: 0 };
 
   return {
@@ -60,6 +73,7 @@ function computeWingFrame(layout: OfficeLayout, side: WingSide): WingFrame {
   };
 }
 
+/** Translates existing rooms, walls, and furniture coordinates by the given frame offset. */
 function shiftExisting(layout: OfficeLayout, shift: { x: number; y: number }) {
   const shiftedRooms: Room[] = layout.rooms.map((r) => ({
     ...r,
@@ -77,6 +91,7 @@ function shiftExisting(layout: OfficeLayout, shift: { x: number; y: number }) {
   return { shiftedRooms, shiftedWalls, shiftedFurniture };
 }
 
+/** Generates room layouts, walls, and furniture for the attached wing, prefixing furniture IDs with w<index>-. */
 function planWing(
   side: WingSide,
   isChill: boolean,
@@ -87,6 +102,7 @@ function planWing(
   look: WingLook,
   rand: () => number,
 ): WingPlan {
+  // Furniture IDs are prefixed with w<index>- across wing planners to ensure uniqueness across wings.
   if (isChill) {
     return planChillWing(side, index, layout.width, layout.height, frame.depth, frame.wingX, layout.rooms);
   }
@@ -96,6 +112,7 @@ function planWing(
   return planSideWing(side, index, layout.height, frame.depth, frame.wingX, look, rand);
 }
 
+/** Converts exterior walls to interior walls and seals gaps adjacent to extra rooms. */
 function prepareSharedWall(
   shiftedWalls: Wall[],
   side: WingSide,
@@ -131,6 +148,7 @@ function prepareSharedWall(
   }
 }
 
+/** Finds the optimal door position along the shared wall and splits walls around the opening. */
 function cutSharedDoor(
   side: WingSide,
   sharedCoord: number,
@@ -152,6 +170,7 @@ function cutSharedDoor(
   return { cutWalls, finalFurniture };
 }
 
+/** Combines shifted layout elements with new wing assets and validates the combined office. */
 function assembleAndValidate(
   layout: OfficeLayout,
   frame: WingFrame,
