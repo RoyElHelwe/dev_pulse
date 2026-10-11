@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { canDeleteTask, needsRebalance, RANK_GAP_MIN, rankBetween, taskKey, workspacePrefix } from './tasks.rules';
+import { canDeleteTask, needsRebalance, RANK_GAP_MIN, taskKey, workspacePrefix } from './tasks.rules';
 
 describe('workspacePrefix', () => {
   it('takes initials of multi-word names up to 4 characters', () => {
@@ -33,27 +33,6 @@ describe('taskKey', () => {
   it('combines prefix and task number', () => {
     expect(taskKey('DP', 1)).toBe('DP-1');
     expect(taskKey('ARC', 42)).toBe('ARC-42');
-  });
-});
-
-describe('rankBetween', () => {
-  it('calculates midpoint between before and after', () => {
-    expect(rankBetween(1, 2)).toBe(1.5);
-    expect(rankBetween(1.2, 1.4)).toBeCloseTo(1.3);
-  });
-
-  it('handles null before (top of list)', () => {
-    expect(rankBetween(null, 5)).toBe(4);
-    expect(rankBetween(null, 1)).toBe(0);
-  });
-
-  it('handles null after (bottom of list)', () => {
-    expect(rankBetween(5, null)).toBe(6);
-    expect(rankBetween(1, null)).toBe(2);
-  });
-
-  it('returns 1 when both before and after are null', () => {
-    expect(rankBetween(null, null)).toBe(1);
   });
 });
 

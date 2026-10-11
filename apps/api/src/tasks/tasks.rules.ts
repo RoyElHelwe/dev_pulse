@@ -43,19 +43,6 @@ export function taskKey(prefix: string, number: number): string {
   return `${prefix}-${number}`;
 }
 
-/**
- * Midpoint rank between two neighbours.
- * null before -> after - 1; null after -> before + 1; both null -> 1.
- * Mirror of `rankBetween` in apps/web/features/tasks/useBoardDrag.ts: the browser computes the dropped
- * card's rank (so the board feels instant) and the API stores it as sent; this copy is the tested reference.
- */
-export function rankBetween(before: number | null, after: number | null): number {
-  if (before === null && after === null) return 1;
-  if (before === null) return after! - 1;
-  if (after === null) return before! + 1;
-  return (before + after) / 2;
-}
-
 /** Only OWNER, ADMIN, or the reporter can delete a task. */
 export function canDeleteTask(role: Role, userId: string, reporterId: string): boolean {
   return role === 'OWNER' || role === 'ADMIN' || userId === reporterId;

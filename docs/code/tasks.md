@@ -70,7 +70,7 @@ Permission checks mirror standard Jira defaults:
 
 ### Rank Algorithm & Rebalancing
 Cards within each status column are ordered by `rank ASC, createdAt ASC`.
-- **Midpoint Formula (`rankBetween`)**:
+- **Midpoint Ranking**: The client (`useBoardDrag.ts`) picks a rank between its neighbours with the same midpoint idea:
   - Dropped into empty column: `1.0`.
   - Dropped at top above card $B$: `B.rank - 1.0`.
   - Dropped at bottom below card $A$: `A.rank + 1.0`.
@@ -79,9 +79,9 @@ Cards within each status column are ordered by `rank ASC, createdAt ASC`.
   1. Column has Card A (`rank = 1.0`) and Card B (`rank = 2.0`).
   2. Drop Card C between A and B: `rank = (1.0 + 2.0) / 2 = 1.5`.
   3. Drop Card D between A and C: `rank = (1.0 + 1.5) / 2 = 1.25`.
-  The browser (`useBoardDrag.ts`) computes this rank immediately upon drop for zero-latency optimistic movement and sends `PATCH /workspace/tasks/:id` with `{ status, rank: 1.25 }`.
+  The client (`useBoardDrag.ts`) computes this rank immediately upon drop for zero-latency optimistic movement and sends `PATCH /workspace/tasks/:id` with `{ status, rank: 1.25 }`.
 - **Status Change Without Rank**: If a card changes status without an explicit rank (e.g. via edit dialog status dropdown), `endOfColumnRank()` calculates `MAX(rank) + 1` (or `1.0`), placing it at the bottom.
-- **Rebalance**: Repeated midpoints in the same slot halve the gap. If `Math.abs(rankA - rankB) < RANK_GAP_MIN` (`1e-6`), `rebalanceColumnIfCrowded()` queries the column ordered by `rank asc, createdAt asc`, renumbers cards sequentially `1..n` (`rank = i + 1`), and broadcasts `task:updated` for every card in that column.
+- **Server Storage & Rebalancing**: The server stores the rank as sent and renumbers a column when the gap falls below `RANK_GAP_MIN` (`1e-6`) using `rebalanceColumnIfCrowded()`. Repeated midpoints in the same slot halve the gap; when `Math.abs(rankA - rankB) < RANK_GAP_MIN`, `rebalanceColumnIfCrowded()` queries the column ordered by `rank asc, createdAt asc`, renumbers cards sequentially `1..n` (`rank = i + 1`), and broadcasts `task:updated` for every card in that column.
 
 ### Update Flow
 
@@ -137,7 +137,7 @@ Tasks remain intact and unassigned rather than deleted.
 ## Why it's built this way
 
 - **Fractional Midpoint Ranking vs. Integer Ordering**: Midpoints allow inserting cards with a single row update (`O(1)`), avoiding rewriting ranks across the entire column (`O(N)` updates and severe DB lock contention during concurrent drags).
-- **Client-Calculated Rank vs. Server-Only Placement**: The browser computes `rankBetween` in `useBoardDrag.ts` so the board renders optimistic position shifts with zero latency before backend confirmation.
+- **Client-Calculated Rank vs. Server-Only Placement**: The browser computes ranks using `useBoardDrag.ts` so the board renders optimistic position shifts with zero latency before backend confirmation; the server stores the rank and runs `rebalanceColumnIfCrowded()` when the gap falls below `RANK_GAP_MIN`.
 - **Advisory Lock vs. Table Locks or Global Sequences**: `pg_advisory_xact_lock` using workspace hash serializes creation per workspace only. Other workspaces are completely unaffected, unlike global table locks (`LOCK TABLE`).
 - **1e-6 Rebalance Threshold vs. Eager Normalization**: `1e-6` is well above IEEE 754 precision limits (~1e-16 relative), avoiding collision while keeping expensive column-wide renumbers and multi-card socket broadcasts exceedingly rare.
 - **Office Gateway Integration vs. Separate WebSocket Connection**: Tasks share the existing `/office` socket room, preventing duplicate connections and keeping desk paper counters synchronized with the board.
@@ -164,13 +164,12 @@ To maintain consistency, pure rules must stay decoupled from NestJS/Prisma in `t
 ## Tests
 
 - **Test Files**:
-  - Pure rules: `apps/api/src/tasks/tasks.rules.spec.ts` (14 unit tests)
+  - Pure rules: `apps/api/src/tasks/tasks.rules.spec.ts` (10 unit tests)
   - Service orchestration: `apps/api/src/tasks/tasks.service.spec.ts` (5 unit tests)
 - **Command**: Run inside container via `docker compose exec api pnpm test src/tasks` (or `vitest run src/tasks` inside `apps/api`).
 - **Coverage**:
   - `workspacePrefix`: multi-word acronyms, single-word prefixes, short words, symbol fallbacks.
   - `taskKey`: combination of prefix and sequential number.
-  - `rankBetween`: midpoint math, empty list fallback, head insertion, tail insertion.
   - `canDeleteTask`: permission matrix for OWNER, ADMIN, reporter, and regular member.
   - `needsRebalance`: gap threshold checks around `RANK_GAP_MIN` (`1e-6`).
   - `create`: assignee membership validation in workspace.
