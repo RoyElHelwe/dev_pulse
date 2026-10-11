@@ -1,3 +1,8 @@
+/**
+ * WebRTC signalling gateway for spatial and room-based voice chat.
+ * Authenticated on the /office namespace to relay peer connection offers and track mute states.
+ */
+
 import {
   ConnectedSocket,
   MessageBody,
@@ -25,25 +30,12 @@ interface VoiceState {
   socketId: string;
 }
 
-/** An offer with its ICE candidates is a few KB; anything bigger is not a signal. */
+/** Maximum payload size for SDP offer/answer or ICE candidate batch in bytes. */
 const MAX_SIGNAL_BYTES = 16_000;
+/** Maximum WebRTC signalling messages allowed per second per socket to prevent negotiation storms. */
 const MAX_SIGNALS_PER_SECOND = 50;
 
-/**
- * Voice: relays WebRTC signaling between two people of the same office, only when
- * the server itself agrees they can hear each other (same room, close enough or in
- * a meeting room, attendees while it's booked), and shares who is muted.
- *
- * Runs on the /office namespace: the OfficeGateway middleware has already
- * authenticated the socket and set `socket.data`.
- *
- * Events:
- * - `rtc:signal { to, data }` → `rtc:signal { from, data }` to the tab `to` joined voice
- *   with, or `rtc:refused { to }` back when they may not talk or aren't in voice.
- * - `voice:state { muted, deafened }` (joined voice / changed) → `office:voice [userId, muted, deafened]`.
- * - `voice:leave` or the tab closing → `office:voice [userId, null, null]`.
- * - `voice:states` (with ack) → `[userId, muted, deafened][]` of everyone in voice.
- */
+/** Relays WebRTC signalling and tracks mute/deafen states between office members within audible range. */
 @WebSocketGateway({ namespace: '/office' })
 export class VoiceGateway implements OnGatewayDisconnect {
   /** workspaceId → userId → state, for people in voice. */
@@ -60,9 +52,11 @@ export class VoiceGateway implements OnGatewayDisconnect {
     if (!me?.userId || !this.withinBudget(me) || !body || typeof body !== 'object') return;
     const { to, data } = body as { to?: unknown; data?: unknown };
     if (typeof to !== 'string' || to === me.userId || !data || typeof data !== 'object') return;
+    // An offer with its ICE candidates is only a few KB; reject oversized payloads to mitigate DoS.
     if (JSON.stringify(data).length > MAX_SIGNAL_BYTES) return;
-    // Only the tab that joined voice answers (two tabs answering would break the call).
+    // Deliver signalling strictly to the specific tab in voice; multi-tab routing corrupts WebRTC peer states.
     const target = this.states.get(me.workspaceId)?.get(to);
+    // Server enforces proximity before relaying signals to prevent eavesdropping across boundaries.
     if (!target || !(await this.mayTalk(me.workspaceId, me.userId, to))) return void socket.emit('rtc:refused', { to });
     this.office.sendToSocket(target.socketId, 'rtc:signal', { from: me.userId, data });
   }
@@ -121,7 +115,7 @@ export class VoiceGateway implements OnGatewayDisconnect {
     if (!withinEarshot(spotA, spotB)) return false;
     const room = spotA!.room;
     if (room?.kind !== 'meeting') return true;
-    // Can't tell who is invited (database down): nobody talks there for now.
+    // Fail safe on database error: treat room as closed so uninvited participants cannot listen.
     const booking = await this.meetings.activeBooking(workspaceId, room.id).catch(() => ({ attendeeIds: [] }));
     return bookingAllows(booking, a, b);
   }

@@ -1,6 +1,6 @@
 /**
- * Dev/test only: HTTP routes of the dev identity switcher (/auth/dev/*). Never active in
- * production because DevModule is only loaded when DEV_LOGIN=true outside production.
+ * Dev/test HTTP controller for identity switching.
+ * Exposes endpoints to list users, switch identity, and generate test users without passwords or 2FA outside production.
  */
 import { Body, Controller, Get, HttpCode, Post, Req, Res } from '@nestjs/common';
 import type { Request, Response } from 'express';
@@ -12,9 +12,10 @@ import { AppConfig } from '../config/app-config';
 import { DevLoginDto, DevUserDto } from './dev.dto';
 import { DevService } from './dev.service';
 
-/** Dev identity switcher: list users, sign in as one, or create a throwaway user. */
+/** Dev identity switcher controller for rapid testing and persona switching. */
 @Controller('auth/dev')
 export class DevController {
+
   constructor(
     private readonly dev: DevService,
     private readonly config: AppConfig,

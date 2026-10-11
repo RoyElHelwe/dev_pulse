@@ -1,5 +1,7 @@
 'use client';
 
+// Modal dialog for viewing, rebinding, and resetting keyboard shortcuts across the app.
+
 import { useCallback, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Kbd } from '@/components/ui/Kbd';
@@ -36,6 +38,7 @@ export interface KeybindsModalProps {
   onClose: () => void;
 }
 
+/** Modal dialog allowing users to inspect, rebind, and reset application keybinds. */
 export function KeybindsModal({ open, onClose }: KeybindsModalProps) {
   const keybinds = useKeybinds();
   const [capturingAction, setCapturingAction] = useState<KeybindAction | null>(null);
@@ -137,69 +140,19 @@ export function KeybindsModal({ open, onClose }: KeybindsModalProps) {
   return (
     <Modal open={open} onClose={onClose} title="Keybinds" className="max-w-xl">
       <div className="mt-4 divide-y divide-zinc-100">
-        {KEYBIND_ACTIONS.map((action) => {
-          const { label, hint } = KEYBIND_LABELS[action];
-          const code = keybinds[action];
-          const isCapturing = capturingAction === action;
-          const isConflicted = conflict?.action === action;
-          const error = rowError?.action === action ? rowError.error : null;
-
-          return (
-            <div key={action} className="py-2.5">
-              <div className="flex items-center justify-between gap-4">
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-zinc-900">{label}</p>
-                  <p className="text-xs text-zinc-500">{hint}</p>
-                </div>
-                <div className="shrink-0">
-                  {isCapturing ? (
-                    <span className="text-xs font-medium text-emerald-600 animate-pulse">
-                      Press a key… (Esc to cancel)
-                    </span>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => startCapturing(action)}
-                      className="rounded p-0.5 hover:ring-2 hover:ring-emerald-500/20 focus-visible:outline-2 focus-visible:outline-emerald-500"
-                      aria-label={`Change shortcut for ${label}, currently ${keyName(code)}`}
-                    >
-                      <Kbd>{keyName(code)}</Kbd>
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {isConflicted && conflict && (
-                <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-900">
-                  <span>
-                    <strong className="font-semibold">{keyName(conflict.code)}</strong> is already used for{' '}
-                    <strong className="font-semibold">{KEYBIND_LABELS[conflict.other].label}</strong>.
-                  </span>
-                  <div className="flex items-center gap-1.5">
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      className="h-7 px-2.5 text-xs"
-                      onClick={() => handleSwap(conflict)}
-                    >
-                      Swap
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 px-2.5 text-xs"
-                      onClick={() => setConflict(null)}
-                    >
-                      Cancel
-                    </Button>
-                  </div>
-                </div>
-              )}
-
-              {error && <p className="mt-1 text-xs text-rose-600">{error}</p>}
-            </div>
-          );
-        })}
+        {KEYBIND_ACTIONS.map((action) => (
+          <KeybindRow
+            key={action}
+            action={action}
+            code={keybinds[action]}
+            isCapturing={capturingAction === action}
+            conflict={conflict?.action === action ? conflict : null}
+            error={rowError?.action === action ? rowError.error : null}
+            onStartCapturing={startCapturing}
+            onSwap={handleSwap}
+            onCancelConflict={() => setConflict(null)}
+          />
+        ))}
       </div>
 
       {generalError && <p className="mt-2 text-xs text-rose-600">{generalError}</p>}
@@ -211,5 +164,85 @@ export function KeybindsModal({ open, onClose }: KeybindsModalProps) {
         </Button>
       </div>
     </Modal>
+  );
+}
+
+interface KeybindRowProps {
+  action: KeybindAction;
+  code: string;
+  isCapturing: boolean;
+  conflict: { action: KeybindAction; code: string; other: KeybindAction } | null;
+  error: string | null;
+  onStartCapturing: (action: KeybindAction) => void;
+  onSwap: (conf: { action: KeybindAction; code: string; other: KeybindAction }) => void;
+  onCancelConflict: () => void;
+}
+
+function KeybindRow({
+  action,
+  code,
+  isCapturing,
+  conflict,
+  error,
+  onStartCapturing,
+  onSwap,
+  onCancelConflict,
+}: KeybindRowProps) {
+  const { label, hint } = KEYBIND_LABELS[action];
+
+  return (
+    <div className="py-2.5">
+      <div className="flex items-center justify-between gap-4">
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-zinc-900">{label}</p>
+          <p className="text-xs text-zinc-500">{hint}</p>
+        </div>
+        <div className="shrink-0">
+          {isCapturing ? (
+            <span className="text-xs font-medium text-emerald-600 animate-pulse">
+              Press a key… (Esc to cancel)
+            </span>
+          ) : (
+            <button
+              type="button"
+              onClick={() => onStartCapturing(action)}
+              className="rounded p-0.5 hover:ring-2 hover:ring-emerald-500/20 focus-visible:outline-2 focus-visible:outline-emerald-500"
+              aria-label={`Change shortcut for ${label}, currently ${keyName(code)}`}
+            >
+              <Kbd>{keyName(code)}</Kbd>
+            </button>
+          )}
+        </div>
+      </div>
+
+      {conflict && (
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-900">
+          <span>
+            <strong className="font-semibold">{keyName(conflict.code)}</strong> is already used for{' '}
+            <strong className="font-semibold">{KEYBIND_LABELS[conflict.other].label}</strong>.
+          </span>
+          <div className="flex items-center gap-1.5">
+            <Button
+              variant="secondary"
+              size="sm"
+              className="h-7 px-2.5 text-xs"
+              onClick={() => onSwap(conflict)}
+            >
+              Swap
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2.5 text-xs"
+              onClick={onCancelConflict}
+            >
+              Cancel
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {error && <p className="mt-1 text-xs text-rose-600">{error}</p>}
+    </div>
   );
 }

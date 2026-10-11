@@ -1,5 +1,7 @@
 'use client';
 
+// Tab navigation bar for the user settings section.
+
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/cn';

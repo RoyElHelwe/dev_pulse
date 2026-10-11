@@ -1,3 +1,5 @@
+// Frosted-glass container card used for game and office floating overlays.
+
 import type { ComponentProps } from 'react';
 import { cn } from '@/lib/cn';
 

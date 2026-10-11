@@ -1,3 +1,5 @@
+// Accessible circular icon button component requiring an accessible label.
+
 import type { ComponentProps } from 'react';
 import { cn } from '@/lib/cn';
 
@@ -14,6 +16,7 @@ export function iconButtonStyles(className?: string) {
   );
 }
 
+/** Circular icon button requiring an aria-label for accessibility. */
 export function IconButton({ className, type = 'button', ...props }: IconButtonProps) {
   return <button type={type} title={props['aria-label']} className={iconButtonStyles(className)} {...props} />;
 }

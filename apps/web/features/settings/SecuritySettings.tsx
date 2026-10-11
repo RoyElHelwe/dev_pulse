@@ -1,5 +1,7 @@
 'use client';
 
+// Composite settings view combining account info, 2FA, password, and active sessions.
+
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import { useAuth } from '@/features/auth/AuthProvider';
@@ -8,6 +10,7 @@ import { PasswordCard } from './PasswordCard';
 import { SessionsCard } from './SessionsCard';
 import { TwoFactorCard } from './TwoFactorCard';
 
+/** Composite settings view for user account security controls. */
 export function SecuritySettings() {
   const { status, user } = useAuth();
   const router = useRouter();

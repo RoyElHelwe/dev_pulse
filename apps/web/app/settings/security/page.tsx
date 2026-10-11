@@ -1,8 +1,11 @@
+// Security settings page for password updates, two-factor auth, and device sessions.
+
 import type { Metadata } from 'next';
 import { SecuritySettings } from '@/features/settings/SecuritySettings';
 
 export const metadata: Metadata = { title: 'Security · Dev Pulse' };
 
+/** Security settings page rendering authentication and session controls. */
 export default function SecurityPage() {
   return (
     <>

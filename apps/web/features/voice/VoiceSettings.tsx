@@ -1,5 +1,8 @@
 'use client';
 
+// User settings view for configuring voice transmission mode (Open mic vs Push-to-talk).
+// Fits into the /settings/voice route to persist microphone preferences to the backend.
+
 import { Keyboard, Mic } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
@@ -18,7 +21,7 @@ const MODES: { mode: VoiceMode; title: string; text: string; Icon: typeof Mic }[
   { mode: 'PUSH_TO_TALK', title: 'Push to talk', text: 'Your mic is only on while you hold a key.', Icon: Keyboard },
 ];
 
-/** /settings/voice: open mic or push-to-talk, and which key. Saved at once. */
+/** Renders the voice preferences page for toggling transmission mode and binding PTT hotkeys. */
 export function VoiceSettings() {
   const { status, user } = useAuth();
   const router = useRouter();
@@ -49,7 +52,7 @@ export function VoiceSettings() {
     }
   }
 
-  // "Press a key": the next key pressed becomes the push-to-talk key (Escape cancels).
+  // Intercept the next keypress to rebind push-to-talk while ignoring Escape to allow cancelling.
   useEffect(() => {
     if (!picking) return;
     const pick = async (e: KeyboardEvent) => {

@@ -1,3 +1,7 @@
+/**
+ * Password lifecycle and security management service.
+ * Handles forgot password flows, token-based password reset, password changes, and immediate session invalidations.
+ */
 import { Injectable } from '@nestjs/common';
 import { FormError } from '../common/form-error';
 import { AppConfig } from '../config/app-config';
@@ -8,6 +12,7 @@ import type { ChangePasswordDto, ResetPasswordDto } from './dto/password.dto';
 import { EmailTokensService } from './email-tokens.service';
 import { TokensService } from './tokens.service';
 
+/** Service managing password reset tokens, password modification, and associated session revocations. */
 @Injectable()
 export class PasswordService {
   constructor(
@@ -18,7 +23,7 @@ export class PasswordService {
     private readonly config: AppConfig,
   ) {}
 
-  /** Sends a reset link. Same answer whether the account exists or not. */
+  /** Sends a reset link. Silently returns if user does not exist to prevent account enumeration. */
   async forgot(email: string) {
     const user = await this.prisma.user.findUnique({ where: { email } });
     if (!user) return;
@@ -36,9 +41,10 @@ export class PasswordService {
     const userId = await this.emailTokens.consume(dto.token, 'RESET_PASSWORD');
     const user = await this.prisma.user.update({
       where: { id: userId },
-      // Clicking the emailed link also proves the email address is theirs.
+      // Following the emailed token proves inbox ownership, so also mark the email verified.
       data: { passwordHash: await hashPassword(dto.password), emailVerifiedAt: new Date() },
     });
+    // Revoke all existing sessions to invalidate any unauthorized device after a password reset.
     await this.tokens.revokeAllSessions(userId, undefined, 'password_changed');
     await this.notifyChanged(user);
   }
@@ -53,6 +59,7 @@ export class PasswordService {
       }
     }
     await this.prisma.user.update({ where: { id: userId }, data: { passwordHash: await hashPassword(dto.newPassword) } });
+    // Revoke other device sessions while preserving the current active session.
     await this.tokens.revokeAllSessions(userId, sessionId, 'password_changed');
     await this.notifyChanged(user);
   }
@@ -68,3 +75,4 @@ export class PasswordService {
     });
   }
 }
+

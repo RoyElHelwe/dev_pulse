@@ -1,3 +1,5 @@
+// TypeScript type definitions for authentication payloads, user profiles, and session states.
+
 /** The signed-in user, as returned by GET /api/auth/me. */
 export interface User {
   id: string;

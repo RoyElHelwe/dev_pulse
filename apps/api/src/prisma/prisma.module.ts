@@ -1,3 +1,7 @@
+/**
+ * Prisma database module.
+ * Globally provides and exports the shared PrismaService client instance across the application.
+ */
 import { Global, Module } from '@nestjs/common';
 import { PrismaService } from './prisma.service';
 
@@ -7,4 +11,6 @@ import { PrismaService } from './prisma.service';
   providers: [PrismaService],
   exports: [PrismaService],
 })
+/** Global module providing database access via Prisma Client. */
 export class PrismaModule {}
+

@@ -1,5 +1,8 @@
 'use client';
 
+// Modal form for scheduling meeting room reservations and inviting attendees.
+// Fits into MeetingsPanel as the creation sub-view when empty time slots are selected.
+
 import { type FormEvent, useMemo, useState } from 'react';
 import { Alert } from '@/components/ui/Alert';
 import { Button } from '@/components/ui/Button';
@@ -9,6 +12,12 @@ import { TextField } from '@/components/ui/TextField';
 import type { Room } from '@/game/layout/types';
 import { api, ApiError } from '@/lib/api';
 import { atMinutes, clockOf, MAX_MINUTES, type Member, STEP_MINUTES } from './time';
+
+const MINUTES_PER_DAY = 24 * 60;
+const MAX_TITLE_LENGTH_CHARS = 80;
+const MEMBER_FILTER_THRESHOLD_COUNT = 8;
+
+const STEPS = Array.from({ length: MINUTES_PER_DAY / STEP_MINUTES + 1 }, (_, i) => i * STEP_MINUTES);
 
 interface BookingFormProps {
   rooms: Room[];
@@ -23,9 +32,7 @@ interface BookingFormProps {
   onBack(): void;
 }
 
-const STEPS = Array.from({ length: (24 * 60) / STEP_MINUTES + 1 }, (_, i) => i * STEP_MINUTES);
-
-/** New booking: title, room, start / end, who is invited. */
+/** Renders the booking creation form for selecting title, room, duration, and invited members. */
 export function BookingForm({ rooms, day, members, myId, onBooked, onBack, ...initial }: BookingFormProps) {
   const [title, setTitle] = useState('');
   const [roomId, setRoomId] = useState(initial.roomId);
@@ -43,8 +50,8 @@ export function BookingForm({ rooms, day, members, myId, onBooked, onBack, ...in
 
   const changeStart = (value: number) => {
     setStart(value);
-    // Keep the same length when possible.
-    setEnd(Math.min(value + Math.max(end - start, STEP_MINUTES), value + MAX_MINUTES, 24 * 60));
+    // Preserve existing booking duration when shifting start time, capped by maximum allowable minutes.
+    setEnd(Math.min(value + Math.max(end - start, STEP_MINUTES), value + MAX_MINUTES, MINUTES_PER_DAY));
   };
 
   const toggle = (id: string) =>
@@ -80,7 +87,15 @@ export function BookingForm({ rooms, day, members, myId, onBooked, onBack, ...in
 
   return (
     <form onSubmit={submit} className="flex flex-col gap-4 p-4">
-      <TextField label="Title" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={80} required autoFocus placeholder="Sprint planning" />
+      <TextField
+        label="Title"
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        maxLength={MAX_TITLE_LENGTH_CHARS}
+        required
+        autoFocus
+        placeholder="Sprint planning"
+      />
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <Select label="Room" value={roomId} onChange={(e) => setRoomId(e.target.value)}>
           {rooms.map((r) => (
@@ -109,7 +124,7 @@ export function BookingForm({ rooms, day, members, myId, onBooked, onBack, ...in
         <legend className="mb-1.5 text-sm font-medium text-zinc-800">
           People <span className="font-normal text-zinc-500">· only they can enter during the meeting</span>
         </legend>
-        {members.length > 8 && (
+        {members.length > MEMBER_FILTER_THRESHOLD_COUNT && (
           <input
             value={filter}
             onChange={(e) => setFilter(e.target.value)}

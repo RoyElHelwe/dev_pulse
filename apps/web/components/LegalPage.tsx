@@ -1,3 +1,5 @@
+// Page shell providing consistent layout and typography for legal documents.
+
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { Logo } from '@/components/ui/Logo';

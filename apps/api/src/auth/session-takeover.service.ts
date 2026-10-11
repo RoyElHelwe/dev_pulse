@@ -1,3 +1,7 @@
+/**
+ * Single-device session takeover workflow service.
+ * Implements account takeover protection via email links and browser-binding cookies when an account is active elsewhere.
+ */
 import { Injectable, Logger } from '@nestjs/common';
 import { timingSafeEqual } from 'node:crypto';
 import { FormError } from '../common/form-error';
@@ -10,19 +14,11 @@ import { EmailTokensService } from './email-tokens.service';
 import { type ClientInfo, TokensService } from './tokens.service';
 import { describeUserAgent } from './user-agent';
 
-/** Minimum time between two "close all sessions" emails for one account. */
-const COOLDOWN_MS = 60 * 1000;
+/** Cooldown prevents email spam if a user repeatedly clicks the takeover button. */
+const SESSION_TAKEOVER_COOLDOWN_MS = 60 * 1000;
 
 /**
- * "Your account is open on another device": closing every session by email.
- *
- * Who can do it, step by step:
- * 1. Asking for the email needs the takeover token, which is only given after
- *    a complete sign-in (password or OAuth, + 2FA). Knowing an email address
- *    is not enough, and the email always goes to the account's own address.
- * 2. Closing the sessions needs the emailed link (proves access to the inbox).
- *    It works once, for 15 minutes, and only in the browser that asked for it;
- *    in any other browser the account password is required as well.
+ * Service managing the email link workflow to close remote sessions when an account is active on another device.
  */
 @Injectable()
 export class SessionTakeoverService {
@@ -43,10 +39,11 @@ export class SessionTakeoverService {
     if (!user) throw new FormError('TAKEOVER_EXPIRED', 'This took too long. Please sign in again.');
 
     const last = await this.emailTokens.lastCreatedAt(user.id, 'CLOSE_SESSIONS');
-    if (last && Date.now() - last.getTime() < COOLDOWN_MS) {
+    if (last && Date.now() - last.getTime() < SESSION_TAKEOVER_COOLDOWN_MS) {
       throw new FormError('TOO_SOON', 'We just sent you a link. Check your inbox, or wait a minute to ask again.');
     }
 
+    // Generate browser binding token to ensure the email link can only be consumed without password by this browser.
     const binding = randomToken();
     const token = await this.emailTokens.create(user.id, 'CLOSE_SESSIONS', sha256(binding));
     await this.mail.send(user.email, {
@@ -66,6 +63,7 @@ export class SessionTakeoverService {
     const row = await this.emailTokens.find(token, 'CLOSE_SESSIONS');
     const user = await this.prisma.user.findUniqueOrThrow({ where: { id: row.userId } });
 
+    // If opened in another browser (cookie binding missing/mismatched), require password verification.
     if (!sameHash(binding ? sha256(binding) : undefined, row.bindingHash)) {
       if (!user.passwordHash) {
         throw new FormError('SAME_BROWSER_REQUIRED', 'Open this link in the browser where you asked for it.');
@@ -106,3 +104,4 @@ function sameHash(a: string | undefined, b: string | null) {
   if (!a || !b || a.length !== b.length) return false;
   return timingSafeEqual(Buffer.from(a), Buffer.from(b));
 }
+

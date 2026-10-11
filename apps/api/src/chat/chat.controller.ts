@@ -1,3 +1,8 @@
+/**
+ * HTTP controller exposing workspace and room chat history endpoints.
+ * Requires user authentication and workspace membership to query messages.
+ */
+
 import { Controller, Get, Query } from '@nestjs/common';
 import { IsISO8601, IsOptional, Matches } from 'class-validator';
 import type { AuthUser } from '../common/auth/auth-user';
@@ -6,6 +11,8 @@ import { FormError } from '../common/form-error';
 import { ZONE_ID } from '../office/office.rules';
 import { MembershipService } from '../workspace/membership.service';
 import { ChatService } from './chat.service';
+
+const MESSAGE_ID_PATTERN = /^\w{1,64}$/;
 
 class HistoryQuery {
   @Matches(ZONE_ID)
@@ -18,10 +25,11 @@ class HistoryQuery {
 
   /** And its id: messages of the same millisecond aren't skipped. */
   @IsOptional()
-  @Matches(/^\w{1,64}$/)
+  @Matches(MESSAGE_ID_PATTERN)
   beforeId?: string;
 }
 
+/** REST controller serving chat pagination queries for office members. */
 @Controller('workspace/chat')
 export class ChatController {
   constructor(
@@ -38,3 +46,4 @@ export class ChatController {
     return result;
   }
 }
+

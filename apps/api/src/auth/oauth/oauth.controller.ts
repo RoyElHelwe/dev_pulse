@@ -1,3 +1,7 @@
+/**
+ * OAuth 2.0 HTTP callback and redirect controller.
+ * Directs browser clients to third-party authorization portals and handles OAuth callbacks.
+ */
 import { Controller, Get, Param, Query, Req, Res } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { Public } from '../../common/auth/public.decorator';
@@ -8,6 +12,9 @@ import { COOKIE_OPTIONS, COOKIES, setSessionCookies } from '../cookies';
 import { safeRedirect } from '../crypto/redirect';
 import { isProvider } from './providers';
 import { OAuthError, OAuthService } from './oauth.service';
+
+const MFA_COOKIE_MAX_AGE_MS = 5 * 60 * 1000;
+const MS_PER_SECOND = 1000;
 
 /** Browser redirects (not JSON): the user follows these links. */
 @Public()
@@ -53,11 +60,11 @@ export class OAuthController {
         req.cookies?.[COOKIES.trustedDevice],
       );
       if (result.status === 'two-factor-required') {
-        res.cookie(COOKIES.mfa, result.mfaToken, { ...COOKIE_OPTIONS.mfa, maxAge: 5 * 60 * 1000 });
+        res.cookie(COOKIES.mfa, result.mfaToken, { ...COOKIE_OPTIONS.mfa, maxAge: MFA_COOKIE_MAX_AGE_MS });
         return res.redirect(302, `/two-factor?redirect=${encodeURIComponent(redirect)}`);
       }
       if (result.status === 'session-active') {
-        res.cookie(COOKIES.takeover, result.takeoverToken, { ...COOKIE_OPTIONS.takeover, maxAge: TAKEOVER_SECONDS * 1000 });
+        res.cookie(COOKIES.takeover, result.takeoverToken, { ...COOKIE_OPTIONS.takeover, maxAge: TAKEOVER_SECONDS * MS_PER_SECOND });
         return res.redirect(302, '/login?error=session_active');
       }
       if (result.status !== 'signed-in') throw new OAuthError('oauth_failed');
@@ -73,3 +80,4 @@ export class OAuthController {
     res.redirect(302, `/login?error=${code}`);
   }
 }
+

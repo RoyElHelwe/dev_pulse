@@ -1,13 +1,9 @@
+// WebSocket client wrapper for Socket.IO providing direct WebSocket transport connections.
+
 import { io } from 'socket.io-client';
 
 /**
- * A Socket.IO connection straight over WebSocket, without the HTTP
- * long-polling step first: nothing to upgrade, so nothing cut half-way when a
- * page closes or a busy laptop misses a heartbeat (no console noise), and
- * everything travels on one connection.
- *
- * It connects on the next tick: a component mounted and unmounted at once
- * (React dev mode) never opens a socket.
+ * Direct WebSocket connection bypassing HTTP polling, connecting on the next tick to prevent dev mount noise.
  */
 export function openSocket(namespace: string, auth?: (send: (data: Record<string, unknown>) => void) => void) {
   const socket = io(namespace, { transports: ['websocket'], autoConnect: false, ...(auth && { auth }) });

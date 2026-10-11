@@ -1,3 +1,5 @@
+// Application navigation bar containing branding, office link, and user profile menu.
+
 import Link from 'next/link';
 import { buttonStyles } from '@/components/ui/Button';
 import { Logo } from '@/components/ui/Logo';

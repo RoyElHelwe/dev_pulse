@@ -1,3 +1,5 @@
+// Feedback banner component rendering contextual alerts with icons.
+
 import { CircleAlert, CircleCheck, Info } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { cn } from '@/lib/cn';
@@ -12,6 +14,7 @@ const STYLES: Record<Tone, string> = {
 
 const ICONS = { error: CircleAlert, success: CircleCheck, info: Info };
 
+/** Feedback banner rendering notifications across error, success, and info tones. */
 export function Alert({ tone = 'info', children, className }: { tone?: Tone; children: ReactNode; className?: string }) {
   const Icon = ICONS[tone];
   return (

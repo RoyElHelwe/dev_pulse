@@ -1,3 +1,7 @@
+/**
+ * Form validation error representation.
+ * Encapsulates user input and validation errors returned as 200 responses to keep browser consoles clean.
+ */
 import { HttpException, HttpStatus } from '@nestjs/common';
 
 /**
@@ -14,3 +18,4 @@ export class FormError extends HttpException {
     super({ error: { code, message, ...(field && { field }), ...(details !== undefined && { details }) } }, HttpStatus.OK);
   }
 }
+

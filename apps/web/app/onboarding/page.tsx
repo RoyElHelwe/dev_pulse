@@ -1,3 +1,5 @@
+// Workspace setup route guiding first-time users through office onboarding.
+
 import type { Metadata } from 'next';
 import { Suspense } from 'react';
 import { AppHeader } from '@/components/AppHeader';
@@ -5,6 +7,7 @@ import { OnboardingGate } from '@/features/onboarding/OnboardingGate';
 
 export const metadata: Metadata = { title: 'Set up your office · Dev Pulse' };
 
+/** Onboarding page wrapping the workspace creation and setup flow. */
 export default function OnboardingPage() {
   return (
     <>

@@ -1,4 +1,9 @@
-/** "Chrome on macOS" from a user-agent string (for emails and messages). */
+/**
+ * User agent string parser.
+ * Converts raw browser User-Agent headers into human-readable descriptions for security emails and session lists.
+ */
+
+/** Formats a User-Agent string into a friendly label like "Chrome on macOS". */
 export function describeUserAgent(userAgent: string | null | undefined): string {
   const ua = userAgent ?? '';
   const browser =
@@ -20,3 +25,4 @@ export function describeUserAgent(userAgent: string | null | undefined): string 
   ].find(([token]) => ua.includes(token))?.[1];
   return os ? `${browser} on ${os}` : browser;
 }
+

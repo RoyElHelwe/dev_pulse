@@ -1,8 +1,10 @@
+// Layout template for the settings section containing the header, tab navigation, and footer.
+
 import { AppHeader } from '@/components/AppHeader';
 import { SiteFooter } from '@/components/SiteFooter';
 import { SettingsNav } from '@/features/settings/SettingsNav';
 
-/** Shared frame of the settings pages: header, the settings tabs, footer. */
+/** Layout template wrapping settings sub-pages with navigation and consistent footer. */
 export default function SettingsLayout({ children }: { children: React.ReactNode }) {
   return (
     <>

@@ -1,3 +1,5 @@
+// Invitation acceptance route resolving invitation tokens for team workspaces.
+
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { SiteFooter } from '@/components/SiteFooter';
@@ -6,6 +8,7 @@ import { InvitationView } from '@/features/onboarding/InvitationView';
 
 export const metadata: Metadata = { title: 'Invitation · Dev Pulse' };
 
+/** Public invitation page resolving team invite tokens. */
 export default async function InvitationPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
   return (

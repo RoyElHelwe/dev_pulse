@@ -1,5 +1,14 @@
+/**
+ * Keybind configuration, defaults, and validation rules for avatar controls and shortcuts.
+ * Resolves persisted user keybindings and validates updates against reserved navigation keys.
+ */
+
 import { FormError } from '../common/form-error';
 
+/** Maximum character length permitted for a KeyboardEvent.code string. */
+const MAX_KEY_CODE_CHARS = 24;
+
+/** Supported user-customizable action identifiers across the virtual office. */
 export const ACTIONS = [
   'interact',
   'mute',
@@ -11,14 +20,13 @@ export const ACTIONS = [
   'people',
 ] as const;
 
+/** Union type of all bindable action identifiers. */
 export type Action = (typeof ACTIONS)[number];
 
-/**
- * Legacy keybind actions that have been removed. We silently drop them
- * in applyKeybindChanges so older clients don't encounter errors.
- */
+/** Legacy keybind actions that are deprecated and silently ignored to support older clients. */
 export const LEGACY_ACTIONS = ['foosKick', 'foosSwitch'] as const;
 
+/** Default physical keybindings for new users. */
 export const DEFAULT_KEYBINDS: Record<Action, string> = {
   interact: 'KeyE',
   mute: 'KeyM',
@@ -41,6 +49,7 @@ const ACTION_LABELS: Record<Action, string> = {
   people: 'People list',
 };
 
+/** Keys reserved for avatar walking (WASD, Arrows) and UI navigation (Escape, Enter, Tab). */
 export const RESERVED = [
   'KeyW',
   'KeyA',
@@ -57,9 +66,9 @@ export const RESERVED = [
 
 const RESERVED_KEYS: ReadonlySet<string> = new Set<string>(RESERVED);
 
-const KEY_CODE = /^[A-Za-z0-9]{1,24}$/;
+const KEY_CODE = new RegExp(`^[A-Za-z0-9]{1,${MAX_KEY_CODE_CHARS}}$`);
 
-/** Strips "Key" or "Digit" prefix if followed by a character, else returns raw code. */
+/** Formats a raw KeyboardEvent.code (e.g. "KeyE" -> "E") for user-facing conflict messages. */
 export function friendlyKeyName(code: string): string {
   if (/^(Key|Digit)./.test(code)) {
     return code.replace(/^(Key|Digit)/, '');
@@ -67,10 +76,7 @@ export function friendlyKeyName(code: string): string {
   return code;
 }
 
-/**
- * Returns full keybind map starting with defaults, overlaid with valid stored entries
- * (ignoring unknown/invalid ones), and pushToTalk overridden by the pushToTalkKey column.
- */
+/** Merges database-stored keybinds and dedicated pushToTalkKey with defaults, ignoring corrupted records. */
 export function resolveKeybinds(stored: unknown, pushToTalkKey: string): Record<Action, string> {
   const result: Record<Action, string> = { ...DEFAULT_KEYBINDS };
 
@@ -84,6 +90,7 @@ export function resolveKeybinds(stored: unknown, pushToTalkKey: string): Record<
     }
   }
 
+  // pushToTalkKey is mirrored in its own database column; valid non-empty values take precedence.
   if (typeof pushToTalkKey === 'string' && KEY_CODE.test(pushToTalkKey)) {
     result.pushToTalk = pushToTalkKey;
   }
@@ -91,11 +98,7 @@ export function resolveKeybinds(stored: unknown, pushToTalkKey: string): Record<
   return result;
 }
 
-/**
- * Applies proposed changes to the current keybind map.
- * Throws FormError on unknown actions, invalid key codes, reserved keys,
- * or if two actions end up sharing the same key code.
- */
+/** Validates proposed keybind updates, rejecting reserved keys and duplicates across actions. */
 export function applyKeybindChanges(
   current: Record<Action, string>,
   changes: Record<string, unknown>,
@@ -104,7 +107,7 @@ export function applyKeybindChanges(
     throw new FormError('INVALID_KEYBINDS', 'Keybind changes must be an object.', 'keybinds');
   }
 
-  // Silently drop legacy actions before the UNKNOWN_ACTION check so old clients don't error.
+  // Silently ignore removed actions so payload sync from older cached client builds succeeds.
   const filteredChanges: Record<string, unknown> = {};
   for (const [action, value] of Object.entries(changes)) {
     if ((LEGACY_ACTIONS as readonly string[]).includes(action)) continue;
@@ -118,6 +121,7 @@ export function applyKeybindChanges(
     if (typeof value !== 'string' || !KEY_CODE.test(value)) {
       throw new FormError('INVALID_KEY', `Pick a key on your keyboard.`, 'keybinds');
     }
+    // Prevent overriding movement keys or core UI controls to avoid trapping the user.
     if (RESERVED_KEYS.has(value)) {
       throw new FormError(
         'RESERVED_KEY',
@@ -132,7 +136,7 @@ export function applyKeybindChanges(
     next[action] = value;
   }
 
-  // Check if any changed action conflicts with another action
+  // Validate that no proposed change conflicts with existing or other proposed actions.
   for (const [actionStr, code] of Object.entries(filteredChanges) as [Action, string][]) {
     const action = actionStr as Action;
     const other = ACTIONS.find((a) => a !== action && next[a] === code);
@@ -143,7 +147,7 @@ export function applyKeybindChanges(
     }
   }
 
-  // Also check if any duplicate exists across all actions
+  // Ensure invariant: each action must map to a unique physical key across the entire layout.
   for (const action of ACTIONS) {
     const code = next[action];
     const other = ACTIONS.find((a) => a !== action && next[a] === code);
@@ -156,3 +160,4 @@ export function applyKeybindChanges(
 
   return next;
 }
+

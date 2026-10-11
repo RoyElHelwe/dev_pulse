@@ -1,5 +1,7 @@
 'use client';
 
+// Card displaying account email, linked authentication providers, and confirmation resend.
+
 import { useState } from 'react';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -9,6 +11,7 @@ import { api } from '@/lib/api';
 
 const PROVIDER_NAMES: Record<string, string> = { google: 'Google', github: 'GitHub', '42': '42' };
 
+/** Displays account email, linked authentication providers, and email confirmation controls. */
 export function AccountCard({ user }: { user: User }) {
   const [sent, setSent] = useState(false);
   const [loading, setLoading] = useState(false);

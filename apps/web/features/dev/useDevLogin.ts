@@ -1,8 +1,8 @@
 'use client';
 
-// Dev/test only: asks the api whether the dev sign-in is on (GET /auth/dev, always answered,
-// `enabled` is false in production), then loads the users the switcher offers from DevModule,
-// which the api only mounts when DEV_LOGIN is effective.
+// Dev/test only: checks dev sign-in status and loads test users for the switcher;
+// never active in production because GET /auth/dev reports enabled as false in production
+// and the API only mounts DevModule when DEV_LOGIN is configured.
 
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';

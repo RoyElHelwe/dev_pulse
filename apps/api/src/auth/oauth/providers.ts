@@ -1,6 +1,12 @@
+/**
+ * OAuth 2.0 provider specifications and user profile adapters.
+ * Implements provider endpoints, PKCE configuration, and profile normalization for Google, GitHub, and 42.
+ */
 import type { OAuthProvider } from '../../config/app-config';
 
-/** What we keep from a Google / GitHub / 42 profile. */
+const HTTP_REQUEST_TIMEOUT_MS = 10_000;
+
+/** Normalized profile representation extracted from an external OAuth identity provider. */
 export interface OAuthProfile {
   id: string;
   email: string | null;
@@ -27,12 +33,13 @@ async function getJson<T>(url: string, accessToken: string): Promise<T> {
       Accept: 'application/json',
       'User-Agent': 'dev-pulse',
     },
-    signal: AbortSignal.timeout(10_000),
+    signal: AbortSignal.timeout(HTTP_REQUEST_TIMEOUT_MS),
   });
   if (!res.ok) throw new Error(`${url} answered ${res.status}`);
   return res.json() as Promise<T>;
 }
 
+/** Registry of supported OAuth 2.0 provider configurations and profile fetchers. */
 export const PROVIDERS: Record<OAuthProvider, ProviderSpec> = {
   google: {
     label: 'Google',
@@ -103,9 +110,11 @@ export const PROVIDERS: Record<OAuthProvider, ProviderSpec> = {
   },
 };
 
-/** Display order of the sign-in buttons. */
+/** Display order of the sign-in buttons on the authentication screen. */
 export const PROVIDER_ORDER: OAuthProvider[] = ['google', 'github', '42'];
 
+/** Type-guard validating whether a string matches one of the configured OAuth provider keys. */
 export function isProvider(value: string): value is OAuthProvider {
   return value in PROVIDERS;
 }
+

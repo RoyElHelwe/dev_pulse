@@ -1,3 +1,8 @@
+/**
+ * Application service managing message dispatch, persistence, and historical retrieval for office chat.
+ * Integrates spatial positioning, room occupancy, and meeting reservations for authorization.
+ */
+
 import { Injectable } from '@nestjs/common';
 import { MeetingsService } from '../meetings/meetings.service';
 import { OfficeGateway } from '../office/office.gateway';
@@ -23,6 +28,7 @@ interface ChatMessageDto {
   createdAt: string;
 }
 
+/** Result outcome of attempting to send a chat message, containing the message or error details. */
 export type SendResult = { ok: true; message: ChatMessageDto } | { ok: false; error: { code: ChatErrorCode; message: string } };
 
 const fail = (code: ChatErrorCode) => ({ ok: false as const, error: { code, message: CHAT_ERRORS[code] } });
@@ -36,13 +42,7 @@ const toDto = (m: { id: string; channel: string; userId: string; text: string; c
   createdAt: m.createdAt.toISOString(),
 });
 
-/**
- * Office chat: one channel for the whole office, one per room. Who is in a room
- * comes from the server's copy of the positions clients report, speed-limited so
- * nobody can jump into a room (OfficeGateway.locate); booked rooms are protected
- * by the attendee check. A meeting's room chat belongs to that booking: it isn't
- * shown before or after it.
- */
+/** Manages text chat delivery, room-based visibility filtering, and persistent message history. */
 @Injectable()
 export class ChatService {
   private readonly limiter = new RateLimiter();
@@ -67,7 +67,7 @@ export class ChatService {
     if (!isChannel(channel)) return fail('BAD_CHANNEL');
     const text = cleanText(raw);
     if (!text) return fail('BAD_MESSAGE');
-    // Before any database work, so a flood costs nothing.
+    // Reject floods in-memory before query execution to avoid DB connection pool exhaustion.
     if (!this.limiter.allow(userId)) return fail('TOO_FAST');
     const { error, booking } = await this.access(workspaceId, userId, channel);
     if (error) return fail(error);
@@ -80,7 +80,7 @@ export class ChatService {
     if (channel === OFFICE_CHANNEL) {
       this.office.broadcast(workspaceId, 'chat:message', message);
     } else {
-      // Only the people in the room right now (and, when booked, only its attendees).
+      // Direct message exclusively to verified occupants (and valid attendees) to avoid cross-room packet leaks.
       const readers = this.office.peopleIn(workspaceId, channel).filter((id) => !booking || booking.attendeeIds.includes(id));
       for (const id of readers) this.office.sendTo(id, 'chat:message', message);
     }
@@ -96,6 +96,7 @@ export class ChatService {
   async history(workspaceId: string, userId: string, channel: string, before?: Date, beforeId?: string) {
     const { error, booking } = await this.access(workspaceId, userId, channel);
     if (error) return { error: { code: error, message: CHAT_ERRORS[error] } };
+    // Compound cursor: tie-break on message id to guarantee pagination determinism when timestamps collide.
     const older = before && {
       OR: [{ createdAt: { lt: before } }, ...(beforeId ? [{ createdAt: before, id: { lt: beforeId } }] : [])],
     };
@@ -103,6 +104,7 @@ export class ChatService {
       where: {
         workspaceId,
         channel,
+        // Bind room history to the active booking so consecutive meetings in the same room remain confidential.
         ...(channel !== OFFICE_CHANNEL && { bookingId: booking?.id ?? null }),
         ...older,
       },
@@ -120,3 +122,4 @@ export class ChatService {
     return { error: channelAccess(channel, userId, room, booking), booking };
   }
 }
+

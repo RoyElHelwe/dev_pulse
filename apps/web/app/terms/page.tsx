@@ -1,9 +1,12 @@
+// Terms of Service page displaying user agreements and usage terms.
+
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { LegalPage } from '@/components/LegalPage';
 
 export const metadata: Metadata = { title: 'Terms of Service · Dev Pulse' };
 
+/** Public Terms of Service legal page. */
 export default function TermsPage() {
   return (
     <LegalPage title="Terms of Service" updated="5 October 2026">

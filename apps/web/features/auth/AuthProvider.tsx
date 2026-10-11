@@ -1,5 +1,7 @@
 'use client';
 
+// Global React authentication context provider managing user sessions and real-time socket events.
+
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { Socket } from 'socket.io-client';
 import {
@@ -29,10 +31,12 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 /** Refresh this long before the access token expires. */
 const REFRESH_AHEAD_MS = 60_000;
+const MAX_AUTH_SOCKET_RETRIES = 2;
 
 /** Pages where being signed out is normal: no redirect from them. */
 const AUTH_PAGES = ['/login', '/register', '/two-factor', '/forgot-password', '/reset-password', '/verify-email', '/close-sessions'];
 
+/** Context provider managing application-wide authentication state and session lifecycle. */
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUserState] = useState<User | null>(null);
   const [status, setStatus] = useState<Status>('loading');
@@ -115,7 +119,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     socket.on('connect_error', async (error) => {
       if (error.message === 'SESSION_ENDED') return forceSignOut('sessions_closed');
       // Refused because the access token expired (e.g. the laptop slept): renew it and retry.
-      if (error.message === 'NOT_AUTHENTICATED' && retries++ < 2) {
+      if (error.message === 'NOT_AUTHENTICATED' && retries++ < MAX_AUTH_SOCKET_RETRIES) {
         if (await refreshTokens()) socket.connect();
         else forceSignOut('expired');
       }
@@ -142,6 +146,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   return <AuthContext value={value}>{children}</AuthContext>;
 }
 
+/** Hook accessing current authentication status, user profile, and sign-out helpers. */
 export function useAuth() {
   const context = useContext(AuthContext);
   if (!context) throw new Error('useAuth must be used inside <AuthProvider>');

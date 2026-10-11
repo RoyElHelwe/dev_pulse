@@ -1,3 +1,5 @@
+// Status indicator badge component supporting multiple tone variants.
+
 import type { ReactNode } from 'react';
 import { cn } from '@/lib/cn';
 
@@ -9,6 +11,7 @@ const TONES: Record<Tone, string> = {
   warning: 'bg-amber-50 text-amber-800',
 };
 
+/** Status pill badge component for compact labels and states. */
 export function Badge({ tone = 'neutral', children }: { tone?: Tone; children: ReactNode }) {
   return (
     <span className={cn('inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium whitespace-nowrap', TONES[tone])}>

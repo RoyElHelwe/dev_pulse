@@ -1,3 +1,7 @@
+/**
+ * Origin validation middleware for CSRF defense.
+ * Verifies that the Origin header on state-modifying HTTP requests matches the configured application URL.
+ */
 import { ForbiddenException, Injectable, type NestMiddleware } from '@nestjs/common';
 import type { NextFunction, Request, Response } from 'express';
 import { AppConfig } from '../config/app-config';
@@ -11,6 +15,7 @@ const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
  */
 @Injectable()
 export class OriginMiddleware implements NestMiddleware {
+
   private readonly allowed: string;
 
   constructor(config: AppConfig) {
