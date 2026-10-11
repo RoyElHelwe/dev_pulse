@@ -1,5 +1,7 @@
+import { pick, seededRandom, shuffle } from '../layout/random';
 import type { OfficeLayout, Room, Wall } from '../layout/types';
 import { LayoutBuilder } from './builder';
+import { CARPETS, SOFAS } from './palette';
 
 // An office made for the team, in a few steps (same conventions as the hand-made templates):
 // 1. a north band, 12 deep: meeting rooms side by side, then the kitchen + lounge;
@@ -18,8 +20,6 @@ const FIRST_ROW = 15.5;
 const MIN_LOUNGE = 21;
 
 const ROOM_NAMES = ['Atlas', 'Nova', 'Orion', 'Vega', 'Lyra', 'Juno', 'Echo', 'Focus', 'Cedar', 'Maple', 'Pixel', 'Sol'];
-const CARPETS = [0x7d8796, 0x8b8478, 0x6f7f74, 0x7b7489, 0x8a7f8f, 0x6e7c86];
-const SOFAS = [0x5f7a6b, 0x3d5a80, 0x6b5b7a, 0x8a5a44];
 const ROOM_SIZES = { big: { w: 13, table: 7 }, medium: { w: 11, table: 5 }, small: { w: 9, table: 4.2 } };
 
 /** Desks for the team, with ~25% to grow (at least 4). */
@@ -34,7 +34,7 @@ export function meetingRoomsFor(teamSize: number) {
 
 export function generatedOffice(teamSize: number, seed: string): OfficeLayout {
   const team = Math.min(100, Math.max(1, Math.round(teamSize)));
-  const rand = random(seed.trim().toLowerCase().replace(/\s+/g, ' '));
+  const rand = seededRandom(seed.trim().toLowerCase().replace(/\s+/g, ' '));
   const flip = rand() < 0.5;
   const b = new LayoutBuilder();
 
@@ -135,29 +135,4 @@ function mirror(layout: OfficeLayout): OfficeLayout {
     })),
     spawn: { x: W - layout.spawn.x, y: layout.spawn.y },
   };
-}
-
-/** Small seeded random numbers (FNV-1a hash + mulberry32): same seed, same office. */
-function random(seed: string) {
-  let h = 2166136261;
-  for (let i = 0; i < seed.length; i++) h = Math.imul(h ^ seed.charCodeAt(i), 16777619);
-  return () => {
-    h = (h + 0x6d2b79f5) | 0;
-    let t = Math.imul(h ^ (h >>> 15), 1 | h);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-function pick<T>(list: readonly T[], rand: () => number) {
-  return list[Math.floor(rand() * list.length)];
-}
-
-function shuffle<T>(list: readonly T[], rand: () => number) {
-  const out = [...list];
-  for (let i = out.length - 1; i > 0; i--) {
-    const j = Math.floor(rand() * (i + 1));
-    [out[i], out[j]] = [out[j], out[i]];
-  }
-  return out;
 }
