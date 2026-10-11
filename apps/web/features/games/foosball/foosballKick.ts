@@ -7,28 +7,28 @@ import { FIELD_W, SCALE } from './constants';
 import { clamp } from './foosballPointer';
 
 /** Height of the playing field in logical canvas pixels (64 units * 4 = 256 px). */
-export const PITCH_H_PX = FIELD_W * SCALE;
+const PITCH_H_PX = FIELD_W * SCALE;
 
 /** Minimum cooldown interval between consecutive kicks in milliseconds (0.35 s). */
-export const KICK_COOLDOWN_MS = 350;
+const KICK_COOLDOWN_MS = 350;
 
 /** Time window in milliseconds for retaining pointer movement samples (55 ms). */
-export const FLICK_SAMPLE_WINDOW_MS = 55;
+const FLICK_SAMPLE_WINDOW_MS = 55;
 
 /** Minimum time span in seconds required across movement samples to evaluate velocity (15 ms). */
-export const MIN_FLICK_DT_S = 0.015;
+const MIN_FLICK_DT_S = 0.015;
 
 /** Speed threshold in table-heights per second to trigger an automatic flick kick. */
-export const FLICK_VELOCITY_THRESHOLD = 3.5;
+const FLICK_VELOCITY_THRESHOLD = 3.5;
 
 /** Minimum base strength imparted by a flick gesture kick. */
-export const KICK_BASE_STRENGTH = 0.35;
+const KICK_BASE_STRENGTH = 0.35;
 
 /** Scaling factor for converting excess velocity into kick strength. */
-export const KICK_VELOCITY_SCALE = 6;
+const KICK_VELOCITY_SCALE = 6;
 
 /** Minimum kick strength imparted on an intentional mouse click. */
-export const CLICK_MIN_KICK_STRENGTH = 0.6;
+const CLICK_MIN_KICK_STRENGTH = 0.6;
 
 /** Movement sample containing logical Y position and high-resolution timestamp. */
 export interface PointerSample {
@@ -60,7 +60,7 @@ export function pruneOldSamples(
  * Computes vertical velocity in table-heights per second from movement samples.
  * Returns 0 if fewer than 2 samples exist or elapsed time is below the minimum threshold.
  */
-export function calculateVerticalVelocity(samples: readonly PointerSample[]): number {
+function calculateVerticalVelocity(samples: readonly PointerSample[]): number {
   if (samples.length < 2) return 0;
   const oldest = samples[0];
   const newest = samples[samples.length - 1];
@@ -76,7 +76,7 @@ export function calculateVerticalVelocity(samples: readonly PointerSample[]): nu
 /**
  * Converts vertical velocity (table-heights/s) into kick strength in range [0.35, 1.0].
  */
-export function velocityToKickStrength(velocity: number): number {
+function velocityToKickStrength(velocity: number): number {
   return clamp(
     KICK_BASE_STRENGTH + (velocity - FLICK_VELOCITY_THRESHOLD) / KICK_VELOCITY_SCALE,
     KICK_BASE_STRENGTH,

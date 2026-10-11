@@ -21,10 +21,10 @@ import { GameResultsService } from './game-results.service';
 import { distanceInTiles, LEAVE_PROXIMITY_TILES } from './proximity';
 
 /** Interval in milliseconds between background spatial proximity sweeps. */
-export const PROXIMITY_SWEEP_INTERVAL_MS = 1000;
+const PROXIMITY_SWEEP_INTERVAL_MS = 1000;
 
 /** Time-to-live in milliseconds for cached workspace office layouts. */
-export const LAYOUT_CACHE_TTL_MS = 10_000;
+const LAYOUT_CACHE_TTL_MS = 10_000;
 
 /**
  * Computes the Socket.IO room name for a game instance bound to a furniture item.

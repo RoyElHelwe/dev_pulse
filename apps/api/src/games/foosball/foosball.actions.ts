@@ -26,23 +26,23 @@ import {
 // ============================================================================
 
 /** Default strength scalar when kicking without specifying strength. */
-export const DEFAULT_KICK_STRENGTH_RATIO = 1;
+const DEFAULT_KICK_STRENGTH_RATIO = 1;
 
 /** Upward vertical movement direction unit vector. */
-export const ROD_DIR_UP_VALUE = -1;
+const ROD_DIR_UP_VALUE = -1;
 
 /** Stopped vertical movement direction unit vector. */
 export const ROD_DIR_STOP_VALUE = 0;
 
 /** Downward vertical movement direction unit vector. */
-export const ROD_DIR_DOWN_VALUE = 1;
+const ROD_DIR_DOWN_VALUE = 1;
 
 // ============================================================================
 // Action Helpers
 // ============================================================================
 
 /** Validates that a requested rod index is an integer between 0 and 3. */
-export function validateRodIndex(rod: unknown): number {
+function validateRodIndex(rod: unknown): number {
   if (typeof rod !== 'number' || rod < MIN_ROD_INDEX || rod > MAX_ROD_INDEX || !Number.isInteger(rod)) {
     throw new GameError('BAD_ACTION', 'Invalid rod index');
   }

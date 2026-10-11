@@ -4,7 +4,7 @@
 import type { Furniture, FurnitureKind, Wall } from './types';
 
 /** Furniture kinds that mount onto south-facing wall surfaces rather than standing on floors. */
-export const WALL_MOUNTED: ReadonlySet<FurnitureKind> = new Set<FurnitureKind>(['tv', 'board', 'legoBoard']);
+const WALL_MOUNTED: ReadonlySet<FurnitureKind> = new Set<FurnitureKind>(['tv', 'board', 'legoBoard']);
 
 /** Returns true if the furniture kind is designed to be hung on a wall. */
 export const isWallMounted = (kind: FurnitureKind) => WALL_MOUNTED.has(kind);
@@ -15,7 +15,9 @@ const SOLID_THICKNESS = 10; // px, same as the wall's footprint (game/render/wal
 const MOUNT_SLACK = 0.5;
 const EDGE = 0.05;
 
-/** Base line (tiles) of a wall that shows a tall face on its south side, else null. */
+/**
+ * @public
+ * Base line (tiles) of a wall that shows a tall face on its south side, else null. */
 export function faceBase(wall: Wall): number | null {
   if (wall.y1 !== wall.y2 || wall.kind !== 'solid' || wall.face === false) return null;
   return wall.y1 + SOLID_THICKNESS / 2 / TILE;

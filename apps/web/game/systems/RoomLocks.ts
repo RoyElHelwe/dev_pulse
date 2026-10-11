@@ -50,12 +50,12 @@ export function pixels(r: Rect): Rect {
 }
 
 /** Checks whether two axis-aligned rectangles overlap. */
-export function overlapsRect(a: Rect, b: Rect): boolean {
+function overlapsRect(a: Rect, b: Rect): boolean {
   return a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
 }
 
 /** Returns the local player physics body rectangle (18 × 10 px) for feet anchored at (x, y). */
-export function playerBody(x: number, y: number): Rect {
+function playerBody(x: number, y: number): Rect {
   return {
     x: x + PLAYER_BODY_OFFSET_X_PX,
     y: y + PLAYER_BODY_OFFSET_Y_PX,

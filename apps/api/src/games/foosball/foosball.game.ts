@@ -34,7 +34,7 @@ import {
   type RodView,
 } from './foosball.roster';
 
-export type { FoosballPhase, FoosballSeats, FoosballSide, FoosballState, FoosballView, Player, RodView };
+export type { FoosballView };
 
 // ============================================================================
 // Constants and Timing Configurations
@@ -44,38 +44,38 @@ export type { FoosballPhase, FoosballSeats, FoosballSide, FoosballState, Foosbal
 export const GRACE_MS = 10000;
 
 /** Match start countdown delay (milliseconds). */
-export const COUNTDOWN_DURATION_MS = 3000;
+const COUNTDOWN_DURATION_MS = 3000;
 
 /** Delay after a goal before re-entering countdown (milliseconds). */
-export const GOAL_RESET_DELAY_MS = 1500;
+const GOAL_RESET_DELAY_MS = 1500;
 
 /** Milliseconds per second conversion factor. */
-export const MS_PER_SECOND = 1000;
+const MS_PER_SECOND = 1000;
 
 /** Interval between simulation ticks (milliseconds, ~33.3ms for 30 Hz). */
-export const TICK_INTERVAL_MS = MS_PER_SECOND / TICK_RATE;
+const TICK_INTERVAL_MS = MS_PER_SECOND / TICK_RATE;
 
 /** Simulation delta time per physics step (seconds). */
-export const SECONDS_PER_TICK = 1 / TICK_RATE;
+const SECONDS_PER_TICK = 1 / TICK_RATE;
 
 /** Initial ball velocity imparted along X on serve (units/s). */
-export const SERVE_BALL_SPEED_UNITS_PER_S = 25;
+const SERVE_BALL_SPEED_UNITS_PER_S = 25;
 
 /** Stopped ball velocity along coordinate axes (units/s). */
-export const BALL_STOPPED_VELOCITY_UNITS_PER_S = 0;
+const BALL_STOPPED_VELOCITY_UNITS_PER_S = 0;
 
 /** Stuck timer reset value in seconds. */
-export const BALL_RESET_STUCK_TIMER_S = 0;
+const BALL_RESET_STUCK_TIMER_S = 0;
 
 /** Divisor for centering objects on field axes. */
-export const FIELD_CENTER_DIVISOR = 2;
+const FIELD_CENTER_DIVISOR = 2;
 
 // ============================================================================
 // Simulation Loop and Timer Helpers
 // ============================================================================
 
 /** Halts active physics simulation interval if running. */
-export function stopTickLoop(state: FoosballState): void {
+function stopTickLoop(state: FoosballState): void {
   if (state.tickInterval) {
     clearInterval(state.tickInterval);
     state.tickInterval = undefined;
@@ -83,7 +83,7 @@ export function stopTickLoop(state: FoosballState): void {
 }
 
 /** Starts the 30 Hz physics tick interval loop. */
-export function startTickLoop(state: FoosballState, ctx: GameContext): void {
+function startTickLoop(state: FoosballState, ctx: GameContext): void {
   if (!state.tickInterval) {
     state.tickInterval = setInterval(() => {
       tick(state, ctx);
@@ -92,7 +92,7 @@ export function startTickLoop(state: FoosballState, ctx: GameContext): void {
 }
 
 /** Clears countdown and goal reset timeouts if active. */
-export function clearPhaseTimeouts(state: FoosballState): void {
+function clearPhaseTimeouts(state: FoosballState): void {
   if (state.countdownTimeout) {
     clearTimeout(state.countdownTimeout);
     state.countdownTimeout = undefined;
@@ -108,7 +108,7 @@ export function clearPhaseTimeouts(state: FoosballState): void {
 // ============================================================================
 
 /** Resets ball to center pitch with initial serve velocity. */
-export function serveBall(world: PhysicsWorld): void {
+function serveBall(world: PhysicsWorld): void {
   world.ball.x = FIELD_L / FIELD_CENTER_DIVISOR;
   world.ball.y = FIELD_W / FIELD_CENTER_DIVISOR;
   world.ball.vx = SERVE_BALL_SPEED_UNITS_PER_S;
@@ -117,7 +117,7 @@ export function serveBall(world: PhysicsWorld): void {
 }
 
 /** Records match outcome in PostgreSQL leaderboard if not already recorded. */
-export function recordMatchResult(
+function recordMatchResult(
   state: FoosballState,
   ctx: GameContext,
   winnerSide: FoosballSide,
@@ -131,7 +131,7 @@ export function recordMatchResult(
 }
 
 /** Handles expiration of grace period when an entire team abandons the match. */
-export function handleGraceExpiry(state: FoosballState, ctx: GameContext): void {
+function handleGraceExpiry(state: FoosballState, ctx: GameContext): void {
   state.graceTimeout = undefined;
   state.graceExpiresAt = null;
   const fSide = state.graceSide;
@@ -151,7 +151,7 @@ export function handleGraceExpiry(state: FoosballState, ctx: GameContext): void 
 }
 
 /** Transitions state into countdown phase and schedules serve transition. */
-export function startCountdown(state: FoosballState, ctx: GameContext): void {
+function startCountdown(state: FoosballState, ctx: GameContext): void {
   state.phase = 'countdown';
   state.countdownEndsAt = state.now() + COUNTDOWN_DURATION_MS;
   clearPhaseTimeouts(state);
@@ -166,7 +166,7 @@ export function startCountdown(state: FoosballState, ctx: GameContext): void {
 }
 
 /** Handles ball entering goal opening, checking win condition or scheduling reset. */
-export function handleGoalScored(
+function handleGoalScored(
   state: FoosballState,
   ctx: GameContext,
   scoringSide: FoosballSide,
@@ -208,7 +208,7 @@ export function handleGoalScored(
 }
 
 /** Executes one 30 Hz simulation step advancing ball kinematics and collision responses. */
-export function tick(state: FoosballState, ctx: GameContext): void {
+function tick(state: FoosballState, ctx: GameContext): void {
   if (state.disposed) return;
 
   if (state.phase === 'countdown' || state.phase === 'goal') {
@@ -240,7 +240,7 @@ export function tick(state: FoosballState, ctx: GameContext): void {
 // ============================================================================
 
 /** Handles a user joining the table or reconnecting to cancel team grace forfeit. */
-export function handleJoin(state: FoosballState, ctx: GameContext, p: GamePlayerRef): void {
+function handleJoin(state: FoosballState, ctx: GameContext, p: GamePlayerRef): void {
   if (state.disposed) return;
 
   const seatedA = state.seats.A.find((x) => x.userId === p.userId);
@@ -264,7 +264,7 @@ export function handleJoin(state: FoosballState, ctx: GameContext, p: GamePlayer
 }
 
 /** Handles a user leaving the table, starting disconnect grace timer if side is empty. */
-export function handleLeave(state: FoosballState, ctx: GameContext, userId: string): void {
+function handleLeave(state: FoosballState, ctx: GameContext, userId: string): void {
   if (state.disposed) return;
 
   const side = getPlayerSide(state.seats, userId);
@@ -299,7 +299,7 @@ export function handleLeave(state: FoosballState, ctx: GameContext, userId: stri
 }
 
 /** Dispatches client action to dedicated action handlers. */
-export function dispatchAction(
+function dispatchAction(
   state: FoosballState,
   ctx: GameContext,
   userId: string,
@@ -343,7 +343,7 @@ export function dispatchAction(
 }
 
 /** Builds client view projection masking private details and computing viewer ownership. */
-export function buildFoosballView(
+function buildFoosballView(
   state: FoosballState,
   ctx: GameContext,
   userId: string,

@@ -45,7 +45,7 @@ const MEN_COUNT = [1, 2, 5, 3] as const;
 export const MAN_R = 3;
 
 /** Rod manual lateral movement speed along Y axis (units/s). */
-export const ROD_SPEED = 70;
+const ROD_SPEED = 70;
 
 /** Maximum rod speed when following a target aim position along Y axis (units/s). */
 export const ROD_AIM_SPEED = 140;
@@ -126,7 +126,7 @@ const SUBSTEPS = 4;
 // ============================================================================
 
 /** State of a single rod on the table. */
-export interface RodState {
+interface RodState {
   y: number; // pattern offset
   dir: -1 | 0 | 1;
   kick: number; // 0..1 swing progress
@@ -138,7 +138,7 @@ export interface RodState {
 }
 
 /** 2D kinematic state of the foosball. */
-export interface BallState {
+interface BallState {
   x: number;
   y: number;
   vx: number;
@@ -168,7 +168,7 @@ export interface PhysicsInputs {
 }
 
 /** Discrete simulation event emitted during a physics step. */
-export type PhysicsEvent =
+type PhysicsEvent =
   | { type: 'bounce' }
   | { type: 'kick'; side: 'A' | 'B'; rod: number }
   | { type: 'goal'; side: 'A' | 'B' };

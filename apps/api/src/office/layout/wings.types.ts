@@ -7,7 +7,7 @@ import type { LayoutBuilder } from '../templates/builder';
 export type WingSide = 'LEFT' | 'RIGHT' | 'BOTTOM';
 
 /** Bounding box and desk capacity metadata for an added wing. */
-export interface WingInfo {
+interface WingInfo {
   x: number;
   y: number;
   w: number;

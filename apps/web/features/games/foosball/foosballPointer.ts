@@ -17,7 +17,7 @@ import {
 } from './constants';
 
 /** Maximum horizontal distance (units) between click and rod to trigger selection. */
-export const DEFAULT_ROD_SELECTION_TOLERANCE_UNITS = 6;
+const DEFAULT_ROD_SELECTION_TOLERANCE_UNITS = 6;
 
 /** Record tracking the last sent aim offset and its performance timestamp. */
 export interface AimRecord {
@@ -37,7 +37,7 @@ export function canvasToFieldX(cursorXPx: number): number {
 }
 
 /** Maps logical canvas Y (px) to physical field coordinate (units). */
-export function canvasToFieldY(cursorYPx: number): number {
+function canvasToFieldY(cursorYPx: number): number {
   return (cursorYPx - OFFSET_Y) / SCALE;
 }
 

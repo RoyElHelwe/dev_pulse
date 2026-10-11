@@ -81,6 +81,7 @@ Every numeric literal representing a physical or temporal metric must be an uppe
 ## 6. Sizing & Documentation Template
 
 - **Size Guidelines**: Aim for functions $\le$ 60 lines and files $\le$ 400 lines. Splits must follow natural domain responsibilities.
+- React components are judged by their logic, not JSX markup length (a long component is fine when it's mostly markup; extract hooks/helpers when logic grows).
 - **Documentation Template**: Architecture guides under `docs/code/` follow: **Purpose · Where it lives · How it works · Rules & invariants · Why it's built this way · How to change safely · Tests**.
 
 ---
@@ -94,6 +95,26 @@ Run these commands before pushing any change:
 - **E2E Browser Suite**: Run Playwright under an exclusive file lock (see [testing.md](testing.md)):
   `flock /tmp/e2e.lock bash -c 'cd ~/projects/dev_pulse/e2e && . ~/.nvm/nvm.sh && E2E_BASE_URL=https://localhost:8443 pnpm exec playwright test'`
 - **Commit Style**: Use concise, imperative commit messages (e.g. `Engine: add FurnitureSprites system`).
+
+### Dead-code check (knip)
+
+Because dependencies in the working tree are Docker-managed, run Knip across an isolated copy with local dependencies:
+
+```bash
+rsync -a --delete --exclude node_modules --exclude .next --exclude .git --exclude .tiered ~/projects/dev_pulse/ /tmp/dp-scan/
+cd /tmp/dp-scan/apps/api && pnpm install --frozen-lockfile
+cd /tmp/dp-scan/apps/web && pnpm install --frozen-lockfile
+cd /tmp/dp-scan/e2e && pnpm install --frozen-lockfile
+cd /tmp/dp-scan && [ -f package.json ] || echo '{"name": "dev-pulse", "private": true}' > package.json
+cd /tmp/dp-scan && npx -y knip
+```
+
+**Intentional exceptions and justifications:**
+- `tools/art-lab/entry.ts` (`tools/art-lab/`): Standalone developer design tool for character/desk recipes, built directly via esbuild (`tools/art-lab/README.md`) rather than bundled into the web app.
+- `phaser` (`tools/art-lab/shim.ts`): Imported as types only for canvas graphics compatibility without bundling Phaser into art-lab.
+- `tailwindcss` (`apps/web`): Framework convention; loaded via CSS `@import 'tailwindcss'` and `@tailwindcss/postcss` rather than direct JS import.
+- `prisma`, `typecheck`, `build` binaries: Invoked by GitHub Actions workflow (`.github/workflows/ci.yml`) inside app sub-workspaces using `pnpm`.
+- `faceBase` (`apps/api/src/office/layout/mount.ts`): Tagged `@public` to preserve the byte-identical layout mirror shared with `apps/web/game/layout/mount.ts` (where `faceBase` is used by the `Depth` and `FurnitureSprites` systems).
 
 ---
 

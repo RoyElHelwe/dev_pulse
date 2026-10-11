@@ -9,10 +9,10 @@ import { circle, rr } from './draw';
 export type LegoBrick = [x: number, y: number, w: number, h: number, c: number];
 
 /** Total width of the Lego board grid in studs. */
-export const LEGO_W = 48;
+const LEGO_W = 48;
 
 /** Total height of the Lego board grid in studs. */
-export const LEGO_H = 32;
+const LEGO_H = 32;
 
 /** Available Lego brick color hex strings indexed by color ID. */
 export const LEGO_PALETTE = [
