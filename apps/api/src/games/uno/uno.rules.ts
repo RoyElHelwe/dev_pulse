@@ -6,17 +6,28 @@
 import type { GamePlayerRef } from '../game.types';
 import { GameError } from '../game.types';
 
+/** Cards dealt to each player at match start according to standard Uno rules (cards). */
 export const INITIAL_HAND_SIZE = 7;
+/** Minimum number of seated players required to start an Uno match (players). */
 export const MIN_PLAYERS = 2;
+/** Maximum player capacity supported at a single Uno table before joining as spectators (players). */
 export const MAX_PLAYERS = 6;
+/** Cards added to the pending penalty stack when a Draw Two card is played under Uno rules (cards). */
 export const DRAW_TWO_CARDS_COUNT = 2;
+/** Cards added to the pending penalty stack when a Wild Draw Four card is played under Uno rules (cards). */
 export const WILD_FOUR_CARDS_COUNT = 4;
+/** Penalty cards drawn by a player caught failing to call Uno before playing their penultimate card (cards). */
 export const CATCH_PENALTY_CARDS_COUNT = 2;
+/** Maximum hand size allowing a player to preemptively declare Uno prior to playing down to one card (cards). */
 export const UNO_CALL_HAND_SIZE = 2;
+/** Hand size leaving a player vulnerable to being caught if they did not declare Uno (cards). */
 export const UNO_VULNERABLE_HAND_SIZE = 1;
+/** Maximum recent match activity entries retained in the circular game event log (entries). */
 export const MAX_LOG_ENTRIES = 8;
 const WIN_SCORE = 500;
+/** Points awarded to the winner for each action card remaining in opponents' hands under Uno scoring rules (points). */
 export const SCORE_ACTION_CARD = 20;
+/** Points awarded to the winner for each wild card remaining in opponents' hands under Uno scoring rules (points). */
 export const SCORE_WILD_CARD = 50;
 const TOTAL_DECK_SIZE = 108;
 const NUM_WILD_CARDS = 4;
@@ -25,23 +36,27 @@ const NUM_NON_ZERO_RUNS = 2;
 const NUM_ACTION_RUNS = 2;
 const MAX_NUMBER_CARD_VALUE = 9;
 
+/** Four playable color suits defined by standard Uno rules. */
 export type Color = 'red' | 'yellow' | 'green' | 'blue';
 
 type Value =
   | '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9'
   | 'skip' | 'reverse' | 'draw2' | 'wild' | 'wild4';
 
+/** Single Uno playing card containing an identifier, assigned color suit, and face value. */
 export interface Card {
   id: number;
   color: Color | 'wild';
   value: Value;
 }
 
+/** Server-side player representation tracking identity, secret hand cards, and Uno call status. */
 export interface InternalUnoPlayer { ref: GamePlayerRef; hand: Card[]; saidUno: boolean; }
 interface InternalUnoSpectator { ref: GamePlayerRef; }
 interface UnoPlayer { id: string; name: string; character: string; cards: number; saidUno: boolean; }
 interface UnoSpectator { id: string; name: string; }
 
+/** Client-facing state projection sanitized for a specific player or spectator with hidden opponent hands. */
 export interface UnoView {
   phase: 'lobby' | 'playing' | 'ended';
   hostId: string | null;
@@ -63,6 +78,7 @@ export interface UnoView {
   log: string[];
 }
 
+/** Authoritative server-side table state tracking draw piles, discard stack, turn order, and active penalties. */
 export interface UnoGameState {
   phase: 'lobby' | 'playing' | 'ended';
   players: InternalUnoPlayer[];

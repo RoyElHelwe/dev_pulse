@@ -1,3 +1,4 @@
+/** Tests Uno game loop, seating, turn flow, special cards, draw stacking, and session lifecycle. */
 import { describe, expect, it, vi } from 'vitest';
 import type { GameContext, GamePlayerRef } from '../game.types';
 import { GameError } from '../game.types';

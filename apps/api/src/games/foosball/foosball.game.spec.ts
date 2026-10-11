@@ -1,3 +1,4 @@
+/** Tests seating, team balancing, game loop phases, rod ownership, and match outcomes for foosball sessions. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { GamePlayerRef } from '../game.types';
 import { GameError } from '../game.types';
