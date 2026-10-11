@@ -1,20 +1,32 @@
+/**
+ * Full-screen modal overlay hosting office interactive games (Foosball, Uno, Lego).
+ * Listens for furniture interaction events, manages fullscreen presentation, and renders game panels.
+ */
+
 'use client';
 
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X } from 'lucide-react';
 import type { Socket } from 'socket.io-client';
-import { Button } from '@/components/ui/Button';
-import { IconButton } from '@/components/ui/IconButton';
 import { officeEvents } from '@/features/office/events';
 import { useEscape } from '@/lib/escape';
 import { GameChromeContext, type GameChromeInfo } from './GameChrome';
-import { Leaderboard } from './Leaderboard';
+import { GameHostHeader } from './GameHostHeader';
 import { GAME_PANELS } from './registry';
 import type { GameKind } from './types';
 
+/** Fallback display names for interactive game objects in the office. */
+const DEFAULT_GAME_NAMES: Record<GameKind, string> = {
+  foosball: 'Baby foot table',
+  uno: 'Uno table',
+  lego: 'Lego wall',
+};
+
+/** Props for the GameHost modal overlay component. */
 export interface GameHostProps {
+  /** Socket.io client instance for office and game communication. */
   socket: Socket | null;
+  /** Authenticated user identity and avatar character reference. */
   me: { id: string; name: string; character: string };
   /** Callback notified when a full-screen game panel opens or closes. */
   onOpenChange?: (open: boolean) => void;
@@ -26,6 +38,9 @@ interface ActiveGame {
   name: string;
 }
 
+/**
+ * Modal host container rendering full-screen interactive game panels.
+ */
 export function GameHost({ socket, me, onOpenChange }: GameHostProps) {
   const [activeGame, setActiveGame] = useState<ActiveGame | null>(null);
   const [mounted, setMounted] = useState(false);
@@ -51,6 +66,7 @@ export function GameHost({ socket, me, onOpenChange }: GameHostProps) {
   }, []);
 
   const handleClose = useCallback(() => {
+    // WHY: Exit browser fullscreen on leave to restore standard window layout.
     if (typeof document !== 'undefined' && document.fullscreenElement) {
       document.exitFullscreen().catch(() => {});
     }
@@ -62,6 +78,7 @@ export function GameHost({ socket, me, onOpenChange }: GameHostProps) {
     setChromeInfo({ players: null, spectators: null });
   }, [socket]);
 
+  // WHY: Allow Escape key to dismiss the full-screen game panel as standard modal accessibility.
   useEscape(!!activeGame, handleClose);
 
   useEffect(() => {
@@ -74,24 +91,19 @@ export function GameHost({ socket, me, onOpenChange }: GameHostProps) {
 
   useEffect(() => {
     return officeEvents.on('object:interact', (e) => {
-      // Ignore if a game is already open
+      // WHY: Ignore interaction events if a game is already active to prevent opening nested panels.
       if (activeGameRef.current) return;
 
       if (e.type === 'foosball' || e.type === 'uno' || e.type === 'lego') {
         if (typeof document !== 'undefined' && !document.fullscreenElement) {
           document.documentElement.requestFullscreen?.().catch(() => {});
         }
-        const defaultName =
-          e.type === 'foosball' ? 'Baby foot table' : e.type === 'uno' ? 'Uno table' : 'Lego wall';
+        const defaultName = DEFAULT_GAME_NAMES[e.type];
         const name =
           e.type === 'foosball' && (!e.name || e.name === 'Foosball table')
             ? defaultName
             : e.name || defaultName;
-        setActiveGame({
-          kind: e.type,
-          objectId: e.id,
-          name,
-        });
+        setActiveGame({ kind: e.type, objectId: e.id, name });
       }
     });
   }, []);
@@ -110,62 +122,20 @@ export function GameHost({ socket, me, onOpenChange }: GameHostProps) {
         aria-label={activeGame.name}
         data-captures-keys=""
         tabIndex={-1}
+        /* WHY stopPropagation: Isolate keyboard events so office avatar navigation keys (WASD/arrows) do not move character in the background */
         onKeyDown={(e) => e.stopPropagation()}
         onKeyUp={(e) => e.stopPropagation()}
         className="fixed inset-0 z-[70] flex h-dvh flex-col bg-zinc-50"
       >
-        <header className="relative flex h-11 shrink-0 items-center justify-between border-b border-zinc-200/80 bg-white px-4">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <h2 className="text-sm font-semibold text-zinc-900 truncate">{activeGame.name}</h2>
-            {chromeInfo.players != null && (
-              <span
-                data-testid="game-chrome-players"
-                className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-600 shrink-0"
-              >
-                {chromeInfo.players} playing
-              </span>
-            )}
-            {chromeInfo.spectators != null && (
-              <span
-                data-testid="game-chrome-spectators"
-                className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-600 shrink-0"
-              >
-                {chromeInfo.spectators} watching
-              </span>
-            )}
-          </div>
-
-          <div className="flex items-center gap-2 shrink-0">
-            <Button
-              data-testid="game-leaderboard-toggle"
-              aria-pressed={leaderboardOpen}
-              variant="secondary"
-              size="sm"
-              onClick={() => setLeaderboardOpen((prev) => !prev)}
-            >
-              Leaderboard
-            </Button>
-            <Button
-              data-testid="game-leave"
-              variant="secondary"
-              size="sm"
-              onClick={handleClose}
-            >
-              Leave
-            </Button>
-            <IconButton aria-label="Close game" onClick={handleClose}>
-              <X className="size-4" />
-            </IconButton>
-          </div>
-
-          {leaderboardOpen && (
-            <Leaderboard
-              game={activeGame.kind}
-              socket={socket}
-              className="absolute top-12 right-4 z-50 w-80 shadow-xl max-h-[70vh] overflow-auto bg-white"
-            />
-          )}
-        </header>
+        <GameHostHeader
+          name={activeGame.name}
+          gameKind={activeGame.kind}
+          chromeInfo={chromeInfo}
+          socket={socket}
+          leaderboardOpen={leaderboardOpen}
+          onToggleLeaderboard={() => setLeaderboardOpen((prev) => !prev)}
+          onClose={handleClose}
+        />
 
         <main className="relative flex-1 min-h-0 overflow-hidden">
           <Suspense

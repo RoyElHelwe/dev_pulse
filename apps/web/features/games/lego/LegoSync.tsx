@@ -1,5 +1,10 @@
 'use client';
 
+/**
+ * Background synchronizer for Lego wall artwork.
+ * Fetches workspace Lego boards on connect and listens for real-time art broadcasts.
+ */
+
 import { useEffect } from 'react';
 import type { Socket } from 'socket.io-client';
 import { legoArt, type LegoBrick } from '@/game/render/legoArt';
@@ -13,6 +18,9 @@ interface LegoBoardsResponse {
   boards: Array<{ id: string; bricks: LegoBrick[] }>;
 }
 
+/**
+ * Invisible sync component that keeps the client-side `legoArt` cache in sync with the server.
+ */
 export function LegoSync({ socket }: LegoSyncProps) {
   useEffect(() => {
     let active = true;

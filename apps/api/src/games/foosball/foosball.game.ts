@@ -1,3 +1,9 @@
+/**
+ * Foosball game session manager.
+ * Implements multiplayer room lifecycle (lobby, countdown, playing, goal, ended),
+ * player seat assignments, turn/rod controls, and game result recording.
+ */
+
 import type { GameContext, GameInstance, GamePlayerRef } from '../game.types';
 import { GameError } from '../game.types';
 import {
@@ -6,15 +12,60 @@ import {
   FIELD_L,
   FIELD_W,
   type PhysicsWorld,
-  ROD_SPEED,
   step,
   TARGET,
   TICK_RATE,
   triggerKick,
 } from './foosball.physics';
 
+// ============================================================================
+// Constants and Timing Configurations
+// ============================================================================
+
+/** Disconnect grace period before forfeited match ends (milliseconds). */
 export const GRACE_MS = 10000;
 
+/** Match start countdown delay (milliseconds). */
+const COUNTDOWN_DURATION_MS = 3000;
+
+/** Delay after a goal before re-entering countdown (milliseconds). */
+const GOAL_RESET_DELAY_MS = 1500;
+
+/** Interval between simulation ticks (milliseconds, ~33.3ms for 30 Hz). */
+const TICK_INTERVAL_MS = 1000 / TICK_RATE;
+
+/** Milliseconds per second conversion factor. */
+const MS_PER_SECOND = 1000;
+
+/** Maximum players seated per side (2 for 2v2). */
+const MAX_PLAYERS_PER_SIDE = 2;
+
+/** Initial ball velocity imparted along X on serve (units/s). */
+const SERVE_BALL_SPEED = 25;
+
+/** Default strength scalar when kicking without specifying strength. */
+const DEFAULT_KICK_STRENGTH = 1;
+
+/** Minimum valid rod index (0: goalkeeper). */
+const MIN_ROD_INDEX = 0;
+
+/** Maximum valid rod index (3: attack). */
+const MAX_ROD_INDEX = 3;
+
+/** Rod indices assigned when a player controls all team rods (1v1 or solo partner). */
+const ALL_ROD_INDICES = [0, 1, 2, 3] as const;
+
+/** Rod indices assigned to the defensive seat (player index 0 in 2v2). */
+const DEFENSE_ROD_INDICES = [0, 1] as const;
+
+/** Rod indices assigned to the offensive seat (player index 1 in 2v2). */
+const ATTACK_ROD_INDICES = [2, 3] as const;
+
+// ============================================================================
+// Types and Interfaces
+// ============================================================================
+
+/** Seated foosball player metadata and presence state. */
 export interface Player {
   userId: string;
   name: string;
@@ -22,11 +73,13 @@ export interface Player {
   away?: boolean;
 }
 
+/** Public view state of a single rod for rendering. */
 export interface RodView {
   y: number;
   kick: number;
 }
 
+/** Complete snapshot of the foosball room state sent to clients. */
 export interface FoosballView {
   phase: 'lobby' | 'countdown' | 'playing' | 'goal' | 'ended';
   target: 5;
@@ -43,6 +96,13 @@ export interface FoosballView {
   now: number;
 }
 
+// ============================================================================
+// Game Instance Factory
+// ============================================================================
+
+/**
+ * Creates and initializes an active Foosball game session instance.
+ */
 export function createFoosballGame(
   ctx: GameContext,
   opts?: { now?: () => number },
@@ -69,6 +129,10 @@ export function createFoosballGame(
   let graceExpiresAt: number | null = null;
   let graceSide: 'A' | 'B' | null = null;
 
+  // --------------------------------------------------------------------------
+  // Timer & Loop Helpers
+  // --------------------------------------------------------------------------
+
   function stopTickLoop(): void {
     if (tickInterval) {
       clearInterval(tickInterval);
@@ -80,7 +144,7 @@ export function createFoosballGame(
     if (!tickInterval) {
       tickInterval = setInterval(() => {
         tick();
-      }, 1000 / TICK_RATE);
+      }, TICK_INTERVAL_MS);
     }
   }
 
@@ -94,6 +158,10 @@ export function createFoosballGame(
       goalTimeout = undefined;
     }
   }
+
+  // --------------------------------------------------------------------------
+  // Player & Seat Query Helpers
+  // --------------------------------------------------------------------------
 
   function getPlayerSide(userId: string): 'A' | 'B' | null {
     if (seats.A.some((p) => p.userId === userId)) return 'A';
@@ -111,14 +179,30 @@ export function createFoosballGame(
     // In 1v1, or if partner is away during match, the present player controls all rods
     if (team.length <= 1 || presentPlayers.length === 1) {
       if (!team[idx].away) {
-        return [0, 1, 2, 3];
+        return [...ALL_ROD_INDICES];
       }
     }
 
-    if (idx === 0) return [0, 1];
-    if (idx === 1) return [2, 3];
+    if (idx === 0) return [...DEFENSE_ROD_INDICES];
+    if (idx === 1) return [...ATTACK_ROD_INDICES];
     return [];
   }
+
+  function checkSessionClose(): void {
+    const allSeated = [...seats.A, ...seats.B];
+    const anyPresentSeated = allSeated.some((p) => !p.away);
+    if (!anyPresentSeated) {
+      const participants = ctx.participants();
+      const spectators = participants.filter((p) => !allSeated.some((s) => s.userId === p.userId));
+      if (spectators.length === 0) {
+        ctx.close();
+      }
+    }
+  }
+
+  // --------------------------------------------------------------------------
+  // Match Progression & Match Lifecycle
+  // --------------------------------------------------------------------------
 
   function recordMatchResult(winnerSide: 'A' | 'B', loserSide: 'A' | 'B'): void {
     if (recordCalled) return;
@@ -147,37 +231,62 @@ export function createFoosballGame(
     ctx.emitState();
   }
 
-  function checkSessionClose(): void {
-    const allSeated = [...seats.A, ...seats.B];
-    const anyPresentSeated = allSeated.some((p) => !p.away);
-    if (!anyPresentSeated) {
-      const participants = ctx.participants();
-      const spectators = participants.filter((p) => !allSeated.some((s) => s.userId === p.userId));
-      if (spectators.length === 0) {
-        ctx.close();
-      }
-    }
-  }
-
   function serveBall(): void {
     world.ball.x = FIELD_L / 2;
     world.ball.y = FIELD_W / 2;
-    world.ball.vx = 25;
+    world.ball.vx = SERVE_BALL_SPEED;
     world.ball.vy = 0;
     world.stuckTimer = 0;
   }
 
   function startCountdown(): void {
     phase = 'countdown';
-    countdownEndsAt = now() + 3000;
+    countdownEndsAt = now() + COUNTDOWN_DURATION_MS;
     clearPhaseTimeouts();
     countdownTimeout = setTimeout(() => {
       countdownTimeout = undefined;
       phase = 'playing';
       serveBall();
       ctx.emitState();
-    }, 3000);
+    }, COUNTDOWN_DURATION_MS);
     startTickLoop();
+    ctx.emitState();
+  }
+
+  function handleGoalScored(scoringSide: 'A' | 'B'): void {
+    score[scoringSide] += 1;
+    ctx.emitEvent('goal', { side: scoringSide });
+
+    if (score[scoringSide] >= TARGET) {
+      phase = 'ended';
+      winner = scoringSide;
+      forfeit = false;
+      stopTickLoop();
+      clearPhaseTimeouts();
+      recordMatchResult(scoringSide, scoringSide === 'A' ? 'B' : 'A');
+      ctx.emitState();
+      return;
+    }
+
+    phase = 'goal';
+    goalEndsAt = now() + GOAL_RESET_DELAY_MS;
+    world.ball.x = FIELD_L / 2;
+    world.ball.y = FIELD_W / 2;
+    world.ball.vx = 0;
+    world.ball.vy = 0;
+    for (const side of ['A', 'B'] as const) {
+      for (const r of world.rods[side]) {
+        r.dir = 0;
+        r.target = null;
+      }
+    }
+
+    clearPhaseTimeouts();
+    goalTimeout = setTimeout(() => {
+      goalTimeout = undefined;
+      startCountdown();
+    }, GOAL_RESET_DELAY_MS);
+
     ctx.emitState();
   }
 
@@ -200,47 +309,198 @@ export function createFoosballGame(
       }
 
       if (res.goal) {
-        const scoringSide = res.goal;
-        score[scoringSide] += 1;
-        ctx.emitEvent('goal', { side: scoringSide });
-
-        if (score[scoringSide] >= TARGET) {
-          phase = 'ended';
-          winner = scoringSide;
-          forfeit = false;
-          stopTickLoop();
-          clearPhaseTimeouts();
-          recordMatchResult(scoringSide, scoringSide === 'A' ? 'B' : 'A');
-          ctx.emitState();
-          return;
-        }
-
-        phase = 'goal';
-        goalEndsAt = now() + 1500;
-        world.ball.x = FIELD_L / 2;
-        world.ball.y = FIELD_W / 2;
-        world.ball.vx = 0;
-        world.ball.vy = 0;
-        for (const side of ['A', 'B'] as const) {
-          for (const r of world.rods[side]) {
-            r.dir = 0;
-            r.target = null;
-          }
-        }
-
-        clearPhaseTimeouts();
-        goalTimeout = setTimeout(() => {
-          goalTimeout = undefined;
-          startCountdown();
-        }, 1500);
-
-        ctx.emitState();
+        handleGoalScored(res.goal);
         return;
       }
 
       ctx.emitState();
     }
   }
+
+  // --------------------------------------------------------------------------
+  // Action Handlers
+  // --------------------------------------------------------------------------
+
+  function handleSitAction(userId: string, act: Record<string, unknown>): void {
+    if (phase !== 'lobby' && phase !== 'ended') {
+      throw new GameError('BAD_PHASE', 'Can only sit in lobby or ended phase');
+    }
+    const side = act.side;
+    if (side !== 'A' && side !== 'B') {
+      throw new GameError('BAD_ACTION', 'Side must be A or B');
+    }
+
+    const currentSide = getPlayerSide(userId);
+    if (currentSide === side) {
+      return;
+    }
+
+    if (seats[side].length >= MAX_PLAYERS_PER_SIDE) {
+      throw new GameError('SEAT_TAKEN', `Side ${side} is full`);
+    }
+
+    if (currentSide) {
+      const oldIdx = seats[currentSide].findIndex((p) => p.userId === userId);
+      if (oldIdx !== -1) seats[currentSide].splice(oldIdx, 1);
+    }
+
+    const pRef = ctx.participants().find((p) => p.userId === userId);
+    seats[side].push({
+      userId,
+      name: pRef?.name ?? 'Player',
+      character: pRef?.character ?? 'default',
+    });
+    ctx.emitState();
+  }
+
+  function handleStandAction(userId: string): void {
+    if (phase !== 'lobby' && phase !== 'ended') {
+      throw new GameError('BAD_PHASE', 'Can only stand in lobby or ended phase');
+    }
+    const currentSide = getPlayerSide(userId);
+    if (currentSide) {
+      const idx = seats[currentSide].findIndex((p) => p.userId === userId);
+      if (idx !== -1) seats[currentSide].splice(idx, 1);
+      ctx.emitState();
+    }
+  }
+
+  function handleStartAction(userId: string): void {
+    if (phase !== 'lobby') {
+      throw new GameError('BAD_PHASE', 'Can only start from lobby');
+    }
+    const side = getPlayerSide(userId);
+    if (!side) {
+      throw new GameError('NOT_SEATED', 'Only seated players can start');
+    }
+    if (seats.A.length !== seats.B.length || seats.A.length === 0) {
+      throw new GameError('UNEVEN_TEAMS', 'Start requires equal counts on both sides (1v1 or 2v2)');
+    }
+
+    score.A = 0;
+    score.B = 0;
+    winner = null;
+    forfeit = false;
+    recordCalled = false;
+    world = createInitialWorld();
+
+    startCountdown();
+  }
+
+  function handleRematchAction(userId: string): void {
+    if (phase !== 'ended') {
+      throw new GameError('BAD_PHASE', 'Can only rematch when ended');
+    }
+    const side = getPlayerSide(userId);
+    if (!side) {
+      throw new GameError('NOT_SEATED', 'Only seated players can rematch');
+    }
+
+    phase = 'lobby';
+    score.A = 0;
+    score.B = 0;
+    winner = null;
+    forfeit = false;
+    recordCalled = false;
+    graceExpiresAt = null;
+    graceSide = null;
+    stopTickLoop();
+    clearPhaseTimeouts();
+
+    world = createInitialWorld();
+    for (const p of seats.A) p.away = false;
+    for (const p of seats.B) p.away = false;
+
+    ctx.emitState();
+  }
+
+  function validateRodIndex(rod: unknown): number {
+    if (typeof rod !== 'number' || rod < MIN_ROD_INDEX || rod > MAX_ROD_INDEX || !Number.isInteger(rod)) {
+      throw new GameError('BAD_ACTION', 'Invalid rod index');
+    }
+    return rod;
+  }
+
+  function handleAimAction(userId: string, act: Record<string, unknown>): void {
+    const side = getPlayerSide(userId);
+    if (!side) {
+      throw new GameError('NOT_SEATED', 'Only seated players can aim rods');
+    }
+    const rod = validateRodIndex(act.rod);
+    const y = act.y;
+    if (typeof y !== 'number' || !Number.isFinite(y)) {
+      throw new GameError('BAD_ACTION', 'Invalid y');
+    }
+
+    const owned = getPlayerOwnedRods(side, userId);
+    if (!owned.includes(rod)) {
+      throw new GameError('NOT_YOUR_ROD', 'Not your rod');
+    }
+
+    if (phase !== 'playing') {
+      return;
+    }
+
+    world.rods[side][rod].target = clampRodOffset(rod, y);
+    world.rods[side][rod].dir = 0;
+  }
+
+  function handleMoveAction(userId: string, act: Record<string, unknown>): void {
+    const side = getPlayerSide(userId);
+    if (!side) {
+      throw new GameError('NOT_SEATED', 'Only seated players can move rods');
+    }
+    const rod = validateRodIndex(act.rod);
+    const dir = act.dir;
+    if (dir !== -1 && dir !== 0 && dir !== 1) {
+      throw new GameError('BAD_ACTION', 'Invalid dir');
+    }
+
+    const owned = getPlayerOwnedRods(side, userId);
+    if (!owned.includes(rod)) {
+      throw new GameError('NOT_YOUR_ROD', 'Not your rod');
+    }
+
+    if (phase !== 'playing') {
+      throw new GameError('BAD_PHASE', 'Can only move rods during playing phase');
+    }
+
+    world.rods[side][rod].dir = dir;
+    world.rods[side][rod].target = null;
+  }
+
+  function handleKickAction(userId: string, act: Record<string, unknown>): void {
+    const side = getPlayerSide(userId);
+    if (!side) {
+      throw new GameError('NOT_SEATED', 'Only seated players can kick rods');
+    }
+    const rod = validateRodIndex(act.rod);
+
+    const owned = getPlayerOwnedRods(side, userId);
+    if (!owned.includes(rod)) {
+      throw new GameError('NOT_YOUR_ROD', 'Not your rod');
+    }
+
+    if (phase !== 'playing') {
+      throw new GameError('BAD_PHASE', 'Can only kick during playing phase');
+    }
+
+    let strength = DEFAULT_KICK_STRENGTH;
+    if (act.strength !== undefined) {
+      if (typeof act.strength !== 'number' || !Number.isFinite(act.strength)) {
+        throw new GameError('BAD_ACTION', 'Invalid strength');
+      }
+      strength = act.strength;
+    }
+
+    if (triggerKick(world, side, rod, strength)) {
+      ctx.emitEvent('kick', { side, rod });
+    }
+  }
+
+  // --------------------------------------------------------------------------
+  // Public Lifecycle & Instance Methods
+  // --------------------------------------------------------------------------
 
   return {
     get _world() {
@@ -292,13 +552,13 @@ export function createFoosballGame(
         return;
       }
 
-      // During match: mark player away
+      // During active match: mark absent player as away
       const player = seats[side].find((p) => p.userId === userId);
       if (player) {
         player.away = true;
       }
 
-      // If no present player remains on that side, start grace timer
+      // If no present player remains on that side, start grace forfeit countdown
       const hasPresentPlayer = seats[side].some((p) => !p.away);
       if (!hasPresentPlayer && graceTimeout === undefined) {
         graceSide = side;
@@ -321,194 +581,27 @@ export function createFoosballGame(
       const act = action as { type: string; [key: string]: unknown };
 
       switch (act.type) {
-        case 'sit': {
-          if (phase !== 'lobby' && phase !== 'ended') {
-            throw new GameError('BAD_PHASE', 'Can only sit in lobby or ended phase');
-          }
-          const side = act.side;
-          if (side !== 'A' && side !== 'B') {
-            throw new GameError('BAD_ACTION', 'Side must be A or B');
-          }
-
-          const currentSide = getPlayerSide(userId);
-          if (currentSide === side) {
-            return;
-          }
-
-          if (seats[side].length >= 2) {
-            throw new GameError('SEAT_TAKEN', `Side ${side} is full`);
-          }
-
-          if (currentSide) {
-            const oldIdx = seats[currentSide].findIndex((p) => p.userId === userId);
-            if (oldIdx !== -1) seats[currentSide].splice(oldIdx, 1);
-          }
-
-          const pRef = ctx.participants().find((p) => p.userId === userId);
-          seats[side].push({
-            userId,
-            name: pRef?.name ?? 'Player',
-            character: pRef?.character ?? 'default',
-          });
-          ctx.emitState();
+        case 'sit':
+          handleSitAction(userId, act);
           break;
-        }
-
-        case 'stand': {
-          if (phase !== 'lobby' && phase !== 'ended') {
-            throw new GameError('BAD_PHASE', 'Can only stand in lobby or ended phase');
-          }
-          const currentSide = getPlayerSide(userId);
-          if (currentSide) {
-            const idx = seats[currentSide].findIndex((p) => p.userId === userId);
-            if (idx !== -1) seats[currentSide].splice(idx, 1);
-            ctx.emitState();
-          }
+        case 'stand':
+          handleStandAction(userId);
           break;
-        }
-
-        case 'start': {
-          if (phase !== 'lobby') {
-            throw new GameError('BAD_PHASE', 'Can only start from lobby');
-          }
-          const side = getPlayerSide(userId);
-          if (!side) {
-            throw new GameError('NOT_SEATED', 'Only seated players can start');
-          }
-          if (seats.A.length !== seats.B.length || seats.A.length === 0) {
-            throw new GameError('UNEVEN_TEAMS', 'Start requires equal counts on both sides (1v1 or 2v2)');
-          }
-
-          score.A = 0;
-          score.B = 0;
-          winner = null;
-          forfeit = false;
-          recordCalled = false;
-          world = createInitialWorld();
-
-          startCountdown();
+        case 'start':
+          handleStartAction(userId);
           break;
-        }
-
-        case 'rematch': {
-          if (phase !== 'ended') {
-            throw new GameError('BAD_PHASE', 'Can only rematch when ended');
-          }
-          const side = getPlayerSide(userId);
-          if (!side) {
-            throw new GameError('NOT_SEATED', 'Only seated players can rematch');
-          }
-
-          phase = 'lobby';
-          score.A = 0;
-          score.B = 0;
-          winner = null;
-          forfeit = false;
-          recordCalled = false;
-          graceExpiresAt = null;
-          graceSide = null;
-          stopTickLoop();
-          clearPhaseTimeouts();
-
-          world = createInitialWorld();
-          for (const p of seats.A) p.away = false;
-          for (const p of seats.B) p.away = false;
-
-          ctx.emitState();
+        case 'rematch':
+          handleRematchAction(userId);
           break;
-        }
-
-        case 'aim': {
-          // Rate limiting: the gateway already limits to 60 msgs/s per socket
-          // and motion speed is capped by ROD_AIM_SPEED, so flooding aims has no extra effect.
-          const side = getPlayerSide(userId);
-          if (!side) {
-            throw new GameError('NOT_SEATED', 'Only seated players can aim rods');
-          }
-          const rod = act.rod;
-          if (typeof rod !== 'number' || rod < 0 || rod > 3 || !Number.isInteger(rod)) {
-            throw new GameError('BAD_ACTION', 'Invalid rod index');
-          }
-          const y = act.y;
-          if (typeof y !== 'number' || !Number.isFinite(y)) {
-            throw new GameError('BAD_ACTION', 'Invalid y');
-          }
-
-          const owned = getPlayerOwnedRods(side, userId);
-          if (!owned.includes(rod)) {
-            throw new GameError('NOT_YOUR_ROD', 'Not your rod');
-          }
-
-          if (phase !== 'playing') {
-            return;
-          }
-
-          world.rods[side][rod].target = clampRodOffset(rod, y);
-          world.rods[side][rod].dir = 0;
+        case 'aim':
+          handleAimAction(userId, act);
           break;
-        }
-
-        case 'move': {
-          const side = getPlayerSide(userId);
-          if (!side) {
-            throw new GameError('NOT_SEATED', 'Only seated players can move rods');
-          }
-          const rod = act.rod;
-          if (typeof rod !== 'number' || rod < 0 || rod > 3 || !Number.isInteger(rod)) {
-            throw new GameError('BAD_ACTION', 'Invalid rod index');
-          }
-          const dir = act.dir;
-          if (dir !== -1 && dir !== 0 && dir !== 1) {
-            throw new GameError('BAD_ACTION', 'Invalid dir');
-          }
-
-          const owned = getPlayerOwnedRods(side, userId);
-          if (!owned.includes(rod)) {
-            throw new GameError('NOT_YOUR_ROD', 'Not your rod');
-          }
-
-          if (phase !== 'playing') {
-            throw new GameError('BAD_PHASE', 'Can only move rods during playing phase');
-          }
-
-          world.rods[side][rod].dir = dir;
-          world.rods[side][rod].target = null;
+        case 'move':
+          handleMoveAction(userId, act);
           break;
-        }
-
-        case 'kick': {
-          const side = getPlayerSide(userId);
-          if (!side) {
-            throw new GameError('NOT_SEATED', 'Only seated players can kick rods');
-          }
-          const rod = act.rod;
-          if (typeof rod !== 'number' || rod < 0 || rod > 3 || !Number.isInteger(rod)) {
-            throw new GameError('BAD_ACTION', 'Invalid rod index');
-          }
-
-          const owned = getPlayerOwnedRods(side, userId);
-          if (!owned.includes(rod)) {
-            throw new GameError('NOT_YOUR_ROD', 'Not your rod');
-          }
-
-          if (phase !== 'playing') {
-            throw new GameError('BAD_PHASE', 'Can only kick during playing phase');
-          }
-
-          let strength = 1;
-          if (act.strength !== undefined) {
-            if (typeof act.strength !== 'number' || !Number.isFinite(act.strength)) {
-              throw new GameError('BAD_ACTION', 'Invalid strength');
-            }
-            strength = act.strength;
-          }
-
-          if (triggerKick(world, side, rod, strength)) {
-            ctx.emitEvent('kick', { side, rod });
-          }
+        case 'kick':
+          handleKickAction(userId, act);
           break;
-        }
-
         default:
           throw new GameError('BAD_ACTION', `Unknown action type: ${act.type}`);
       }
@@ -523,12 +616,12 @@ export function createFoosballGame(
 
       let countdown = 0;
       if (phase === 'countdown') {
-        countdown = Math.max(0, Math.ceil((countdownEndsAt - now()) / 1000));
+        countdown = Math.max(0, Math.ceil((countdownEndsAt - now()) / MS_PER_SECOND));
       }
 
       let graceLeft: number | null = null;
       if (graceExpiresAt !== null) {
-        graceLeft = Math.max(0, Math.ceil((graceExpiresAt - now()) / 1000));
+        graceLeft = Math.max(0, Math.ceil((graceExpiresAt - now()) / MS_PER_SECOND));
       }
 
       return {

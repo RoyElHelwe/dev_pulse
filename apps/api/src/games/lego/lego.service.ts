@@ -1,21 +1,30 @@
+/**
+ * Lego board persistence, in-memory caching, and debounced/throttled change propagation.
+ * Coordinates Prisma LegoBoard storage and emits real-time office websocket updates.
+ */
+
 import { Injectable, Logger, type OnModuleDestroy } from '@nestjs/common';
 import { OfficeGateway } from '../../office/office.gateway';
-import { Budget } from '../../office/office.rules';
 import { PrismaService } from '../../prisma/prisma.service';
+import { GameError } from '../game.types';
 import {
-  type GameContext,
-  GameError,
-  type GameInstance,
-  type GamePlayerRef,
-} from '../game.types';
-import {
-  BOARD_H,
-  BOARD_W,
   type Brick,
   parseBricks,
+  removeBrickAt,
   validatePlace,
 } from './lego.rules';
 
+export { LegoGameInstance } from './lego.game';
+
+/** Debounce delay before persisting in-memory board modifications to PostgreSQL. */
+export const SAVE_DEBOUNCE_MS = 400;
+
+/** Throttle duration between broadcasting board state changes to the office. */
+export const BROADCAST_THROTTLE_MS = 300;
+
+/**
+ * In-memory representation of an active Lego board.
+ */
 export interface CachedBoard {
   bricks: Brick[];
   version: number;
@@ -24,6 +33,9 @@ export interface CachedBoard {
   broadcastTimer?: ReturnType<typeof setTimeout> | null;
 }
 
+/**
+ * Service managing Lego board lifecycle, caching, and persistence.
+ */
 @Injectable()
 export class LegoService implements OnModuleDestroy {
   private readonly logger = new Logger(LegoService.name);
@@ -35,6 +47,10 @@ export class LegoService implements OnModuleDestroy {
     private readonly officeGateway: OfficeGateway,
   ) {}
 
+  /**
+   * Ensures that the specified Lego board is loaded from the database into the cache.
+   * Concurrent requests for the same board share the in-flight database load promise.
+   */
   async ensureLoaded(workspaceId: string, objectId: string): Promise<void> {
     const key = `${workspaceId}:${objectId}`;
     const cached = this.cache.get(key);
@@ -78,6 +94,9 @@ export class LegoService implements OnModuleDestroy {
     return loadPromise;
   }
 
+  /**
+   * Returns current cached bricks and version for a board without initiating a database fetch.
+   */
   peek(
     workspaceId: string,
     objectId: string,
@@ -92,6 +111,9 @@ export class LegoService implements OnModuleDestroy {
     };
   }
 
+  /**
+   * Places a brick onto the cached board, schedules a debounced save, and throttles broadcast.
+   */
   place(workspaceId: string, objectId: string, brick: Brick): void {
     const key = `${workspaceId}:${objectId}`;
     const entry = this.cache.get(key);
@@ -110,6 +132,10 @@ export class LegoService implements OnModuleDestroy {
     this.scheduleThrottledBroadcast(workspaceId, objectId);
   }
 
+  /**
+   * Removes any brick covering coordinate (x, y) from the board.
+   * Returns true if a brick was found and removed, false otherwise.
+   */
   remove(workspaceId: string, objectId: string, x: number, y: number): boolean {
     const key = `${workspaceId}:${objectId}`;
     const entry = this.cache.get(key);
@@ -117,11 +143,9 @@ export class LegoService implements OnModuleDestroy {
       throw new GameError('LOADING', 'Board is not loaded yet');
     }
 
-    const idx = entry.bricks.findIndex(
-      ([bx, by, bw, bh]) => bx <= x && x < bx + bw && by <= y && y < by + bh,
-    );
-    if (idx !== -1) {
-      entry.bricks.splice(idx, 1);
+    const { nextBricks, removed } = removeBrickAt(entry.bricks, x, y);
+    if (removed) {
+      entry.bricks = nextBricks;
       entry.version++;
       this.scheduleDebouncedSave(workspaceId, objectId);
       this.scheduleThrottledBroadcast(workspaceId, objectId);
@@ -130,6 +154,9 @@ export class LegoService implements OnModuleDestroy {
     return false;
   }
 
+  /**
+   * Clears all bricks from the specified board.
+   */
   clear(workspaceId: string, objectId: string): void {
     const key = `${workspaceId}:${objectId}`;
     const entry = this.cache.get(key);
@@ -143,6 +170,10 @@ export class LegoService implements OnModuleDestroy {
     this.scheduleThrottledBroadcast(workspaceId, objectId);
   }
 
+  /**
+   * Persists the current in-memory board state to the database using an upsert.
+   * WHY: Single JSON column upsert per board is significantly faster than per-brick rows.
+   */
   async persistBoard(workspaceId: string, objectId: string): Promise<void> {
     const key = `${workspaceId}:${objectId}`;
     const entry = this.cache.get(key);
@@ -167,6 +198,10 @@ export class LegoService implements OnModuleDestroy {
     }
   }
 
+  /**
+   * Schedules a debounced database write for the board.
+   * WHY: Debouncing (400ms) absorbs rapid brick edits while guaranteeing persistence.
+   */
   private scheduleDebouncedSave(workspaceId: string, objectId: string): void {
     const key = `${workspaceId}:${objectId}`;
     const entry = this.cache.get(key);
@@ -179,9 +214,13 @@ export class LegoService implements OnModuleDestroy {
     entry.saveTimer = setTimeout(() => {
       entry.saveTimer = null;
       void this.persistBoard(workspaceId, objectId);
-    }, 400);
+    }, SAVE_DEBOUNCE_MS);
   }
 
+  /**
+   * Schedules a trailing throttled broadcast to notify office clients of changes.
+   * WHY: Throttling (300ms) prevents flooding sockets during multi-user building bursts.
+   */
   private scheduleThrottledBroadcast(workspaceId: string, objectId: string): void {
     const key = `${workspaceId}:${objectId}`;
     const entry = this.cache.get(key);
@@ -197,9 +236,12 @@ export class LegoService implements OnModuleDestroy {
         id: objectId,
         bricks: [...entry.bricks],
       });
-    }, 300);
+    }, BROADCAST_THROTTLE_MS);
   }
 
+  /**
+   * Lists all Lego boards in a workspace, merging database records with dirty in-memory cache entries.
+   */
   async listBoards(
     workspaceId: string,
   ): Promise<Array<{ id: string; bricks: Brick[] }>> {
@@ -226,6 +268,9 @@ export class LegoService implements OnModuleDestroy {
     }));
   }
 
+  /**
+   * Flushes all pending debounced saves immediately to database.
+   */
   async flush(): Promise<void> {
     const saves: Promise<void>[] = [];
     for (const [key, entry] of this.cache.entries()) {
@@ -239,6 +284,9 @@ export class LegoService implements OnModuleDestroy {
     await Promise.allSettled(saves);
   }
 
+  /**
+   * Cleans up all pending timers and flushes unpersisted boards on module shutdown.
+   */
   async onModuleDestroy(): Promise<void> {
     await this.flush();
     for (const entry of this.cache.values()) {
@@ -247,166 +295,5 @@ export class LegoService implements OnModuleDestroy {
         entry.broadcastTimer = null;
       }
     }
-  }
-}
-
-export class LegoGameInstance implements GameInstance {
-  private readonly logger = new Logger(LegoGameInstance.name);
-  private readonly players = new Map<string, GamePlayerRef>();
-  private readonly roles = new Map<string, string>();
-  private readonly budgets = new Map<string, Budget>();
-  private disposed = false;
-
-  constructor(
-    private readonly ctx: GameContext,
-    private readonly legoService: LegoService,
-    private readonly prisma: PrismaService,
-  ) {}
-
-  onJoin(p: GamePlayerRef, _intent: unknown): void {
-    if (this.disposed) return;
-    this.players.set(p.userId, p);
-
-    void this.legoService
-      .ensureLoaded(this.ctx.workspaceId, this.ctx.objectId)
-      .then(() => {
-        if (!this.disposed) {
-          this.ctx.emitState();
-        }
-      })
-      .catch((err) => {
-        this.logger.error('Failed to ensure board loaded on join', err);
-      });
-
-    void this.prisma.workspaceMember
-      .findUnique({
-        where: { userId: p.userId },
-        select: { role: true },
-      })
-      .then((member) => {
-        if (member && !this.disposed) {
-          this.roles.set(p.userId, member.role);
-          this.ctx.emitState();
-        }
-      })
-      .catch((err) => {
-        this.logger.error('Failed to get member role on join', err);
-      });
-  }
-
-  onLeave(userId: string, _reason: 'left' | 'far' | 'disconnected'): void {
-    this.players.delete(userId);
-    this.roles.delete(userId);
-    this.budgets.delete(userId);
-    if (!this.disposed) {
-      this.ctx.emitState();
-    }
-  }
-
-  onAction(userId: string, action: unknown): void {
-    if (this.disposed) return;
-
-    let budget = this.budgets.get(userId);
-    if (!budget) {
-      budget = new Budget(15);
-      this.budgets.set(userId, budget);
-    }
-    if (!budget.allow()) {
-      throw new GameError('RATE_LIMIT', 'Too many actions');
-    }
-
-    if (!action || typeof action !== 'object' || !('type' in action)) {
-      throw new GameError('BAD_REQUEST', 'Action must have a type');
-    }
-
-    const { type } = action as { type: unknown };
-
-    if (type === 'place') {
-      const { x, y, w, h, c } = action as Record<string, unknown>;
-      if (
-        typeof x !== 'number' ||
-        typeof y !== 'number' ||
-        typeof w !== 'number' ||
-        typeof h !== 'number' ||
-        typeof c !== 'number'
-      ) {
-        throw new GameError('BAD_REQUEST', 'Missing or invalid place parameters');
-      }
-
-      const board = this.legoService.peek(this.ctx.workspaceId, this.ctx.objectId);
-      if (!board) {
-        throw new GameError('LOADING', 'Board is not loaded yet');
-      }
-
-      const brick: Brick = [x, y, w, h, c];
-      const validationError = validatePlace(board.bricks, brick);
-      if (validationError) {
-        throw new GameError('INVALID_BRICK', validationError);
-      }
-
-      this.legoService.place(this.ctx.workspaceId, this.ctx.objectId, brick);
-      this.ctx.emitState();
-      return;
-    }
-
-    if (type === 'remove') {
-      const { x, y } = action as Record<string, unknown>;
-      if (typeof x !== 'number' || typeof y !== 'number') {
-        throw new GameError('BAD_REQUEST', 'Missing or invalid remove parameters');
-      }
-
-      const board = this.legoService.peek(this.ctx.workspaceId, this.ctx.objectId);
-      if (!board) {
-        throw new GameError('LOADING', 'Board is not loaded yet');
-      }
-
-      this.legoService.remove(this.ctx.workspaceId, this.ctx.objectId, x, y);
-      this.ctx.emitState();
-      return;
-    }
-
-    if (type === 'clear') {
-      const role = this.roles.get(userId);
-      if (role !== 'OWNER' && role !== 'ADMIN') {
-        throw new GameError(
-          'FORBIDDEN',
-          'Only OWNER or ADMIN may clear the board',
-        );
-      }
-
-      const board = this.legoService.peek(this.ctx.workspaceId, this.ctx.objectId);
-      if (!board) {
-        throw new GameError('LOADING', 'Board is not loaded yet');
-      }
-
-      this.legoService.clear(this.ctx.workspaceId, this.ctx.objectId);
-      this.ctx.emitState();
-      return;
-    }
-
-    throw new GameError('BAD_REQUEST', `Unknown action type: ${String(type)}`);
-  }
-
-  view(userId: string) {
-    const board = this.legoService.peek(this.ctx.workspaceId, this.ctx.objectId);
-    const role = this.roles.get(userId);
-    const canClear = role === 'OWNER' || role === 'ADMIN';
-
-    return {
-      ready: !!board,
-      w: BOARD_W,
-      h: BOARD_H,
-      bricks: board ? board.bricks : [],
-      canClear,
-      players: Array.from(this.players.values()).map((p) => p.name),
-      version: board ? board.version : 0,
-    };
-  }
-
-  dispose(): void {
-    this.disposed = true;
-    this.players.clear();
-    this.roles.clear();
-    this.budgets.clear();
   }
 }

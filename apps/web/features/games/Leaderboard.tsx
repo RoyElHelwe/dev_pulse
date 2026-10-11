@@ -1,3 +1,8 @@
+/**
+ * Leaderboard component displaying recent player rankings for a game.
+ * Fetches weekly win/loss stats and listens for live socket match-end events to refresh rankings.
+ */
+
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
@@ -7,26 +12,38 @@ import { api } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import type { GameKind, LeaderboardEntry, LeaderboardResponse } from './types';
 
+/** Aggregation window in days for leaderboard rankings. */
+const LEADERBOARD_WINDOW_DAYS = 7;
+
+/** Props for the Leaderboard component. */
 export interface LeaderboardProps {
+  /** Target game kind for which rankings are fetched. */
   game: GameKind;
+  /** Socket instance used to listen for game completion events. */
   socket?: Socket | null;
+  /** Optional additional CSS classes for container layout. */
   className?: string;
 }
 
+/**
+ * Renders a weekly leaderboard card showing top players with win/loss counts.
+ */
 export function Leaderboard({ game, socket, className }: LeaderboardProps) {
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchLeaderboard = useCallback(async () => {
     try {
-      const data = await api<LeaderboardResponse>(`/workspace/games/leaderboard?game=${game}&days=7`);
+      const data = await api<LeaderboardResponse>(
+        `/workspace/games/leaderboard?game=${game}&days=${LEADERBOARD_WINDOW_DAYS}`,
+      );
       if (data && Array.isArray(data.entries)) {
         setEntries(data.entries);
       } else {
         setEntries([]);
       }
     } catch {
-      // Graceful fallback if leaderboard endpoint is not yet populated or fails
+      // WHY: Gracefully default to empty rankings if the API endpoint fails or no games have occurred yet.
       setEntries([]);
     } finally {
       setLoading(false);
@@ -38,6 +55,8 @@ export function Leaderboard({ game, socket, className }: LeaderboardProps) {
     void fetchLeaderboard();
   }, [fetchLeaderboard]);
 
+  // WHY: Subscribing to 'game:ended' ensures rankings refresh in real time immediately when any match finishes,
+  // without requiring manual user refreshes or aggressive background polling.
   useEffect(() => {
     if (!socket) return;
     const onEnded = () => {

@@ -1,9 +1,14 @@
+/**
+ * Uno card rendering component.
+ * Displays card faces with color styling, corner indices, center symbols, and button interaction.
+ */
+
 'use client';
 
 import { cn } from '@/lib/cn';
 import type { Card, Value } from './types';
 
-export function getCardSymbol(value: Value): string {
+function getCardSymbol(value: Value): string {
   switch (value) {
     case 'skip':
       return '⊘';
@@ -37,6 +42,9 @@ interface UnoCardProps {
   isButton?: boolean;
 }
 
+/**
+ * Renders an interactive or static Uno card.
+ */
 export function UnoCard({
   card,
   disabled = false,
