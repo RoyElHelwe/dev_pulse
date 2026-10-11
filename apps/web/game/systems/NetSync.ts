@@ -10,6 +10,9 @@ import { type Avatar, type Direction, DIRECTIONS } from '../objects/Avatar';
 import { RemotePlayer } from '../objects/RemotePlayer';
 import type { Proximity } from './Proximity';
 
+/** Resolution multiplier for sharp font rendering on high-DPI displays. */
+const TEXT_RESOLUTION_SCALE = 2;
+
 /** Someone else in the office, as the network describes them. */
 export interface PlayerState {
   id: string;
@@ -25,6 +28,13 @@ export interface PlayerState {
   zone?: string | null;
 }
 
+/** For the minimap and voice: positions in tiles, and the room each person stands in (null outside rooms). */
+export interface OfficeSnapshot {
+  me: { x: number; y: number; room: string | null; dir: Direction; seated: boolean };
+  others: { id: string; x: number; y: number; room: string | null; dir: Direction; seated: boolean }[];
+  view: { x: number; y: number; w: number; h: number };
+}
+
 /** Last broadcast movement state of the local player. */
 interface SentState {
   at: number;
@@ -34,11 +44,13 @@ interface SentState {
 }
 
 /** Dependencies and callbacks required by the NetSync system. */
-interface NetSyncOptions {
+export interface NetSyncOptions {
   scene: Phaser.Scene;
   player: Avatar;
+  myId: string;
   fontFamily: string;
   dpr: number;
+  roomAt: (x: number, y: number) => string | null;
   depthOf: (x: number, y: number, seated: boolean) => number;
   onMove: (x: number, y: number, dir: number, moving: boolean, seated: boolean) => void;
   onBadgesDirty?: () => void;
@@ -57,8 +69,10 @@ export class NetSync {
 
   private readonly scene: Phaser.Scene;
   private readonly player: Avatar;
+  private readonly myId: string;
   private readonly fontFamily: string;
   private readonly resolution: number;
+  private readonly roomAt: (x: number, y: number) => string | null;
   private readonly depthOf: (x: number, y: number, seated: boolean) => number;
   private readonly onMove: (x: number, y: number, dir: number, moving: boolean, seated: boolean) => void;
   private readonly onBadgesDirty?: () => void;
@@ -69,11 +83,41 @@ export class NetSync {
   constructor(opts: NetSyncOptions) {
     this.scene = opts.scene;
     this.player = opts.player;
+    this.myId = opts.myId;
     this.fontFamily = opts.fontFamily;
-    this.resolution = opts.dpr * 2;
+    this.resolution = opts.dpr * TEXT_RESOLUTION_SCALE;
+    this.roomAt = opts.roomAt;
     this.depthOf = opts.depthOf;
     this.onMove = opts.onMove;
     this.onBadgesDirty = opts.onBadgesDirty;
+  }
+
+  /** Captures current office positions, rooms, facing directions, and camera view for minimap. */
+  snapshot(cam: { x: number; y: number; width: number; height: number }): OfficeSnapshot {
+    const at = (avatar: Avatar) => ({
+      x: avatar.x / TILE,
+      y: avatar.y / TILE,
+      room: this.roomAt(avatar.x / TILE, avatar.y / TILE),
+      dir: avatar.facing,
+      seated: avatar.seated,
+    });
+    return {
+      me: at(this.player),
+      others: [...this.remotes].map(([id, r]) => ({ id, ...at(r.avatar) })),
+      view: { x: cam.x / TILE, y: cam.y / TILE, w: cam.width / TILE, h: cam.height / TILE },
+    };
+  }
+
+  /** Sets voice activity indicators (headset and speech pulse) for local or remote player. */
+  setVoice(id: string, inCall: boolean, talking: boolean): void {
+    const avatar = id === this.myId ? this.player : this.remotes.get(id)?.avatar;
+    avatar?.setInCall(inCall, talking);
+  }
+
+  /** Displays a temporary speech bubble above local or remote player avatar. */
+  showChat(userId: string, message: string): void {
+    const avatar = userId === this.myId ? this.player : this.remotes.get(userId)?.avatar;
+    avatar?.say(message);
   }
 
   /** Returns coordinates of all remote players currently seated. */

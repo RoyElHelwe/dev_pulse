@@ -10,6 +10,7 @@ import { faceBase, isWallMounted, mountWall } from '../layout/mount';
 import type { Furniture, OfficeLayout } from '../layout/types';
 import type { DeskOwner } from '../objects/DeskPlates';
 import { FURNITURE } from '../render/furniture';
+import { legoArt } from '../render/legoArt';
 import {
   ensureFurnitureTexture,
   ensureShadowTexture,
@@ -43,7 +44,7 @@ interface WallMountedSprite {
 }
 
 /** Dependencies required by the FurnitureSprites system. */
-interface FurnitureSpritesOptions {
+export interface FurnitureSpritesOptions {
   scene: Phaser.Scene;
   getLayout: () => OfficeLayout;
   getDpr: () => number;
@@ -66,6 +67,10 @@ export class FurnitureSprites {
   private readonly getLayout: () => OfficeLayout;
   private readonly getDpr: () => number;
   private readonly isEditing: () => boolean;
+  private readonly unsubLego: () => void;
+
+  private desks: DeskOwner[] = [];
+  private taskCounts: ReadonlyMap<string, number> = new Map();
 
   /** Placed furniture sprites keyed by item id (shared with EditMode). */
   readonly sprites = new Map<string, FurnitureSprite>();
@@ -78,6 +83,9 @@ export class FurnitureSprites {
     this.getLayout = options.getLayout;
     this.getDpr = options.getDpr;
     this.isEditing = options.isEditing ?? (() => false);
+    this.unsubLego = legoArt.subscribe((objectId) => {
+      this.updateLegoBoard(objectId);
+    });
   }
 
   /** Places furniture and optional shadow sprites into the scene, tracking wall-mounted art. */
@@ -120,8 +128,29 @@ export class FurnitureSprites {
     }
   }
 
+  /** Updates desk owners and re-renders customized desk visuals. */
+  setDesks(desks: DeskOwner[]): void {
+    this.desks = desks;
+    this.redecorateDesks();
+  }
+
+  /** Updates open task counts per user and re-renders desk paper stacks. */
+  setTaskCounts(counts: ReadonlyMap<string, number>): void {
+    this.taskCounts = counts;
+    this.redecorateDesks();
+  }
+
+  /** Updates character customization for a specific desk owner if assigned. */
+  setOwnerCharacter(userId: string, character: string): void {
+    if (!this.desks.some((d) => d.userId === userId)) return;
+    this.desks = this.desks.map((d) => (d.userId === userId ? { ...d, character } : d));
+    this.redecorateDesks();
+  }
+
   /** Desks show their owner's things (mug in their colour, their kind of clutter...). */
-  redecorateDesks(desks: DeskOwner[], taskCounts: ReadonlyMap<string, number>): void {
+  redecorateDesks(desks: DeskOwner[] = this.desks, taskCounts: ReadonlyMap<string, number> = this.taskCounts): void {
+    this.desks = desks;
+    this.taskCounts = taskCounts;
     setDeskOwners(this.scene, ownersOf(desks));
     setDeskPapers(this.scene, papersOf(desks, taskCounts));
     const scale = textureScale(this.getDpr());
@@ -163,6 +192,7 @@ export class FurnitureSprites {
 
   /** Clears sprite and wall-mounted tracking references. */
   destroy(): void {
+    this.unsubLego();
     this.wallMounted.length = 0;
     this.sprites.clear();
   }

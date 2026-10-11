@@ -3,11 +3,12 @@
  *
  * Delegates specialized behaviors to dedicated systems:
  * - ViewControl: Camera tracking, zoom levels, and layout drawer view shift
- * - NetSync: Remote player lifecycle, positional lerping, and character appearances
+ * - NetSync: Remote player lifecycle, positional lerping, minimap snapshots, and character appearances
  * - FurnitureSprites: Furniture rendering, dynamic overlays, and desk paper stacks
  * - DeskPlates: Desk occupant name tags and status bubbles
- * - RoomBadges: Meeting room booking status indicators
- * - RoomLocks: Room access permissions, boundary enforcement, and locked room ejection
+ * - RoomBadges: Meeting room booking status indicators and occupancy counters
+ * - RoomLocks: Room access permissions, boundary enforcement, obstacle collisions, and spawn arrival points
+ * - Zones: Zone boundary tracking and enter/leave event dispatching
  * - Seating: Chair proximity detection and sit/stand animations
  * - Interactions: Interactive elements (TV, whiteboard, foosball, desk prompt)
  * - Proximity: Voice proximity tracking and room audio containment
@@ -15,7 +16,6 @@
  */
 
 import * as Phaser from 'phaser';
-import { officeEvents } from '@/features/office/events';
 import { getKeybinds } from '@/features/settings/keybindStore';
 import { isTyping } from '@/lib/dom';
 import {
@@ -29,10 +29,9 @@ import {
 } from '../constants';
 import { EditMode } from '../editor/EditMode';
 import type { LayoutEditor } from '../editor/LayoutEditor';
-import { deriveZones } from '../layout/derive';
-import { itemBounds, type Rect } from '../layout/geometry';
-import type { OfficeLayout, Zone } from '../layout/types';
-import { Avatar, beginTextureBudget, type Direction } from '../objects/Avatar';
+import { itemBounds } from '../layout/geometry';
+import type { OfficeLayout } from '../layout/types';
+import { Avatar, beginTextureBudget } from '../objects/Avatar';
 import { DeskPlates, type DeskOwner } from '../objects/DeskPlates';
 import { recipeOf } from '../art/recipe';
 import { type RoomBooking, RoomBadges } from '../objects/RoomBadges';
@@ -40,44 +39,32 @@ import { Interactions } from '../systems/Interactions';
 import { Proximity } from '../systems/Proximity';
 import { roomFinder } from '../systems/rooms';
 import { FURNITURE } from '../render/furniture';
-import { legoArt } from '../render/legoArt';
 import { textureScale } from '../render/sprites';
 import type { WallFaces } from '../render/wallFaces';
 import { wallCollider } from '../render/walls';
 import { DEPTH, furnitureDepth, peopleDepth } from '../systems/Depth';
 import { bakeStaticScenery, createWallFaces } from '../render/scenery';
 import { ViewControl } from '../systems/ViewControl';
-import { overlapsRect, pixels, playerBody, RoomLocks } from '../systems/RoomLocks';
-import { NetSync, type PlayerState } from '../systems/NetSync';
+import { pixels, RoomLocks } from '../systems/RoomLocks';
+import { NetSync, type OfficeSnapshot, type PlayerState } from '../systems/NetSync';
 import { Seating } from '../systems/Seating';
 import { FurnitureSprites } from '../systems/FurnitureSprites';
+import { Zones } from '../systems/Zones';
 
 /** Re-exported serialized network player state representation. */
 export type { PlayerState };
 
+/** Re-exported minimap snapshot representation. */
+export type { OfficeSnapshot };
+
 /** Inset in pixels applied to solid furniture colliders to allow smoother walking nearby. */
 const FURNITURE_COLLIDER_INSET_PX = 2;
 
-/** Number of random spawn attempts when finding an arrival spot near the entrance. */
-const SPAWN_ATTEMPTS = 20;
-
-/** Margin in pixels from the bottom map edge when choosing a spawn spot. */
-const SPAWN_BOTTOM_MARGIN_PX = 4;
+/** Double inset in pixels for total width and height reduction on solid colliders. */
+const COLLIDER_TOTAL_INSET_PX = FURNITURE_COLLIDER_INSET_PX * 2;
 
 /** Resolution scale multiplier for crisp high-DPI text badges and avatar labels. */
 const TEXT_RESOLUTION_SCALE = 2;
-
-/** Minimum arrival distance offset from spawn in tiles to keep arriving players spread out. */
-const ARRIVAL_MIN_DISTANCE_TILES = 0.5;
-
-/** Additional random distance jitter in tiles added to the arrival radius (< 3 tiles total). */
-const ARRIVAL_JITTER_DISTANCE_TILES = 0.9;
-
-/** Vertical perspective squish factor for spawn jitter (makes the arrival area an ellipse). */
-const SPAWN_Y_SQUISH = 0.6;
-
-/** Map boundary padding in tiles to prevent spawning or standing half-outside the office grid. */
-const MAP_BOUNDARY_PADDING_TILES = 0.5;
 
 /** Configuration options and event callbacks required to instantiate and run OfficeScene. */
 export interface OfficeSceneData {
@@ -111,13 +98,6 @@ export interface OfficeSceneData {
   onZone: (zoneId: string | null) => void;
 }
 
-/** For the minimap and voice: positions in tiles, and the room each person stands in (null outside rooms). */
-export interface OfficeSnapshot {
-  me: { x: number; y: number; room: string | null; dir: Direction; seated: boolean };
-  others: { id: string; x: number; y: number; room: string | null; dir: Direction; seated: boolean }[];
-  view: { x: number; y: number; w: number; h: number };
-}
-
 /**
  * Core Phaser scene managing the interactive office environment, avatar physics,
  * scenery rendering, and delegated subsystem coordination.
@@ -126,30 +106,22 @@ export class OfficeScene extends Phaser.Scene {
   private opts!: OfficeSceneData;
   private player!: Avatar;
   private keys!: Record<'up' | 'down' | 'left' | 'right' | 'w' | 'a' | 's' | 'd', Phaser.Input.Keyboard.Key>;
-  private zones: Zone[] = [];
-  private obstacles: Rect[] = [];
   private roomLocks!: RoomLocks;
+  private zones!: Zones;
   private viewControl!: ViewControl;
   private seating!: Seating;
   private netSync!: NetSync;
   private furnitureSprites!: FurnitureSprites;
-  private currentZone: Zone | null = null;
-  private desks: DeskOwner[] = [];
-  private taskCounts: ReadonlyMap<string, number> = new Map();
   private editMode: EditMode | null = null;
   private proximity!: Proximity;
-  private roomAt!: (x: number, y: number) => string | null;
   private interactions!: Interactions;
   private plates!: DeskPlates;
   private badges!: RoomBadges;
-  private badgesDirty = true;
   private wallFaces!: WallFaces;
   private readonly crowd: Array<{ x: number; y: number }> = [];
   /** Virtual joystick (touch screens), -1..1 on each axis. */
   private joystick = { x: 0, y: 0 };
   private readonly moveVec = new Phaser.Math.Vector2();
-  private lastZoneX = NaN;
-  private lastZoneY = NaN;
   /** True while a full-screen game covers the office: the scene keeps ticking but ignores the keyboard. */
   private inputBlocked = false;
 
@@ -162,7 +134,6 @@ export class OfficeScene extends Phaser.Scene {
   /** Initializes the scene state with incoming office data before creation. */
   init(data: OfficeSceneData) {
     this.opts = data;
-    this.desks = [];
     this.furnitureSprites = new FurnitureSprites({
       scene: this,
       getLayout: () => this.opts.layout,
@@ -170,11 +141,7 @@ export class OfficeScene extends Phaser.Scene {
       isEditing: () => Boolean(this.editMode),
     });
     this.editMode = null;
-    this.badgesDirty = true;
     this.joystick = { x: 0, y: 0 };
-    this.currentZone = null;
-    this.lastZoneX = NaN;
-    this.lastZoneY = NaN;
     this.inputBlocked = false;
   }
 
@@ -185,12 +152,17 @@ export class OfficeScene extends Phaser.Scene {
     const worldH = layout.height * TILE;
     const solids = this.physics.add.staticGroup();
 
+    this.roomLocks = new RoomLocks({
+      scene: this,
+      getLayout: () => this.opts.layout,
+      getPlayerPos: () => ({ x: this.player?.x ?? 0, y: this.player?.y ?? 0 }),
+    });
+
     this.setupScenery(worldW, worldH, solids);
     this.setupFurniture(solids);
     this.setupPlayer(worldW, worldH, solids);
     this.setupSystems();
     this.setupInput();
-    this.setupView();
     this.setupEventHandlers();
     this.netSync.sendPosition(true);
   }
@@ -263,10 +235,10 @@ export class OfficeScene extends Phaser.Scene {
   private updateSystems(time: number) {
     const body = this.player.body as Phaser.Physics.Arcade.Body;
     this.netSync.maybeSend(time, body.velocity.x !== 0 || body.velocity.y !== 0);
-    this.updateZone();
+    this.zones.update(this.player.x, this.player.y);
     this.interactions.update(this.player.x, this.player.y, !this.editMode);
     this.netSync.updateProximity(time, { x: this.player.x / TILE, y: this.player.y / TILE }, this.proximity);
-    if (this.badgesDirty) this.refreshBadges();
+    this.badges.updateIfDirty(this.netSync.remoteZones.values(), this.zones.currentZoneId);
   }
 
   // ---- remote players & chat --------------------------------------------------
@@ -289,7 +261,7 @@ export class OfficeScene extends Phaser.Scene {
   /** Updates character appearance recipe for a remote player and their desk. */
   setPlayerCharacter(id: string, character: string) {
     this.netSync.setLook(id, character);
-    this.ownerChanged(id, character);
+    this.furnitureSprites.setOwnerCharacter(id, character);
   }
 
   /** Updates the active zone identifier for a remote player. */
@@ -304,14 +276,12 @@ export class OfficeScene extends Phaser.Scene {
 
   /** Sets voice activity (headset indicator and talking pulse) for a player. */
   setVoice(id: string, inCall: boolean, talking: boolean) {
-    const avatar = id === this.opts.myId ? this.player : this.netSync.remotes.get(id)?.avatar;
-    avatar?.setInCall(inCall, talking);
+    this.netSync.setVoice(id, inCall, talking);
   }
 
   /** Displays a temporary speech bubble with chat text over a player's head. */
   showChat(userId: string, message: string) {
-    const avatar = userId === this.opts.myId ? this.player : this.netSync.remotes.get(userId)?.avatar;
-    avatar?.say(message);
+    this.netSync.showChat(userId, message);
   }
 
   // ---- local player -----------------------------------------------------------
@@ -320,7 +290,7 @@ export class OfficeScene extends Phaser.Scene {
   setOwnLook(character: string) {
     this.player.setLook(recipeOf(character));
     this.opts.character = character;
-    this.ownerChanged(this.opts.myId, character);
+    this.furnitureSprites.setOwnerCharacter(this.opts.myId, character);
   }
 
   /** Sets the status emoji/bubble displayed above the local player. */
@@ -344,32 +314,22 @@ export class OfficeScene extends Phaser.Scene {
     this.player.animate(0, 0, 0);
     this.cameras.main.centerOn(x, y);
     this.netSync.sendPosition();
-    this.lastZoneX = NaN;
-    this.lastZoneY = NaN;
-    this.updateZone();
+    this.zones.resetPosition();
+    this.zones.update(x, y);
   }
 
   // ---- desks & tasks ----------------------------------------------------------
 
   /** Updates desk assignments, name plates, interaction targets, and desk decorations. */
   setDesks(desks: DeskOwner[]) {
-    this.desks = desks;
     this.plates.set(desks);
     this.interactions.setOwners(desks);
-    this.furnitureSprites.redecorateDesks(this.desks, this.taskCounts);
+    this.furnitureSprites.setDesks(desks);
   }
 
   /** Updates open task counts per user, updating paper stacks on their desks. */
   setTaskCounts(counts: ReadonlyMap<string, number>) {
-    this.taskCounts = counts;
-    this.furnitureSprites.redecorateDesks(this.desks, this.taskCounts);
-  }
-
-  /** Someone changed character: their avatar and their desk follow. */
-  private ownerChanged(userId: string, character: string) {
-    if (!this.desks.some((d) => d.userId === userId)) return;
-    this.desks = this.desks.map((d) => (d.userId === userId ? { ...d, character } : d));
-    this.furnitureSprites.redecorateDesks(this.desks, this.taskCounts);
+    this.furnitureSprites.setTaskCounts(counts);
   }
 
   // ---- meeting rooms & zones --------------------------------------------------
@@ -379,13 +339,12 @@ export class OfficeScene extends Phaser.Scene {
     const insideRoomId = this.roomLocks.set(roomIds);
     if (!insideRoomId) return null;
     if (this.seating.isSeated) this.seating.standUp(true);
-    const to = this.arrivalPoint(this.opts.layout);
+    const to = this.roomLocks.arrivalPoint();
     (this.player.body as Phaser.Physics.Arcade.Body).reset(to.x, to.y);
     this.cameras.main.centerOn(to.x, to.y);
     this.netSync.sendPosition();
-    this.lastZoneX = NaN;
-    this.lastZoneY = NaN;
-    this.updateZone();
+    this.zones.resetPosition();
+    this.zones.update(to.x, to.y);
     return insideRoomId;
   }
 
@@ -394,55 +353,11 @@ export class OfficeScene extends Phaser.Scene {
     this.badges.setBookings(bookings);
   }
 
-  /** People per meeting room, from everyone's reported zone (and ours). */
-  private refreshBadges() {
-    this.badgesDirty = false;
-    const counts = new Map<string, number>();
-    const add = (zone: string | null | undefined) => zone && counts.set(zone, (counts.get(zone) ?? 0) + 1);
-    for (const zone of this.netSync.remoteZones.values()) add(zone);
-    add(this.currentZone?.id);
-    this.badges.update(counts);
-  }
-
-  /** Emits zone:leave / zone:enter when the player's feet cross into a zone. */
-  private updateZone() {
-    if (this.player.x === this.lastZoneX && this.player.y === this.lastZoneY) return;
-    this.lastZoneX = this.player.x;
-    this.lastZoneY = this.player.y;
-    const px = this.player.x / TILE;
-    const py = this.player.y / TILE;
-    let zone: Zone | null = null;
-    for (const z of this.zones) {
-      if (px >= z.x && px < z.x + z.w && py >= z.y && py < z.y + z.h) {
-        zone = z;
-        break;
-      }
-    }
-    if (zone?.id === this.currentZone?.id) return;
-    if (this.currentZone) officeEvents.emit('zone:leave', toEvent(this.currentZone));
-    if (zone) officeEvents.emit('zone:enter', toEvent(zone));
-    this.currentZone = zone;
-    this.opts.onZone(zone?.id ?? null);
-    this.badgesDirty = true;
-  }
-
   // ---- snapshot & minimap -----------------------------------------------------
 
   /** Captures current office positions, rooms, facing directions, and camera view for minimap. */
   snapshot(): OfficeSnapshot {
-    const cam = this.cameras.main.worldView;
-    const at = (avatar: Avatar) => ({
-      x: avatar.x / TILE,
-      y: avatar.y / TILE,
-      room: this.roomAt(avatar.x / TILE, avatar.y / TILE),
-      dir: avatar.facing,
-      seated: avatar.seated,
-    });
-    return {
-      me: at(this.player),
-      others: [...this.netSync.remotes].map(([id, r]) => ({ id, ...at(r.avatar) })),
-      view: { x: cam.x / TILE, y: cam.y / TILE, w: cam.width / TILE, h: cam.height / TILE },
-    };
+    return this.netSync.snapshot(this.cameras.main.worldView);
   }
 
   // ---- layout editing ---------------------------------------------------------
@@ -487,12 +402,9 @@ export class OfficeScene extends Phaser.Scene {
 
   private setupScenery(worldW: number, worldH: number, solids: Phaser.Physics.Arcade.StaticGroup) {
     const { layout } = this.opts;
-    this.obstacles = [];
-    this.zones = deriveZones(layout);
-
     for (const wall of layout.walls) {
       const r = wallCollider(wall);
-      this.addCollider(solids, r.x, r.y, r.w, r.h);
+      this.roomLocks.addSolidCollider(solids, r.x, r.y, r.w, r.h);
     }
     this.wallFaces = createWallFaces(this, layout, worldW, worldH, this.opts.dpr, this.opts.fontFamily);
     bakeStaticScenery(this, layout, this.wallFaces.leftover, this.opts.dpr, this.opts.fontFamily);
@@ -500,19 +412,19 @@ export class OfficeScene extends Phaser.Scene {
 
   private setupFurniture(solids: Phaser.Physics.Arcade.StaticGroup) {
     const { layout } = this.opts;
-    this.taskCounts = this.opts.taskCounts();
-    this.furnitureSprites.redecorateDesks(this.opts.desks(), this.taskCounts);
+    this.furnitureSprites.setTaskCounts(this.opts.taskCounts());
+    this.furnitureSprites.setDesks(this.opts.desks());
     const scale = textureScale(this.opts.dpr);
     for (const item of layout.furniture) {
       this.furnitureSprites.addFurniture(item, scale);
       if (FURNITURE[item.kind].solid) {
         const b = pixels(itemBounds(item));
-        this.addCollider(
+        this.roomLocks.addSolidCollider(
           solids,
           b.x + FURNITURE_COLLIDER_INSET_PX,
           b.y + FURNITURE_COLLIDER_INSET_PX,
-          b.w - 2 * FURNITURE_COLLIDER_INSET_PX,
-          b.h - 2 * FURNITURE_COLLIDER_INSET_PX,
+          b.w - COLLIDER_TOTAL_INSET_PX,
+          b.h - COLLIDER_TOTAL_INSET_PX,
         );
       }
     }
@@ -522,15 +434,10 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   private setupPlayer(worldW: number, worldH: number, solids: Phaser.Physics.Arcade.StaticGroup) {
-    const { layout } = this.opts;
-    this.roomLocks = new RoomLocks({
-      scene: this,
-      getLayout: () => this.opts.layout,
-      getPlayerPos: () => ({ x: this.player?.x ?? 0, y: this.player?.y ?? 0 }),
-    });
-
     const start =
-      this.opts.startAt && this.isFree(this.opts.startAt.x, this.opts.startAt.y) ? this.opts.startAt : this.arrivalPoint(layout);
+      this.opts.startAt && this.roomLocks.isFree(this.opts.startAt.x, this.opts.startAt.y)
+        ? this.opts.startAt
+        : this.roomLocks.arrivalPoint();
     this.player = new Avatar(
       this,
       start.x,
@@ -555,31 +462,44 @@ export class OfficeScene extends Phaser.Scene {
   private setupSystems() {
     const { layout } = this.opts;
     const text = { fontFamily: this.opts.fontFamily, resolution: this.opts.dpr * TEXT_RESOLUTION_SCALE };
-    this.roomAt = roomFinder(layout);
-    this.proximity = new Proximity(this.roomAt);
+    const roomAt = roomFinder(layout);
+    this.proximity = new Proximity(roomAt);
     this.plates = new DeskPlates(this, layout, { ...text, myId: this.opts.myId, depth: DEPTH.sorted + DESK_PLATE_DEPTH_OFFSET });
     this.badges = new RoomBadges(this, layout, { ...text, depth: DEPTH.badges });
     this.interactions = new Interactions(this, layout, { ...text, myId: this.opts.myId, touch: this.opts.touch, depth: DEPTH.hints });
 
+    this.zones = new Zones({
+      layout,
+      onZone: this.opts.onZone,
+      onChanged: () => this.badges.markDirty(),
+    });
+
     this.netSync = new NetSync({
       scene: this,
       player: this.player,
+      myId: this.opts.myId,
       fontFamily: this.opts.fontFamily,
       dpr: this.opts.dpr,
+      roomAt,
       depthOf: (x, y, s) => peopleDepth(x, y, s, this.seating.seats, this.opts.layout.walls),
       onMove: this.opts.onMove,
-      onBadgesDirty: () => {
-        this.badgesDirty = true;
-      },
+      onBadgesDirty: () => this.badges.markDirty(),
     });
 
     this.seating = new Seating({
       player: this.player,
       layout: this.opts.layout,
-      isFree: (x, y) => this.isFree(x, y),
+      isFree: (x, y) => this.roomLocks.isFree(x, y),
       sendPosition: (moving) => this.netSync.sendPosition(moving),
       getOtherSeatedPositions: () => this.netSync.getSeatedPositions(),
     });
+
+    this.viewControl = new ViewControl({
+      scene: this,
+      getLayout: () => this.opts.layout,
+      getDpr: () => this.opts.dpr,
+    });
+    this.viewControl.setup(this.player);
 
     this.setDesks(this.opts.desks());
     this.setRoomBookings(this.opts.bookings());
@@ -593,15 +513,10 @@ export class OfficeScene extends Phaser.Scene {
   private setupInput() {
     const kb = this.input.keyboard!;
     const K = Phaser.Input.Keyboard.KeyCodes;
+    const bind = (k: number) => kb.addKey(k, false);
     this.keys = {
-      up: kb.addKey(K.UP, false),
-      down: kb.addKey(K.DOWN, false),
-      left: kb.addKey(K.LEFT, false),
-      right: kb.addKey(K.RIGHT, false),
-      w: kb.addKey(K.W, false),
-      a: kb.addKey(K.A, false),
-      s: kb.addKey(K.S, false),
-      d: kb.addKey(K.D, false),
+      up: bind(K.UP), down: bind(K.DOWN), left: bind(K.LEFT), right: bind(K.RIGHT),
+      w: bind(K.W), a: bind(K.A), s: bind(K.S), d: bind(K.D),
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.code !== getKeybinds().interact || e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
@@ -614,21 +529,8 @@ export class OfficeScene extends Phaser.Scene {
     });
   }
 
-  private setupView() {
-    this.viewControl = new ViewControl({
-      scene: this,
-      getLayout: () => this.opts.layout,
-      getDpr: () => this.opts.dpr,
-    });
-    this.viewControl.setup(this.player);
-  }
-
   private setupEventHandlers() {
-    const unsubLego = legoArt.subscribe((objectId) => {
-      this.furnitureSprites.updateLegoBoard(objectId);
-    });
     this.events.once('shutdown', () => {
-      unsubLego();
       this.viewControl.destroy();
       this.wallFaces.destroy();
       this.netSync.destroy();
@@ -637,48 +539,7 @@ export class OfficeScene extends Phaser.Scene {
       this.editMode = null;
       this.proximity.clear();
       this.interactions.destroy();
-      this.opts.onZone(null);
-      if (this.currentZone) officeEvents.emit('zone:leave', toEvent(this.currentZone));
+      this.zones.destroy();
     });
   }
-
-  private addCollider(group: Phaser.Physics.Arcade.StaticGroup, x: number, y: number, w: number, h: number) {
-    this.obstacles.push({ x, y, w, h });
-    group.add(this.add.zone(x + w / 2, y + h / 2, w, h));
-  }
-
-  /** A free spot around the entrance, so people arriving together don't stand on each other. */
-  private arrivalPoint(layout: OfficeLayout) {
-    const spawn = { x: layout.spawn.x * TILE, y: layout.spawn.y * TILE };
-    for (let attempt = 0; attempt < SPAWN_ATTEMPTS; attempt++) {
-      const angle = Math.random() * Math.PI * 2;
-      // Close to the door: two people arriving together are within earshot (< 3 tiles apart).
-      const distance = TILE * (ARRIVAL_MIN_DISTANCE_TILES + Math.random() * ARRIVAL_JITTER_DISTANCE_TILES);
-      const x = spawn.x + Math.cos(angle) * distance;
-      const y = spawn.y + Math.sin(angle) * distance * SPAWN_Y_SQUISH;
-      if (this.isFree(x, y) && y < layout.height * TILE - SPAWN_BOTTOM_MARGIN_PX) return { x, y };
-    }
-    return spawn;
-  }
-
-  /** True if the player's body fits at these feet coordinates (inside the office). */
-  private isFree(x: number, y: number) {
-    const { width, height } = this.opts.layout;
-    if (
-      x < TILE * MAP_BOUNDARY_PADDING_TILES ||
-      y < TILE ||
-      x > (width - MAP_BOUNDARY_PADDING_TILES) * TILE ||
-      y > (height - MAP_BOUNDARY_PADDING_TILES) * TILE
-    ) {
-      return false;
-    }
-    const body = playerBody(x, y);
-    return !this.obstacles.some((o) => overlapsRect(body, o)) && !this.roomLocks.blocks(body);
-  }
-}
-
-// (helpers)
-
-function toEvent(zone: Zone) {
-  return { type: zone.type, id: zone.id, name: zone.name };
 }

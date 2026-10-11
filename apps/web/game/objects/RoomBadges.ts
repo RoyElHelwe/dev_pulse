@@ -11,6 +11,9 @@ import { Bubble } from './Bubble';
 const BADGE_Y_OFFSET_TILES = 1.1;
 const BADGE_FONT_SIZE_PX = 10;
 
+/** Increment step when counting occupants in a room zone. */
+const OCCUPANT_INCREMENT = 1;
+
 /** A meeting room booked right now, until `until` ("15:00", already in local time). */
 export interface RoomBooking {
   roomId: string;
@@ -22,6 +25,7 @@ export class RoomBadges {
   private readonly badges = new Map<string, Bubble>();
   private counts = new Map<string, number>();
   private booked = new Map<string, string>();
+  private dirty = true;
 
   constructor(scene: Phaser.Scene, layout: OfficeLayout, o: { fontFamily: string; resolution: number; depth: number }) {
     for (const room of layout.rooms.filter((r) => r.kind === 'meeting')) {
@@ -33,6 +37,28 @@ export class RoomBadges {
       });
       this.badges.set(room.id, badge.setDepth(o.depth).setVisible(false));
     }
+  }
+
+  /** Marks badges dirty so occupancy counts re-render on the next frame. */
+  markDirty(): void {
+    this.dirty = true;
+  }
+
+  /**
+   * Refreshes room occupancy badges from remote and local player zone presence if dirty.
+   */
+  updateIfDirty(remoteZones: Iterable<string | null | undefined>, myZoneId?: string | null): void {
+    if (!this.dirty) return;
+    this.dirty = false;
+    const counts = new Map<string, number>();
+    const add = (zone: string | null | undefined) => {
+      if (zone) {
+        counts.set(zone, (counts.get(zone) ?? 0) + OCCUPANT_INCREMENT);
+      }
+    };
+    for (const zone of remoteZones) add(zone);
+    add(myZoneId);
+    this.update(counts);
   }
 
   /** People per room id. */
@@ -51,7 +77,7 @@ export class RoomBadges {
     for (const [roomId, badge] of this.badges) {
       const n = this.counts.get(roomId) ?? 0;
       const until = this.booked.get(roomId);
-      badge.setVisible(n > 0 || !!until);
+      badge.setVisible(n > 0 || !until);
       if (until) badge.setText(`● Booked · until ${until}${n > 0 ? ` · ${n}` : ''}`);
       else if (n > 0) badge.setText(`● In use · ${n}`);
     }
