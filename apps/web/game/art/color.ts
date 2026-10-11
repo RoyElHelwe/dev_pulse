@@ -1,7 +1,6 @@
-// Colour in OKLCH: lightness 0..1, chroma 0..~0.37, hue in degrees.
-// OKLCH is "perceptually uniform": two colours with the same L look equally
-// light, which HSL can't promise. So palettes built here stay balanced: no
-// generated shirt glows brighter than the others.
+// OKLCH colour space math and palette generation for procedural office art.
+// Perceptually uniform lightness ensures generated colors stay visually balanced
+// without unintended brightness spikes across avatars and furniture.
 
 /** A colour as the game uses it: 0xRRGGBB. */
 export type Hex = number;

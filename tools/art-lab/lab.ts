@@ -12,6 +12,7 @@ import { canvasPen } from '../../apps/web/game/art/pen';
 import { breed, decode, encode, FIELDS, HAT_FREE_HAIR, mutate, PRESETS, randomRecipe, type Recipe, tidy } from '../../apps/web/game/art/recipe';
 import { OfficeSim, skyAt } from './office';
 
+/** Office layout preset selectable for simulation and rendering tests in the art lab. */
 export interface LabTemplate {
   id: string;
   name: string;

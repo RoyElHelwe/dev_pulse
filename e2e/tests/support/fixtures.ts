@@ -7,6 +7,7 @@ import { closeContexts, openPage } from './browser';
 import { gotoOffice } from './office';
 import { devOwner, devUser } from './users';
 
+/** Paired browser pages representing an organizer and staff member for multi-user test scenarios. */
 export interface Team {
   org: Page;
   staff: Page;
