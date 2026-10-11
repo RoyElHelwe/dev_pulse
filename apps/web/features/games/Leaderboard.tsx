@@ -1,12 +1,12 @@
 /**
  * Leaderboard component displaying recent player rankings for a game.
- * Fetches weekly win/loss stats and listens for live socket match-end events to refresh rankings.
+ * Fetches weekly win/loss stats once each time it mounts: GameHostHeader only renders it while the drawer is open,
+ * so reopening the drawer shows fresh rankings (no live refresh: the server has no "match recorded" event).
  */
 
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import type { Socket } from 'socket.io-client';
 import { CharacterFace } from '@/features/workspace/CharacterPreview';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/cn';
@@ -19,8 +19,6 @@ const LEADERBOARD_WINDOW_DAYS = 7;
 export interface LeaderboardProps {
   /** Target game kind for which rankings are fetched. */
   game: GameKind;
-  /** Socket instance used to listen for game completion events. */
-  socket?: Socket | null;
   /** Optional additional CSS classes for container layout. */
   className?: string;
 }
@@ -28,7 +26,7 @@ export interface LeaderboardProps {
 /**
  * Renders a weekly leaderboard card showing top players with win/loss counts.
  */
-export function Leaderboard({ game, socket, className }: LeaderboardProps) {
+export function Leaderboard({ game, className }: LeaderboardProps) {
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -54,19 +52,6 @@ export function Leaderboard({ game, socket, className }: LeaderboardProps) {
     setLoading(true);
     void fetchLeaderboard();
   }, [fetchLeaderboard]);
-
-  // WHY: Subscribing to 'game:ended' ensures rankings refresh in real time immediately when any match finishes,
-  // without requiring manual user refreshes or aggressive background polling.
-  useEffect(() => {
-    if (!socket) return;
-    const onEnded = () => {
-      void fetchLeaderboard();
-    };
-    socket.on('game:ended', onEnded);
-    return () => {
-      socket.off('game:ended', onEnded);
-    };
-  }, [socket, fetchLeaderboard]);
 
   return (
     <div className={cn('rounded-xl border border-zinc-200/80 bg-white p-4 shadow-xl', className)}>

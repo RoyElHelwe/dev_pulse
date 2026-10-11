@@ -508,7 +508,7 @@ Interactive break room framework and multiplayer arcade activities embedded in t
 
 - Completed competitive matches (Foosball, Uno) persist match results to the `GameResult` table via `GameResultsService`. Lego is freeplay and does not record match results.
 - **Weekly leaderboard**: `GET /api/workspace/games/leaderboard?game=foosball|uno|lego&days=7` returns top 10 members sorted by wins descending and losses ascending.
-- The floating leaderboard drawer in `GameHost` displays ranks and W/L statistics, auto-refreshing on `game:ended` events.
+- The floating leaderboard drawer in `GameHost` displays ranks and W/L statistics, reloaded each time the drawer is opened.
 
 ### Framework and wire protocol
 
