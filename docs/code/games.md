@@ -46,13 +46,13 @@ The office minigames framework enables interactive, real-time multiplayer miniga
 | `foosball/FoosballPanel.tsx` | Foosball panel composing audio synthesis, lobby seating controls, HUD, and table canvas. |
 | `foosball/FoosballTable.tsx` | Interactive table container rendering scores, rod switcher buttons, pointer lock hints, and rematch controls. |
 | `foosball/FoosballCanvas.tsx` | Canvas element executing foosball rendering routines. |
-| `foosball/FoosballLobby.tsx` | Pre-match lobby displaying Red (A) and Blue (B) team seats and Start match button. |
+| `foosball/FoosballLobby.tsx` | Pre-match lobby displaying Blue (A) and Red (B) team seats and Start match button. |
 | `foosball/FoosballEnded.tsx` | Game over banner displaying match winner, forfeit status, and rematch button. |
 | `foosball/useFoosballMouse.ts` | Hook translating mouse movement into rod aim offsets, pointer lock, flick kicks, and click kicks. |
 | `foosball/foosballPointer.ts` | Coordinate translations, rod offset computations, and network aim throttle logic. |
 | `foosball/foosballKick.ts` | Pointer velocity analysis detecting rapid flick kicks and click kick power. |
 | `foosball/foosballDraw.ts` | HTML5 Canvas 2D rendering routines for foosball field, lines, rods, players, and ball. |
-| `foosball/constants.ts` | Foosball dimensions, field offsets, default view, and action types. |
+| `foosball/constants.ts` | Foosball dimensions, field offsets, default view, and action types. Mirrors `apps/api/src/games/foosball/foosball.physics.ts` geometry. |
 | `uno/UnoPanel.tsx` | Uno screen router switching between lobby, playing table, and game ended screens. |
 | `uno/UnoTable.tsx` | Playing screen rendering opponents, center draw/discard piles, active hand, game log, and actions. |
 | `uno/UnoLobby.tsx` | Pre-game player roster, spectator list, and host Start button. |
@@ -170,6 +170,7 @@ The host framework supplies `GameContext` to `GameInstance`:
   - Rod selection: Click HUD rod buttons (1–4) or click near rod columns on the table.
 - **State & View**: `FoosballView` contains `phase`, `score` (`A`, `B`), `seats` (`A`, `B`), `spectators`, `you` (`{ side, rods }`), `ball` (`x`, `y`, `vx`, `vy`), `rods` (`{ y, kick }` per team), `countdown`, `winner`, `forfeit`, `graceLeft`, `now`.
 - **Physics Engine**: Pure deterministic 2D simulation (`foosball.physics.ts`). Field is 120 x 64 units. Runs at 30 Hz with 4 substeps per tick to eliminate ball tunneling. Features elastic wall bounces (`WALL_RESTITUTION = 0.9`), men collision circles, kick impulses (base 150 units/s deflected by contact offset angle), and an automatic 6s unstuck impulse.
+- **Pitch Geometry Mirror**: `apps/web/features/games/foosball/constants.ts` mirrors `apps/api/src/games/foosball/foosball.physics.ts` pitch dimensions (`FIELD_L`, `FIELD_W`, `GOAL_W`, `BALL_R`, `MAN_R`), rod positions (`ROD_X_A`, `ROD_X_B`), rod travel limits, and man Y offsets; change both together.
 
 ### Uno
 

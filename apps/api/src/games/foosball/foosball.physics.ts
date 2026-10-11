@@ -1,3 +1,5 @@
+// Mirror of apps/web/features/games/foosball/constants.ts: change both together.
+
 /**
  * Foosball physics engine.
  * Pure deterministic 2D physics simulation handling ball motion, rod movement,

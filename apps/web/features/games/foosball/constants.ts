@@ -1,3 +1,5 @@
+// Mirror of apps/api/src/games/foosball/foosball.physics.ts: change both together.
+
 /**
  * Foosball shared constants, types, and view schema validation.
  * Used across the Foosball game client feature (canvas, mouse controls, panel screens).
