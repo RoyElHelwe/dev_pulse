@@ -1,10 +1,10 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
-
 // One Escape key for the whole app: every open menu, panel or dialog registers a
 // layer while it is open, and Escape closes only the top-most (latest opened) one.
 // With nothing open the key is left alone (the game, the editor...).
+
+import { useEffect, useRef } from 'react';
 
 interface Layer {
   handler(): void;

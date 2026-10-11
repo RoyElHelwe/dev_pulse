@@ -1,3 +1,7 @@
+// A small simulation of a day at the office, drawn with the game's real
+// scenery code and the new characters and desks: people arrive, work, take
+// coffee, meet, chat by proximity, and go home; the light follows the clock.
+
 import { TILE } from '../../apps/web/game/constants';
 import { itemBounds, numberedDesks, seatPoint } from '../../apps/web/game/layout/derive';
 import type { Furniture, OfficeLayout } from '../../apps/web/game/layout/types';
@@ -13,10 +17,6 @@ import { GLOW } from '../../apps/web/game/art/palette';
 import { canvasPen, type Pen } from '../../apps/web/game/art/pen';
 import type { Recipe } from '../../apps/web/game/art/recipe';
 import { CanvasGraphics } from './shim';
-
-// A small simulation of a day at the office, drawn with the game's real
-// scenery code and the new characters and desks: people arrive, work, take
-// coffee, meet, chat by proximity, and go home; the light follows the clock.
 
 /** Same as NEAR_RADIUS in systems/Proximity.ts (tiles). */
 const NEAR = 3;
@@ -75,6 +75,7 @@ const SKY: [number, Hex][] = [
   [24, 0x262d52],
 ];
 
+/** Calculates the ambient sky hex colour based on a 24-hour time clock simulation. */
 export function skyAt(hour: number): Hex {
   for (let i = 1; i < SKY.length; i++) {
     if (hour <= SKY[i][0]) {
@@ -88,6 +89,7 @@ export function skyAt(hour: number): Hex {
 
 const luminance = (c: Hex) => (0.2126 * ((c >> 16) & 255) + 0.7152 * ((c >> 8) & 255) + 0.0722 * (c & 255)) / 255;
 
+/** Simulates virtual office workers, daily routines, movement physics, and real-time canvas rendering. */
 export class OfficeSim {
   hour = 10.5;
   showRadius = true;

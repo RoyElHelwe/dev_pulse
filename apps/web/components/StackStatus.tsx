@@ -1,14 +1,14 @@
 'use client';
 
+// Checks every layer of the stack: browser -> nginx (HTTPS) -> api -> postgres,
+// plus the websocket path used by the game and voice features.
+
 import { useEffect, useState } from 'react';
 import { io } from 'socket.io-client';
 
 const WS_PING_TIMEOUT_MS = 3000;
 
 type Status = 'checking' | 'ok' | 'error';
-
-// Checks every layer of the stack: browser -> nginx (HTTPS) -> api -> postgres,
-// plus the websocket path used by the game and voice features.
 
 /** Live system status monitor testing API, database, and WebSocket connectivity. */
 export function StackStatus() {

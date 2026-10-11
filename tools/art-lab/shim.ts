@@ -1,3 +1,6 @@
+// Canvas 2D graphics shim providing lightweight Phaser Graphics API compatibility for the art lab.
+// Allows rendering office floor, wall, and furniture routines directly into standard HTML canvas.
+
 import type * as Phaser from 'phaser';
 
 /**

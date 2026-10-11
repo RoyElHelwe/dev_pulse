@@ -1,3 +1,7 @@
+// The art lab page: a live office, a character studio, a lineup to test
+// variety ("10,000 bowls of oatmeal") and the palette. Built from the same
+// modules the game uses. See lab.html for the markup.
+
 import type { OfficeLayout } from '../../apps/web/game/layout/types';
 import { seededRandom } from '../../apps/web/game/render/draw';
 import { type Direction, drawCharacter, type Mood } from '../../apps/web/game/art/character';
@@ -7,10 +11,6 @@ import { BOTTOM, CLOTH, HAIR, SHOES, SKIN, type Swatch } from '../../apps/web/ga
 import { canvasPen } from '../../apps/web/game/art/pen';
 import { breed, decode, encode, FIELDS, HAT_FREE_HAIR, mutate, PRESETS, randomRecipe, type Recipe, tidy } from '../../apps/web/game/art/recipe';
 import { OfficeSim, skyAt } from './office';
-
-// The art lab page: a live office, a character studio, a lineup to test
-// variety ("10,000 bowls of oatmeal") and the palette. Built from the same
-// modules the game uses. See lab.html for the markup.
 
 export interface LabTemplate {
   id: string;
@@ -53,6 +53,7 @@ function fit(canvas: HTMLCanvasElement, height?: number) {
 
 const token = (name: string) => getComputedStyle(document.documentElement).getPropertyValue(name).trim() || '#888';
 
+/** Mounts the interactive art lab controls, canvas preview, and simulation runner into the DOM. */
 export function mountLab(templates: LabTemplate[]) {
   const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   let recipe: Recipe = PRESETS.lea;

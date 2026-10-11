@@ -14,6 +14,7 @@ import { TaskPriority, TaskStatus, TaskType } from '@prisma/client';
 
 const trim = () => Transform(({ value }) => (typeof value === 'string' ? value.trim().replace(/\s+/g, ' ') : value));
 
+/** Request payload for creating a new task in a workspace column with validated bounds. */
 export class CreateTaskDto {
   @IsOptional()
   @IsEnum(TaskType)
@@ -48,6 +49,7 @@ export class CreateTaskDto {
   dueDate?: string | null;
 }
 
+/** Request payload for updating an existing task's status, assignment, ranking, or details. */
 export class UpdateTaskDto {
   @IsOptional()
   @IsEnum(TaskType)
