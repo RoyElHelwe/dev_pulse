@@ -1,3 +1,14 @@
+/**
+ * Ref-counted cached shape texture manager.
+ *
+ * Why this exists (perf report 18b part 2):
+ * Phaser replays and re-triangulates Graphics objects on every frame, which caused heavy CPU
+ * overhead when multiple avatars or UI bubbles were active. Instead of persistent Graphics
+ * objects, shapes (avatar shadows, name badges, speech and status bubbles) are drawn once into
+ * dynamic textures and displayed as lightweight Phaser Images. Each texture key is reference-counted
+ * across users and evicted when the last user releases it, keeping texture counts flat and
+ * eliminating per-frame re-tessellation without memory leaks.
+ */
 import * as Phaser from 'phaser';
 
 type G = Phaser.GameObjects.Graphics;
@@ -10,6 +21,12 @@ export interface ShapeBounds {
   h: number;
 }
 
+/** Minimum resolution scale factor for baked textures. */
+const MIN_SHAPE_SCALE = 1;
+
+/** Maximum resolution scale factor to cap texture memory while keeping high DPI sharpness. */
+const MAX_SHAPE_SCALE = 3;
+
 /**
  * Phaser replays (and re-triangulates) a Graphics object's shapes on every frame, so a persistent
  * Graphics (name tag, bubble, shadow) costs CPU forever. A baked shape is drawn once into a texture
@@ -19,7 +36,7 @@ export interface ShapeBounds {
 const uses = new Map<string, number>();
 
 /** Texture pixels per world pixel for baked shapes (same sharpness as the Text objects). */
-export const shapeScale = (resolution: number) => Math.min(3, Math.max(1, resolution));
+export const shapeScale = (resolution: number) => Math.min(MAX_SHAPE_SCALE, Math.max(MIN_SHAPE_SCALE, resolution));
 
 /** Bakes the shape (or reuses it) and counts one more user. Returns the texture key; pair with `releaseShape`. */
 export function acquireShape(scene: Phaser.Scene, key: string, bounds: ShapeBounds, scale: number, draw: (g: G) => void): string {

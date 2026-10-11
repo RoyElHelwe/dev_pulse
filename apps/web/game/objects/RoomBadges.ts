@@ -1,7 +1,15 @@
+/**
+ * Room status badges displayed above meeting rooms.
+ * Renders occupancy counts and calendar booking schedule indicators.
+ */
+
 import type * as Phaser from 'phaser';
 import { TILE } from '../constants';
 import type { OfficeLayout } from '../layout/types';
 import { Bubble } from './Bubble';
+
+const BADGE_Y_OFFSET_TILES = 1.1;
+const BADGE_FONT_SIZE_PX = 10;
 
 /** A meeting room booked right now, until `until` ("15:00", already in local time). */
 export interface RoomBooking {
@@ -17,11 +25,11 @@ export class RoomBadges {
 
   constructor(scene: Phaser.Scene, layout: OfficeLayout, o: { fontFamily: string; resolution: number; depth: number }) {
     for (const room of layout.rooms.filter((r) => r.kind === 'meeting')) {
-      const badge = new Bubble(scene, (room.x + room.w / 2) * TILE, (room.y + 1.1) * TILE, '', {
+      const badge = new Bubble(scene, (room.x + room.w / 2) * TILE, (room.y + BADGE_Y_OFFSET_TILES) * TILE, '', {
         fontFamily: o.fontFamily,
         resolution: o.resolution,
         tone: 'dark',
-        fontSize: 10,
+        fontSize: BADGE_FONT_SIZE_PX,
       });
       this.badges.set(room.id, badge.setDepth(o.depth).setVisible(false));
     }

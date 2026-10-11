@@ -1,9 +1,10 @@
+// Procedural palette ramps and material swatches for characters and desk props.
+// All cast clothing, hair, skin, and items draw colors from here for visual harmony.
+// Each entry represents a material defined as an OKLCH hue-shifted ramp.
+
 import { type Hex, oklch, type Ramp, ramp } from './color';
 
-// The whole cast and every desk prop take their colours from these lists, so
-// any combination the generator picks still belongs to the same picture.
-// Each entry is one material as a hue-shifted ramp (see color.ts).
-
+/** A named material swatch holding a hue-shifted ramp and base lightness. */
 export interface Swatch {
   name: string;
   ramp: Ramp;
@@ -46,6 +47,7 @@ export const HAIR: Swatch[] = [
   swatch('rose dye', 0.68, 0.13, 2),
   swatch('lilac dye', 0.67, 0.1, 305),
 ];
+/** Index in HAIR array where unnatural dye colors begin. */
 export const DYED_FROM = 9;
 
 /** Tops, hats and accents. Chroma is capped (~0.13) so nobody outshines the UI. */
@@ -82,6 +84,7 @@ export const BOTTOM: Swatch[] = [
   swatch('plum', 0.38, 0.08, 330),
 ];
 
+/** Footwear material color swatches. */
 export const SHOES: Swatch[] = [
   swatch('black', 0.25, 0.006, 260),
   swatch('white', 0.95, 0.008, 90),
@@ -107,13 +110,16 @@ export const TECH = {
   white: swatch('white', 0.97, 0.004, 250, 0.04),
 };
 
+/** Foliage and succulent material swatches for office plants. */
 export const PLANT = {
   leaf: swatch('leaf', 0.58, 0.12, 145),
   pothos: swatch('pothos', 0.66, 0.13, 130),
   cactus: swatch('cactus', 0.56, 0.09, 160),
 };
 
+/** Paper material swatch for documents, notebooks, and sketches. */
 export const PAPER = swatch('paper', 0.97, 0.01, 90, 0.04);
+/** Sticky note swatches (yellow, pink, mint) for desk clutter. */
 export const STICKY = [swatch('yellow', 0.92, 0.12, 100), swatch('pink', 0.85, 0.08, 0), swatch('mint', 0.9, 0.07, 165)];
 
 /** Light colours (monitors, lamps, LEDs). */
@@ -124,5 +130,7 @@ export const GLOW = {
   led: oklch(0.8, 0.18, 150),
 };
 
+/** Default dark charcoal eye color. */
 export const EYES: Hex = oklch(0.25, 0.015, 40);
+/** Warm cheek blush accent color. */
 export const BLUSH: Hex = oklch(0.72, 0.12, 15);

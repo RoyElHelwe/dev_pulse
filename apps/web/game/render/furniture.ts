@@ -1,3 +1,8 @@
+/**
+ * Procedural drawing recipes for office furniture objects.
+ * Coordinates inside drawing functions are design-tool pixel art centered at (0, 0) in local px:
+ * "north" (-y) is the back of the item, "south" (+y) is where the person sits or stands.
+ */
 import type * as Phaser from 'phaser';
 import type { FurnitureKind } from '../layout/types';
 import { circle, pick, type Random, rr, rrStroke, shade } from './draw';
@@ -21,6 +26,9 @@ interface FurnitureSpec {
 const WOOD_LIGHT = 0xf1ebe2;
 const WOOD_WALNUT = 0x6e5241;
 const METAL_DARK = 0x262a2e;
+const PITCH_GREEN = 0x2e7d32;
+const BASEPLATE_GREEN = 0x15803d;
+const STUD_GREEN = 0x22c55e;
 const BOOK_COLORS = [0xc0574a, 0x3f6e8c, 0xe3b55a, 0x4f7d5c, 0xd9d4cc, 0x2f3e4e, 0x8c6a9f];
 const MUG_COLORS = [0xffffff, 0x2f3e4e, 0xd9734e, 0x6b9080];
 const CARD_COLORS = [0xf4d35e, 0xee964b, 0x0ea5e9, 0x10b981, 0xf43f5e];
@@ -277,7 +285,7 @@ const floorLamp: DrawFn = (g, w) => {
   circle(g, 0, 0, 2.5, 0x2b2b2b);
 };
 
-const foosball: DrawFn = (g, w, h) => {
+function drawFoosballField(g: G, w: number, h: number, rim: number, pw: number, ph: number) {
   // Small corner feet / leg caps
   const legS = 6;
   rr(g, -w / 2 - 0.5, -h / 2 - 0.5, legS, legS, 1.5, 0x1e2227);
@@ -293,10 +301,7 @@ const foosball: DrawFn = (g, w, h) => {
   g.fillRect(-w / 2 + 3, h / 2 - 3, w - 6, 2);
 
   // Playing pitch (green)
-  const rim = 5;
-  const pw = w - rim * 2;
-  const ph = h - rim * 2;
-  rr(g, -pw / 2, -ph / 2, pw, ph, 2, 0x2e7d32);
+  rr(g, -pw / 2, -ph / 2, pw, ph, 2, PITCH_GREEN);
   // Pitch inner rim shadow
   g.fillStyle(0x000000, 0.2);
   g.fillRect(-pw / 2, -ph / 2, pw, 1.5);
@@ -314,7 +319,7 @@ const foosball: DrawFn = (g, w, h) => {
   g.fillRect(-0.5, -ph / 2 + 1, 1, ph - 2);
   const cr = Math.min(9, ph * 0.25);
   circle(g, 0, 0, cr, 0xffffff, 0.65);
-  circle(g, 0, 0, cr - 1, 0x2e7d32);
+  circle(g, 0, 0, cr - 1, PITCH_GREEN);
   circle(g, 0, 0, 1.2, 0xffffff, 0.7);
 
   // Penalty / goal boxes
@@ -322,7 +327,9 @@ const foosball: DrawFn = (g, w, h) => {
   const pbW = pw * 0.12;
   rrStroke(g, -pw / 2 + 0.5, -pbH / 2, pbW, pbH, 1, 0xffffff, 1, 0.5);
   rrStroke(g, pw / 2 - pbW - 0.5, -pbH / 2, pbW, pbH, 1, 0xffffff, 1, 0.5);
+}
 
+function drawFoosballRods(g: G, h: number, pw: number, ph: number) {
   // 8 rods (4 per team: Red handles south, Blue handles north)
   const rodConfigs = [
     { team: 0xef4444, south: true, ys: [0] },
@@ -366,6 +373,15 @@ const foosball: DrawFn = (g, w, h) => {
       circle(g, rx, py - 0.8, 0.9, 0xffffff, 0.8);
     }
   }
+}
+
+const foosball: DrawFn = (g, w, h) => {
+  const rim = 5;
+  const pw = w - rim * 2;
+  const ph = h - rim * 2;
+
+  drawFoosballField(g, w, h, rim, pw, ph);
+  drawFoosballRods(g, h, pw, ph);
 
   // Little white soccer ball on the pitch
   circle(g, 2, 1, 2, 0xffffff);
@@ -426,18 +442,14 @@ const cardTable: DrawFn = (g, w, h) => {
   circle(g, feltR * 0.68, -feltR * 0.55, 2.5, 0x5b3d2a);
 };
 
-const legoBoard: DrawFn = (g, w, h) => {
+function drawLegoBoardBase(g: G, w: number, h: number, bx: number, by: number, bw: number, bh: number) {
   // Dark frame
   rr(g, -w / 2, -h / 2, w, h, 2, METAL_DARK);
   g.fillStyle(0x3e454f, 1);
   g.fillRect(-w / 2 + 1, -h / 2, w - 2, 1);
 
   // Green Lego baseplate
-  const bw = w - 4;
-  const bh = h - 3;
-  const bx = -bw / 2;
-  const by = -h / 2 + 1.5;
-  rr(g, bx, by, bw, bh, 1, 0x15803d);
+  rr(g, bx, by, bw, bh, 1, BASEPLATE_GREEN);
 
   // Stud grid across the baseplate
   const studSpacing = 4;
@@ -447,14 +459,20 @@ const legoBoard: DrawFn = (g, w, h) => {
   const oy = by + (bh - rows * studSpacing) / 2;
   for (let c = 0; c <= cols; c++) {
     for (let r = 0; r <= rows; r++) {
-      circle(g, ox + c * studSpacing, oy + r * studSpacing, 0.8, 0x22c55e, 0.5);
+      circle(g, ox + c * studSpacing, oy + r * studSpacing, 0.8, STUD_GREEN, 0.5);
     }
   }
+}
 
-  // Tidy decorative bricks positioned by fractions of the baseplate
-  const sx = w / 128;
-  const sy = h / ((w * 2) / 3);
-
+function drawLegoBoardFigures(
+  g: G,
+  bx: number,
+  by: number,
+  bw: number,
+  bh: number,
+  sx: number,
+  sy: number,
+) {
   // 1. Smiley face (yellow bricks, black eyes and smile)
   const smX = bx + bw * 0.28;
   const smY = by + bh * 0.5;
@@ -496,8 +514,23 @@ const legoBoard: DrawFn = (g, w, h) => {
   const b2y = by + bh * 0.45;
   rr(g, b2x - 3 * sx, b2y - 2.5 * sy, 6 * sx, 5 * sy, 0.8, 0xf97316);
   circle(g, b2x, b2y, 0.9 * sx, 0xfb923c);
+}
+
+const legoBoard: DrawFn = (g, w, h) => {
+  const bw = w - 4;
+  const bh = h - 3;
+  const bx = -bw / 2;
+  const by = -h / 2 + 1.5;
+
+  drawLegoBoardBase(g, w, h, bx, by, bw, bh);
+
+  // Tidy decorative bricks positioned by fractions of the baseplate
+  const sx = w / 128;
+  const sy = h / ((w * 2) / 3);
+  drawLegoBoardFigures(g, bx, by, bw, bh, sx, sy);
 };
 
+/** Registry of furniture physical specs and procedural draw recipes by furniture kind. */
 export const FURNITURE: Record<FurnitureKind, FurnitureSpec> = {
   desk: { solid: true, draw: desk },
   chair: { solid: false, draw: chair },

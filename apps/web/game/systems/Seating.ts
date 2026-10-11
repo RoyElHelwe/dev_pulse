@@ -52,12 +52,17 @@ const STEP_OFF_OFFSETS: Record<Direction, { dx: number; dy: number }> = {
   right: { dx: STEP_OFF_DISTANCE_PX, dy: 0 },
 };
 
+const ROTATION_RIGHT_DEG = 90;
+const ROTATION_DOWN_DEG = 180;
+const ROTATION_LEFT_DEG = 270;
+const FULL_CIRCLE_DEG = 360;
+
 /** Determines avatar facing direction from chair rotation in degrees. */
 function chairFacing(deg = 0): Direction {
-  const r = ((deg % 360) + 360) % 360;
-  if (r === 90) return 'right';
-  if (r === 180) return 'down';
-  if (r === 270) return 'left';
+  const r = ((deg % FULL_CIRCLE_DEG) + FULL_CIRCLE_DEG) % FULL_CIRCLE_DEG;
+  if (r === ROTATION_RIGHT_DEG) return 'right';
+  if (r === ROTATION_DOWN_DEG) return 'down';
+  if (r === ROTATION_LEFT_DEG) return 'left';
   return 'up';
 }
 

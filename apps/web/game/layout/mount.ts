@@ -3,7 +3,10 @@
 
 import type { Furniture, FurnitureKind, Wall } from './types';
 
+/** Furniture kinds that mount onto south-facing wall surfaces rather than standing on floors. */
 export const WALL_MOUNTED: ReadonlySet<FurnitureKind> = new Set<FurnitureKind>(['tv', 'board', 'legoBoard']);
+
+/** Returns true if the furniture kind is designed to be hung on a wall. */
 export const isWallMounted = (kind: FurnitureKind) => WALL_MOUNTED.has(kind);
 
 const TILE = 32;

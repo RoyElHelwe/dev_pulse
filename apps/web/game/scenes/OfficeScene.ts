@@ -1,6 +1,17 @@
 /**
  * Main office scene lifecycle, coordinating rendering, physics, systems, and networking.
- * Delegates specialized behaviors to dedicated systems and exposes the public office API.
+ *
+ * Delegates specialized behaviors to dedicated systems:
+ * - ViewControl: Camera tracking, zoom levels, and layout drawer view shift
+ * - NetSync: Remote player lifecycle, positional lerping, and character appearances
+ * - FurnitureSprites: Furniture rendering, dynamic overlays, and desk paper stacks
+ * - DeskPlates: Desk occupant name tags and status bubbles
+ * - RoomBadges: Meeting room booking status indicators
+ * - RoomLocks: Room access permissions, boundary enforcement, and locked room ejection
+ * - Seating: Chair proximity detection and sit/stand animations
+ * - Interactions: Interactive elements (TV, whiteboard, foosball, desk prompt)
+ * - Proximity: Voice proximity tracking and room audio containment
+ * - EditMode: Interactive office layout editor
  */
 
 import * as Phaser from 'phaser';
@@ -41,6 +52,7 @@ import { NetSync, type PlayerState } from '../systems/NetSync';
 import { Seating } from '../systems/Seating';
 import { FurnitureSprites } from '../systems/FurnitureSprites';
 
+/** Re-exported serialized network player state representation. */
 export type { PlayerState };
 
 /** Inset in pixels applied to solid furniture colliders to allow smoother walking nearby. */
@@ -55,6 +67,19 @@ const SPAWN_BOTTOM_MARGIN_PX = 4;
 /** Resolution scale multiplier for crisp high-DPI text badges and avatar labels. */
 const TEXT_RESOLUTION_SCALE = 2;
 
+/** Minimum arrival distance offset from spawn in tiles to keep arriving players spread out. */
+const ARRIVAL_MIN_DISTANCE_TILES = 0.5;
+
+/** Additional random distance jitter in tiles added to the arrival radius (< 3 tiles total). */
+const ARRIVAL_JITTER_DISTANCE_TILES = 0.9;
+
+/** Vertical perspective squish factor for spawn jitter (makes the arrival area an ellipse). */
+const SPAWN_Y_SQUISH = 0.6;
+
+/** Map boundary padding in tiles to prevent spawning or standing half-outside the office grid. */
+const MAP_BOUNDARY_PADDING_TILES = 0.5;
+
+/** Configuration options and event callbacks required to instantiate and run OfficeScene. */
 export interface OfficeSceneData {
   layout: OfficeLayout;
   myId: string;
@@ -93,6 +118,10 @@ export interface OfficeSnapshot {
   view: { x: number; y: number; w: number; h: number };
 }
 
+/**
+ * Core Phaser scene managing the interactive office environment, avatar physics,
+ * scenery rendering, and delegated subsystem coordination.
+ */
 export class OfficeScene extends Phaser.Scene {
   private opts!: OfficeSceneData;
   private player!: Avatar;
@@ -624,9 +653,9 @@ export class OfficeScene extends Phaser.Scene {
     for (let attempt = 0; attempt < SPAWN_ATTEMPTS; attempt++) {
       const angle = Math.random() * Math.PI * 2;
       // Close to the door: two people arriving together are within earshot (< 3 tiles apart).
-      const distance = TILE * (0.5 + Math.random() * 0.9);
+      const distance = TILE * (ARRIVAL_MIN_DISTANCE_TILES + Math.random() * ARRIVAL_JITTER_DISTANCE_TILES);
       const x = spawn.x + Math.cos(angle) * distance;
-      const y = spawn.y + Math.sin(angle) * distance * 0.6;
+      const y = spawn.y + Math.sin(angle) * distance * SPAWN_Y_SQUISH;
       if (this.isFree(x, y) && y < layout.height * TILE - SPAWN_BOTTOM_MARGIN_PX) return { x, y };
     }
     return spawn;
@@ -635,7 +664,14 @@ export class OfficeScene extends Phaser.Scene {
   /** True if the player's body fits at these feet coordinates (inside the office). */
   private isFree(x: number, y: number) {
     const { width, height } = this.opts.layout;
-    if (x < TILE / 2 || y < TILE || x > (width - 0.5) * TILE || y > (height - 0.5) * TILE) return false;
+    if (
+      x < TILE * MAP_BOUNDARY_PADDING_TILES ||
+      y < TILE ||
+      x > (width - MAP_BOUNDARY_PADDING_TILES) * TILE ||
+      y > (height - MAP_BOUNDARY_PADDING_TILES) * TILE
+    ) {
+      return false;
+    }
     const body = playerBody(x, y);
     return !this.obstacles.some((o) => overlapsRect(body, o)) && !this.roomLocks.blocks(body);
   }

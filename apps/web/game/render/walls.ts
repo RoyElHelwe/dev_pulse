@@ -1,8 +1,40 @@
+/**
+ * 2.5D wall geometry calculations and procedural rendering (solid walls, glass partitions, caps).
+ * Collider footprints match physical obstacles, while front faces and caps rise in local pixels.
+ */
 import type * as Phaser from 'phaser';
 import { TILE } from '../constants';
 import type { Wall } from '../layout/types';
 
 type G = Phaser.GameObjects.Graphics;
+
+// Wall paint, skirting, and shading colors
+const WALL_PAINT = 0xeee9e2;
+const SKIRTING = 0xd6cec3;
+const SOLID_CAP_BASE = 0x2d3236;
+const SOLID_CAP_HIGHLIGHT = 0x4a5258;
+
+// Glass partition colors and alphas
+const GLASS_TINT = 0xcfe7ef;
+const GLASS_ALPHA = 0.3;
+const GLASS_HIGHLIGHT_COLOR = 0xffffff;
+const GLASS_HIGHLIGHT_ALPHA = 0.45;
+const GLASS_FRAME_COLOR = 0x7d8a93;
+const GLASS_CAP_FILL = 0xbcdde8;
+const GLASS_CAP_ALPHA = 0.75;
+
+// Shadow and stroke dimensions
+const SHADOW_COLOR = 0x000000;
+const CAP_SHADE_ALPHA = 0.08;
+const CAP_SHADE_HEIGHT_PX = 5;
+const SKIRTING_HEIGHT_PX = 5;
+const FLOOR_SHADOW_ALPHA = 0.08;
+const GLASS_HIGHLIGHT_OFFSET_PX = 4;
+const GLASS_HIGHLIGHT_HEIGHT_PX = 1.5;
+const GLASS_BASE_HEIGHT_PX = 3;
+const GLASS_FRAME_STROKE_PX = 1.5;
+const GLASS_POST_WIDTH_PX = 2;
+const SOLID_CAP_HIGHLIGHT_HEIGHT_PX = 2;
 
 // 2.5D walls. The collider is only the wall's footprint (its thickness). What
 // you see is the wall standing up from its base line: a painted front face
@@ -23,6 +55,7 @@ interface Rect {
   h: number;
 }
 
+/** Checks whether a wall runs horizontally (constant y). */
 export function isHorizontal(wall: Wall) {
   return wall.y1 === wall.y2;
 }
@@ -84,23 +117,23 @@ export function drawWall(g: G, wall: Wall) {
     const faceTop = base - height;
     const cap = { x: r.x, y: faceTop - thickness, w: r.w, h: thickness };
     if (solid) {
-      g.fillStyle(0xeee9e2, 1); // painted wall
+      g.fillStyle(WALL_PAINT, 1); // painted wall
       g.fillRect(r.x, faceTop, r.w, height);
-      g.fillStyle(0x000000, 0.08); // shade under the cap
-      g.fillRect(r.x, faceTop, r.w, 5);
-      g.fillStyle(0xd6cec3, 1); // skirting board
-      g.fillRect(r.x, base - 5, r.w, 5);
-      g.fillStyle(0x000000, 0.08); // contact shadow on the floor
+      g.fillStyle(SHADOW_COLOR, CAP_SHADE_ALPHA); // shade under the cap
+      g.fillRect(r.x, faceTop, r.w, CAP_SHADE_HEIGHT_PX);
+      g.fillStyle(SKIRTING, 1); // skirting board
+      g.fillRect(r.x, base - SKIRTING_HEIGHT_PX, r.w, SKIRTING_HEIGHT_PX);
+      g.fillStyle(SHADOW_COLOR, FLOOR_SHADOW_ALPHA); // contact shadow on the floor
       g.fillRect(r.x, base, r.w, WALL_SHADOW);
     } else {
-      g.fillStyle(0xcfe7ef, 0.3);
+      g.fillStyle(GLASS_TINT, GLASS_ALPHA);
       g.fillRect(r.x, faceTop, r.w, height);
-      g.fillStyle(0xffffff, 0.45);
-      g.fillRect(r.x, faceTop + 4, r.w, 1.5);
-      g.fillStyle(0x7d8a93, 1);
-      g.fillRect(r.x, base - 3, r.w, 3);
+      g.fillStyle(GLASS_HIGHLIGHT_COLOR, GLASS_HIGHLIGHT_ALPHA);
+      g.fillRect(r.x, faceTop + GLASS_HIGHLIGHT_OFFSET_PX, r.w, GLASS_HIGHLIGHT_HEIGHT_PX);
+      g.fillStyle(GLASS_FRAME_COLOR, 1);
+      g.fillRect(r.x, base - GLASS_BASE_HEIGHT_PX, r.w, GLASS_BASE_HEIGHT_PX);
       for (let px = r.x; px <= r.x + r.w + 0.5; px += TILE * 2) {
-        g.fillRect(Math.min(px, r.x + r.w - 2), faceTop, 2, height);
+        g.fillRect(Math.min(px, r.x + r.w - GLASS_POST_WIDTH_PX), faceTop, GLASS_POST_WIDTH_PX, height);
       }
     }
     drawCap(g, wall, cap);
@@ -110,13 +143,13 @@ export function drawWall(g: G, wall: Wall) {
   // Vertical: the cap is the footprint lifted by the wall's height; below its south end the end face.
   const cap = { x: r.x, y: r.y - height, w: r.w, h: r.h };
   if (height > 0) {
-    g.fillStyle(solid ? 0xeee9e2 : 0xcfe7ef, solid ? 1 : 0.3);
+    g.fillStyle(solid ? WALL_PAINT : GLASS_TINT, solid ? 1 : GLASS_ALPHA);
     g.fillRect(r.x, cap.y + cap.h, r.w, height);
     if (solid) {
-      g.fillStyle(0xd6cec3, 1);
-      g.fillRect(r.x, base - 5, r.w, 5);
+      g.fillStyle(SKIRTING, 1);
+      g.fillRect(r.x, base - SKIRTING_HEIGHT_PX, r.w, SKIRTING_HEIGHT_PX);
     }
-    g.fillStyle(0x000000, 0.08);
+    g.fillStyle(SHADOW_COLOR, FLOOR_SHADOW_ALPHA);
     g.fillRect(r.x, base, r.w, WALL_SHADOW);
   }
   drawCap(g, wall, cap);
@@ -124,20 +157,20 @@ export function drawWall(g: G, wall: Wall) {
 
 function drawCap(g: G, wall: Wall, cap: Rect) {
   if (wall.kind === 'solid') {
-    g.fillStyle(0x2d3236, 1);
+    g.fillStyle(SOLID_CAP_BASE, 1);
     g.fillRect(cap.x, cap.y, cap.w, cap.h);
-    g.fillStyle(0x4a5258, 1);
-    g.fillRect(cap.x, cap.y, cap.w, 2);
+    g.fillStyle(SOLID_CAP_HIGHLIGHT, 1);
+    g.fillRect(cap.x, cap.y, cap.w, SOLID_CAP_HIGHLIGHT_HEIGHT_PX);
     return;
   }
-  g.fillStyle(0xbcdde8, 0.75);
+  g.fillStyle(GLASS_CAP_FILL, GLASS_CAP_ALPHA);
   g.fillRect(cap.x, cap.y, cap.w, cap.h);
-  g.fillStyle(0x7d8a93, 1);
+  g.fillStyle(GLASS_FRAME_COLOR, 1);
   if (isHorizontal(wall)) {
-    g.fillRect(cap.x, cap.y, cap.w, 1.5);
-    g.fillRect(cap.x, cap.y + cap.h - 1.5, cap.w, 1.5);
+    g.fillRect(cap.x, cap.y, cap.w, GLASS_FRAME_STROKE_PX);
+    g.fillRect(cap.x, cap.y + cap.h - GLASS_FRAME_STROKE_PX, cap.w, GLASS_FRAME_STROKE_PX);
   } else {
-    g.fillRect(cap.x, cap.y, 1.5, cap.h);
-    g.fillRect(cap.x + cap.w - 1.5, cap.y, 1.5, cap.h);
+    g.fillRect(cap.x, cap.y, GLASS_FRAME_STROKE_PX, cap.h);
+    g.fillRect(cap.x + cap.w - GLASS_FRAME_STROKE_PX, cap.y, GLASS_FRAME_STROKE_PX, cap.h);
   }
 }

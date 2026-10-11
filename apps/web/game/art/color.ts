@@ -105,6 +105,10 @@ interface RampOptions {
   shift?: number;
 }
 
+/**
+ * Generates a 5-tone hue-shifted color ramp (deep, shadow, base, light, glint) from OKLCH coordinates.
+ * Shadows shift cool towards blue-violet, highlights shift warm towards yellow.
+ */
 export function ramp(l: number, c: number, h: number, options: RampOptions = {}): Ramp {
   const step = options.step ?? 0.075;
   const shift = options.shift ?? 9;
@@ -145,4 +149,5 @@ export function flatRamp(hex: Hex): Ramp {
   };
 }
 
+/** Formats a 0xRRGGBB hex color number as a CSS hex string (e.g. #rrggbb). */
 export const css = (hex: Hex) => `#${hex.toString(16).padStart(6, '0')}`;

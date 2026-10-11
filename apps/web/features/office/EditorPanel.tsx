@@ -1,3 +1,8 @@
+/**
+ * Organiser floating toolbars and sidebar panels for in-office layout editing.
+ * Provides furniture palette selection, piece rotation/duplication/deletion, and room renaming.
+ */
+
 'use client';
 
 import {
@@ -80,11 +85,12 @@ interface EditorPanelProps {
   onProblem(text: string): void;
 }
 
-/** The organiser's tools around the office while editing it. */
+/** The organiser's toolbar and sidebar panels for editing the office layout. */
 export function EditorPanel({ editor, saving, error, onSave, onDiscard, onReload, onReset, onProblem }: EditorPanelProps) {
   const state = useEditorState(editor);
   const selected = state.selectedId ? editor.item(state.selectedId) : undefined;
   const count = state.selectedIds.length;
+  // WHY: Maps domain placement error enum keys to localized human-readable error messages.
   const report = (problem: PlacementProblem | null) => problem && onProblem(PROBLEM_TEXT[problem]);
 
   return (
@@ -193,6 +199,7 @@ export function EditorPanel({ editor, saving, error, onSave, onDiscard, onReload
         ) : (
           <div>
             <p className="border-b border-zinc-200/70 px-4 py-3 text-sm font-semibold">Rooms</p>
+            {/* WHY: max-h-[60vh] prevents the room list from exceeding screen viewport height on laptops. */}
             <div className="max-h-[60vh] space-y-2 overflow-y-auto p-3">
               {editor.layout.rooms
                 .filter((room) => room.name)
@@ -267,6 +274,7 @@ function RoomName({ id, value, editor }: { id: string; value: string; editor: La
     <input
       key={value}
       defaultValue={value}
+      // WHY: Cap room names at 24 characters to prevent text overflow on Phaser badges and wall signs.
       maxLength={24}
       aria-label={`Name of ${value}`}
       onBlur={(e) => commit(e.currentTarget)}
