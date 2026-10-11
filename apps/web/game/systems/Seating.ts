@@ -14,7 +14,7 @@ import {
   STEP_OFF_DISTANCE_PX,
   TILE,
 } from '../constants';
-import { itemBounds } from '../layout/derive';
+import { itemBounds } from '../layout/geometry';
 import type { Furniture, OfficeLayout } from '../layout/types';
 import type { Avatar, Direction } from '../objects/Avatar';
 import { pixels } from './RoomLocks';

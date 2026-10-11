@@ -1,4 +1,6 @@
-import { itemBounds } from '../layout/derive';
+// Headless state container and history manager for office layout modifications.
+
+import { itemBounds } from '../layout/geometry';
 import { isWallMounted, snapToWall } from '../layout/mount';
 import type { Furniture, FurnitureKind, OfficeLayout } from '../layout/types';
 import { catalogEntry } from './catalog';
@@ -29,11 +31,7 @@ interface EditorState {
   canRedo: boolean;
 }
 
-/**
- * The office editor's state, without Phaser: the furniture being edited,
- * the selection and the undo history. The scene draws it; React shows the
- * panels; both subscribe to changes.
- */
+/** Headless office editor state manager tracking furniture layout, selection, and undo history. */
 export class LayoutEditor {
   private furniture: Furniture[];
   private roomNames: Record<string, string>;

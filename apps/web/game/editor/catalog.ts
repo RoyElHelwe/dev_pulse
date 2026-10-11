@@ -1,3 +1,5 @@
+// Furniture palette catalog and metadata for the office layout editor.
+
 import type { FurnitureKind } from '../layout/types';
 
 /** What the organiser can add from the editor palette, with sensible default sizes (tiles). */
@@ -15,6 +17,7 @@ const FABRIC = [0x5f7a6b, 0x3d5a80, 0xc9845f, 0x6b5b7a, 0x3f4a5a, 0xb8a48a];
 const RUGS = [0xd9cdbb, 0xc8c2d6, 0xb9cbbf, 0xe3c9b6, 0x6b6f73];
 const BEANBAGS = [0x4f6d8f, 0xd8b25c, 0xd1495b, 0x81b29a];
 
+/** Catalog of placeable furniture items grouped by office section with default sizes. */
 export const CATALOG: CatalogItem[] = [
   { kind: 'desk', label: 'Desk', w: 3, h: 1.5, group: 'Work' },
   { kind: 'chair', label: 'Office chair', w: 0.85, h: 0.85, group: 'Work' },
@@ -40,11 +43,13 @@ export const CATALOG: CatalogItem[] = [
   { kind: 'legoBoard', label: 'Lego wall', w: 3, h: 0.5, group: 'Games' },
 ];
 
+/** Finds the first catalog entry for the specified furniture kind. */
 export function catalogEntry(kind: FurnitureKind) {
   return CATALOG.find((c) => c.kind === kind);
 }
 
 // First entry wins (a "plant" is a Plant, not a Big plant).
+/** Mapping from furniture kind to its default display label in the editor. */
 export const KIND_LABEL = Object.fromEntries(
   [...CATALOG].reverse().map((c) => [c.kind, c.label]),
 ) as Record<FurnitureKind, string>;

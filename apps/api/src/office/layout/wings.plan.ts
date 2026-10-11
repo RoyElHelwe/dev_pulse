@@ -14,25 +14,25 @@ export const SIDE_WING_DEPTH = 13;
 export const BOTTOM_WING_DEPTH = 17;
 
 /** Width of the extra room in a bottom wing, in tiles. */
-export const BOTTOM_EXTRA_ROOM_W = 14;
+const BOTTOM_EXTRA_ROOM_W = 14;
 
 /** Minimum height of the extra room in a side wing, in tiles. */
-export const SIDE_EXTRA_ROOM_MIN_H = 12;
+const SIDE_EXTRA_ROOM_MIN_H = 12;
 
 /** Maximum height of the extra room in a side wing, in tiles. */
-export const SIDE_EXTRA_ROOM_MAX_H = 16;
+const SIDE_EXTRA_ROOM_MAX_H = 16;
 
 /** Target clearance from the south wall for side wing extra room height calculation. */
-export const SIDE_EXTRA_ROOM_CLEARANCE = 14;
+const SIDE_EXTRA_ROOM_CLEARANCE = 14;
 
 /** Left cluster offset in a left side wing to preserve aisle and clearance. */
-export const CLUSTER_MARGIN_LEFT = 3.05;
+const CLUSTER_MARGIN_LEFT = 3.05;
 
 /** Right cluster offset in a right side wing to preserve aisle and clearance. */
-export const CLUSTER_MARGIN_RIGHT = 2.85;
+const CLUSTER_MARGIN_RIGHT = 2.85;
 
 /** Width of a standard desk cluster, in tiles. */
-export const CLUSTER_W = 7.1;
+const CLUSTER_W = 7.1;
 
 /** Number of desks added by a standard working wing. */
 export const DESKS_PER_WING = 8;
@@ -65,7 +65,7 @@ export function pickWingLook(rand: () => number): WingLook {
 }
 
 /** Populates furniture for the extra room (meeting room or lounge variant). */
-export function furnishExtraRoom(
+function furnishExtraRoom(
   b: LayoutBuilder,
   look: WingLook,
   rect: { x: number; y: number; w: number },
@@ -80,11 +80,12 @@ export function furnishExtraRoom(
     } else {
       b.kitchen(rect.x + 1, 5, rect.y);
       b.barTable(rect.x + rect.w / 2, rect.y + 6.5);
-      b.add({ kind: 'plant', x: rect.x + 1.2, y: rect.y + 10.8, w: 1, h: 1 });
+      b.plant(rect.x + 1.2, rect.y + 10.8);
     }
   }
 }
 
+/** Generates exterior boundary walls for an attached side wing. */
 function sideOuterWalls(side: 'LEFT' | 'RIGHT', wingX: number, depth: number, origH: number): Wall[] {
   const walls: Wall[] = [{ x1: wingX, y1: 0, x2: wingX + depth, y2: 0, kind: 'solid' }];
   if (side === 'LEFT') {
@@ -101,6 +102,7 @@ function sideOuterWalls(side: 'LEFT' | 'RIGHT', wingX: number, depth: number, or
   return walls;
 }
 
+/** Generates exterior walls and southern entrance gap for an attached bottom wing. */
 function bottomOuterWalls(origW: number, origH: number, depth: number, entranceX: number): Wall[] {
   return [
     { x1: 0, y1: origH + depth, x2: 0, y2: origH, kind: 'solid' },
@@ -110,6 +112,7 @@ function bottomOuterWalls(origW: number, origH: number, depth: number, entranceX
   ];
 }
 
+/** Determines whether the extra room in a bottom wing should sit on the west or east side. */
 function pickBottomOrientation(
   shiftedWalls: Wall[],
   origW: number,
@@ -135,6 +138,7 @@ export function planChillWing(
   wingX: number,
   existingRooms: Room[],
 ): WingPlan {
+  // Furniture IDs are prefixed with `w<index>-` to ensure uniqueness across sequentially attached wings.
   const b = new LayoutBuilder(`w${index}-`);
   const chillRoomId = existingRooms.some((r) => r.id === 'chill') ? `wing${index}-chill` : 'chill';
 
@@ -181,6 +185,7 @@ export function planSideWing(
   rand: () => number,
 ): WingPlan {
   const isLeft = side === 'LEFT';
+  // Furniture IDs are prefixed with `w<index>-` to ensure uniqueness across sequentially attached wings.
   const b = new LayoutBuilder(`w${index}-`);
   const R = Math.min(
     SIDE_EXTRA_ROOM_MAX_H,
@@ -209,7 +214,7 @@ export function planSideWing(
   b.deskCluster(clusterOx, R + 7.0);
 
   const plantX = isLeft ? 1.0 : wingX + depth - 1.0;
-  b.add({ kind: 'plant', x: plantX, y: origH - 1.2, w: 1.1, h: 1.1 });
+  b.plant(plantX, origH - 1.2, 1.1);
 
   return {
     rooms: wingRooms,
@@ -231,6 +236,7 @@ export function planBottomWing(
   look: WingLook,
   rand: () => number,
 ): WingPlan {
+  // Furniture IDs are prefixed with `w<index>-` to ensure uniqueness across sequentially attached wings.
   const b = new LayoutBuilder(`w${index}-`);
   const isWest = pickBottomOrientation(shiftedWalls, origW, origH, rand);
 

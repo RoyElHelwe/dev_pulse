@@ -1,6 +1,10 @@
+// Mirror of apps/web/game/layout/geometry.ts (itemBounds, seatPoint, numberedDesks, overlaps, Rect) and
+// apps/web/game/constants.ts (TILE) plus apps/web/game/render/furniture.ts (solid flags = SOLID): change both together.
+// They cannot share a package because the Docker build contexts are per app (see docs/code/layout.md).
+
 import type { Furniture, FurnitureKind, OfficeLayout, Wall } from './types';
 
-// Same numbers as the game (apps/web/game): keep in sync.
+/** Size of a single grid tile in pixels. */
 export const TILE = 32;
 const WALL = { solid: { thickness: 10 }, glass: { thickness: 6 } };
 
@@ -29,6 +33,7 @@ export const SOLID: Record<FurnitureKind, boolean> = {
   legoBoard: true,
 };
 
+/** Axis-aligned rectangle with position and dimensions. */
 export interface Rect {
   x: number;
   y: number;
@@ -71,10 +76,12 @@ export function seatPoint(desk: Furniture) {
   return { x: desk.x - Math.sin(angle) * distance, y: desk.y + Math.cos(angle) * distance };
 }
 
+/** Tests whether two axis-aligned rectangles intersect, with an optional inner margin tolerance. */
 export function overlaps(a: Rect, b: Rect, margin = 0) {
   return a.x + margin < b.x + b.w && b.x + margin < a.x + a.w && a.y + margin < b.y + b.h && b.y + margin < a.y + a.h;
 }
 
+/** Converts a rectangle with tile-based coordinates and dimensions into pixel units. */
 export function toPixels(r: Rect): Rect {
   return { x: r.x * TILE, y: r.y * TILE, w: r.w * TILE, h: r.h * TILE };
 }

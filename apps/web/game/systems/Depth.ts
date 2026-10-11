@@ -10,7 +10,7 @@ import {
   TILE,
   WALL_MOUNTED_DEPTH_OFFSET,
 } from '../constants';
-import { itemBounds } from '../layout/derive';
+import { itemBounds } from '../layout/geometry';
 import { faceBase, isWallMounted, mountWall } from '../layout/mount';
 import type { Furniture, Wall } from '../layout/types';
 import { FURNITURE } from '../render/furniture';

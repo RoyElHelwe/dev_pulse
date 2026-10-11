@@ -1,4 +1,5 @@
 // Doorway location search and wall splitting helpers for connecting wings to an office.
+// Identifies optimal door openings along shared walls minimizing furniture disruption.
 
 import { itemBounds, overlaps, type Rect, SOLID } from './geometry';
 import type { Furniture, Room, Wall } from './types';
@@ -8,25 +9,25 @@ import { type Span, WingError, type WingSide } from './wings.types';
 export const DOOR_WIDTH_TILES = 4;
 
 /** Depth of the search strip perpendicular to the shared wall, in tiles. */
-export const DOOR_STRIP_DEPTH_TILES = 3;
+const DOOR_STRIP_DEPTH_TILES = 3;
 
 /** Width of the search strip along the shared wall, in tiles. */
-export const DOOR_STRIP_WIDTH_TILES = 5.5;
+const DOOR_STRIP_WIDTH_TILES = 5.5;
 
 /** Padding on each side of the doorway when building the search strip, in tiles. */
-export const DOOR_STRIP_PAD_TILES = 0.75;
+const DOOR_STRIP_PAD_TILES = 0.75;
 
 /** Step increment when sliding the doorway along the shared wall, in tiles. */
-export const DOOR_STEP_TILES = 0.5;
+const DOOR_STEP_TILES = 0.5;
 
 /** Required clearance between the door and the ends of the wing open aisle, in tiles. */
-export const DOOR_AISLE_MARGIN_TILES = 1;
+const DOOR_AISLE_MARGIN_TILES = 1;
 
 /** Numerical tolerance for coordinate comparison and overlap tests. */
-export const EPSILON = 1e-4;
+const EPSILON = 1e-4;
 
 /** Furniture kinds that must never be removed or blocked to place a door. */
-export const PROTECTED_KINDS = new Set<string>([
+const PROTECTED_KINDS = new Set<string>([
   'desk',
   'chair',
   'meetingTable',
@@ -37,7 +38,7 @@ export const PROTECTED_KINDS = new Set<string>([
 ]);
 
 /** Result of selecting the best door placement on the shared wall. */
-export interface DoorChoice {
+interface DoorChoice {
   t: number;
   removableItems: Furniture[];
 }
@@ -147,6 +148,7 @@ export function splitWallsForDoor(
   return result;
 }
 
+/** Computes the span of an open room adjacent to the shared coordinate axis, if any. */
 function roomSpanOnShared(
   room: Room,
   orientation: 'HORIZONTAL' | 'VERTICAL',
@@ -161,6 +163,7 @@ function roomSpanOnShared(
   return touches ? { start: room.x, end: room.x + room.w } : null;
 }
 
+/** Generates a search bounding box for a candidate doorway location. */
 function doorCandidateStrip(
   orientation: 'HORIZONTAL' | 'VERTICAL',
   sharedCoord: number,
@@ -174,6 +177,7 @@ function doorCandidateStrip(
   return { x: t - DOOR_STRIP_PAD_TILES, y: sharedCoord - DOOR_STRIP_DEPTH_TILES, w: DOOR_STRIP_WIDTH_TILES, h: DOOR_STRIP_DEPTH_TILES };
 }
 
+/** Tests whether a doorway strip intersects protected furniture and identifies removable items. */
 function testDoorCandidateStrip(
   strip: Rect,
   furniture: Furniture[],

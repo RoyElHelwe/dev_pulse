@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { canManage, type MyWorkspace } from '@/features/workspace/types';
-import { numberedDesks } from '@/game/layout/derive';
+import { numberedDesks } from '@/game/layout/geometry';
 import { api } from '@/lib/api';
 import { InviteCard } from './InviteCard';
 import { InvitationsCard } from './InvitationsCard';

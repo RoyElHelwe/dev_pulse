@@ -1,6 +1,8 @@
+// Interactive Phaser edit mode for dragging, placing, rotating, and selecting office furniture.
+
 import * as Phaser from 'phaser';
 import { TILE } from '../constants';
-import { itemBounds } from '../layout/derive';
+import { itemBounds } from '../layout/geometry';
 import { isWallMounted, snapToWall } from '../layout/mount';
 import type { Furniture } from '../layout/types';
 import { FURNITURE } from '../render/furniture';
@@ -23,11 +25,7 @@ interface EditModeHost {
   shadowDepth: number;
 }
 
-/**
- * Editing inside the real office: drag furniture, place new pieces from the
- * palette, pan the camera. All changes go through the LayoutEditor; this class
- * only turns mouse and keyboard into editor calls and draws the result.
- */
+/** Interactive Phaser controller handling input, dragging, and visual feedback for layout editing. */
 export class EditMode {
   private readonly scene: Phaser.Scene;
   private readonly outline: Phaser.GameObjects.Graphics;
