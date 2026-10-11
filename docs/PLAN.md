@@ -1,3 +1,5 @@
+> **Historical plan with live status markers; current code reality in [HANDOFF.md](HANDOFF.md) and docs/code/README.md.**
+
 # Dev Pulse — Team Plan
 
 **Team:** Roy · Mira · Zakaria
@@ -41,15 +43,18 @@ Each person mostly works in their own folders, which keeps merge conflicts rare.
 
 | Area             | Backend (`apps/api/src/…`)               | Frontend (`apps/web/…`)                                   | Owner          |
 | ---------------- | ---------------------------------------- | --------------------------------------------------------- | -------------- |
-| Auth             | `auth/`, `common/auth/`                  | `app/(auth)/login`, `app/(auth)/signup`                   | **Mira**       |
-| Profile, friends | `users/`, `friends/`                     | `app/profile/…`, `app/u/[id]`                             | **Mira**       |
-| Invitations      | `invitations/`, `members/`               | `app/invite/[token]`, `features/members/`                 | **Mira**       |
-| Onboarding       | `workspaces/`                            | `app/onboarding/`                                         | **Roy**        |
-| Office / game    | `office/` (Socket.IO `/office`)          | `app/office/[workspaceId]`, `game/` (Phaser), `features/office/` | **Roy**  |
-| Task manager     | `tasks/` (Socket.IO `/tasks`)            | `features/tasks/`                                         | **Zakaria**    |
-| Voice + meeting  | `voice/` (Socket.IO `/office`), `meetings/` | `features/voice/`, `features/meeting/`                    | **Zakaria**    |
-| Chill room, chat | `chat/` (Socket.IO `/chat`)              | `features/chill/`, `features/chat/`                       | **Helper → Mira** |
-| Shared           | `prisma/`, `health/`, `schema.prisma` CORE | `app/layout.tsx`, `components/ui/`                      | everyone, needs review |
+| Auth             | `auth/`, `common/auth/`                  | `features/auth/`, `app/(auth)/`                           | **Mira**       |
+| Profile, friends | *(not built)*                            | *(not built)*                                             | **Mira**       |
+| Invitations & team | `invitations/`, `workspace/`           | `app/invite/[token]`, `features/team/`                    | **Mira**       |
+| Onboarding & workspace | `workspace/`                       | `app/onboarding/`, `features/onboarding/`, `features/workspace/` | **Roy**  |
+| Office / game    | `office/` (Socket.IO `/office`)          | `app/office/`, `game/` (Phaser), `features/office/`       | **Roy**        |
+| Task manager     | `tasks/` (Socket.IO `/office`)           | `features/tasks/`                                         | **Zakaria**    |
+| Voice + meeting  | `voice/` (Socket.IO `/office`), `meetings/` | `features/voice/`, `features/meetings/`                | **Zakaria**    |
+| Chill room, chat | `chat/` (Socket.IO `/office`), `workspace/` | `features/chat/`, `features/games/`                   | **Zakaria · Claude** |
+| Games (extra)    | `games/` (Foosball, Uno, Lego)           | `features/games/`                                         | **Zakaria**    |
+| Dev tooling      | `dev/` (auth/dev, teleport)              | `features/dev/`                                           | **Zakaria**    |
+| E2E testing      | —                                        | `e2e/` (Playwright suite)                                 | **Zakaria · Roy** |
+| Shared           | `prisma/`, `health/`, `apps/api/prisma/schema.prisma` | `app/layout.tsx`, `components/ui/`            | everyone, needs review |
 
 **Schema rule:** `apps/api/prisma/schema.prisma` has one section per person. You only edit
 your own section. Changes to the **CORE** section get discussed with the whole team first.
@@ -115,39 +120,53 @@ Details and examples: **[docs/AUTH.md](AUTH.md)**.
 ### C3 — Game → features event bus (Roy emits, Zakaria and the helper listen)
 
 Roy owns **detecting** who is near and which zone a player is in. Zakaria owns **what
-happens** then (voice, meeting call, task panel). This boundary is what takes load off
+happens** then (voice, meeting call, task panel, games). This boundary is what takes load off
 Zakaria.
 
 `apps/web/features/office/events.ts` exports a typed emitter `officeEvents`:
 
-| Event             | Payload                                                     | Emitted when                                   |
-| ----------------- | ----------------------------------------------------------- | ---------------------------------------------- |
-| `player:near`     | `{ userId, distance }`                                      | another player comes within `NEAR_RADIUS` (**done in R4**) |
-| `player:distance` | `{ userId, distance }`                                      | while near, at most 5×/s (for voice volume)    |
-| `player:far`      | `{ userId }`                                                | they leave the radius (with a little hysteresis)|
-| `zone:enter`      | `{ type: 'meeting' \| 'chill' \| 'desk', id, name }`        | local player enters a zone (**done in R1**)    |
-| `zone:leave`      | `{ type, id, name }`                                        | local player leaves a zone (**done in R1**)    |
-| `object:interact` | `{ type: 'desk' \| 'board', id, name, ownerId? }`           | player presses **E** next to an object (**done in R4**) |
+| Event             | Payload                                                                  | Emitted when                                   |
+| ----------------- | ------------------------------------------------------------------------ | ---------------------------------------------- |
+| `player:near`     | `{ userId, distance }`                                                   | another player comes within `NEAR_RADIUS` (**done in R4**) |
+| `player:distance` | `{ userId, distance }`                                                   | while near, at most 5×/s (for voice volume)    |
+| `player:far`      | `{ userId }`                                                             | they leave the radius (with a little hysteresis)|
+| `zone:enter`      | `{ type: ZoneType, id, name }`                                           | local player enters a zone (**done in R1**)    |
+| `zone:leave`      | `{ type: ZoneType, id, name }`                                           | local player leaves a zone (**done in R1**)    |
+| `object:interact` | `{ type: 'desk' \| 'board' \| 'kanban' \| 'foosball' \| 'uno' \| 'lego', id, name, ownerId? }` | player presses **E** next to an object (**done in R4/Z5**) |
 
 Map format: an `OfficeLayout` object (`apps/web/game/layout/types.ts`): plain JSON with
-rooms (`kind`: open / meeting / lounge), walls, furniture and the spawn point, stored on the
+rooms (`kind`: open / meeting / lounge / chill), walls, furniture and the spawn point, stored on the
 workspace. Zones are **derived** from it (`game/layout/derive.ts`): one per desk, one per
-meeting room and lounge. Templates: `apps/api/src/office/templates`.
+meeting room, lounge, and chill room. Templates: `apps/api/src/office/templates`.
 
 ### C4 — Realtime namespaces and REST prefixes
 
 | Namespace  | Owner   | Main events                                                                                   |
 | ---------- | ------- | --------------------------------------------------------------------------------------------- |
-| `/office`  | Roy     | ✅ joins your office on connect → `office:state {players}`; `move [x,y,dir,moving]` → `office:moved`; `zone` → `office:zone`; `office:joined`, `office:left`, `office:layout`, `office:updated`, `office:desks`, `office:removed` |
-| `/session` | Mira    | ✅ `session:ended` (instant sign-out)                                                          |
-| `/tasks`   | Zakaria | `task:created`, `task:updated`, `task:deleted` (room = workspaceId)                           |
-| `/office`  | Zakaria | voice on the office socket: `rtc:signal {to, data}` → `rtc:signal {from, data}` (offer, answer, ICE, bye), or `rtc:refused {to}`; `voice:state`, `voice:leave`, `voice:states` → `office:voice` |
-| `/chat`    | Helper  | `chat:join {roomId}`, `chat:message`, `chat:typing`                                           |
+| `/office`  | Roy     | ✅ joins your office on connect → `office:state {players}`; `move [x,y,dir,moving]` → `office:moved`; `zone` → `office:zone`; `office:joined`, `office:left`, `office:layout`, `office:updated`, `office:desks`, `office:removed`, `office:replaced`, `office:busy` |
+| `/office`  | Zakaria | ✅ voice: `rtc:signal {to, data}` → `rtc:signal {from, data}` (offer, answer, ICE), `rtc:refused {to}`; `voice:state`, `voice:leave`, `voice:states` → `office:voice` |
+| `/office`  | Zakaria | ✅ tasks: `task:created`, `task:updated`, `task:deleted` broadcast across workspace members   |
+| `/office`  | Zakaria | ✅ minigames: `game:join`, `game:leave`, `game:action` → `game:state`, `game:event`, `game:left`, `game:ended`, `game:error`, `lego:art` |
+| `/office`  | Claude / Helper | ✅ chat: `chat:send {channel, text}` → `chat:message` broadcast                       |
+| `/office`  | Claude / Roy | ✅ bookings: `office:bookings {changed: true}` broadcast                                 |
+| `/office`  | Zakaria | ✅ dev teleport: `dev:teleport [x, y]` (pixels) (dev/test only, gated)                              |
+| `/session` | Mira    | ✅ `session:ended` (instant sign-out on remote session closure)                                |
 
-REST: `/api/auth/*` ✅, `/api/workspace` ✅ (+ `/members`, `/invitations`, `/layout`),
-`/api/invitations/:token` ✅, `/api/office/templates` ✅, `/api/users/*`,
-`/api/workspace/tasks`, `/api/workspace/messages`. The server finds the workspace from the
-signed-in user, so feature routes don't need a workspace id.
+REST:
+- `/api/auth/*` ✅ (`/register`, `/login`, `/2fa/*`, `/email/*`, `/password/*`, `/sessions/*`, `/refresh`, `/logout*`, `/me`, `/providers`, `/oauth/*`)
+- `/api/auth/dev/*` ✅ (`/users`, `/login`) (dev/test only, gated)
+- `/api/workspace` ✅ (`/`, `/me`, `/me/desk`, `/wings`, `/wings/chill`, `/template`, `/layout`, `/delete`)
+- `/api/workspace/members` ✅ (list, update role, assign desk, remove member)
+- `/api/workspace/invitations` ✅ (send, list, resend, revoke) & `/api/invitations/:token` ✅ (validate, accept, decline)
+- `/api/office/templates` ✅
+- `/api/workspace/tasks` ✅ (list, create, update/reorder rank, delete)
+- `/api/workspace/bookings` ✅ (list, create, delete)
+- `/api/workspace/chat` ✅ (channel message history)
+- `/api/workspace/games/leaderboard` ✅ & `/api/workspace/lego` ✅
+- `/api/settings` ✅ (voice preferences, keybind configuration)
+- `/api/health` ✅
+
+The server finds the workspace from the signed-in user, so feature routes don't need a workspace id.
 
 ---
 
@@ -161,13 +180,13 @@ signed-in user, so feature routes don't need a workspace id.
 | -- | ----- | ---- | ------- | -------- |
 | M1 | W0–W1 | ✅ **Auth contract (C2)**: global `AuthGuard` + `@Public()`, `@CurrentUser()`, `authenticateSocket` (`WorkspaceMemberGuard` comes with M4/M5) | C1 | **everyone** |
 | M2 | W1    | ✅ Sign up / sign in / sign out (scrypt), JWT access + rotating refresh tokens, `/auth/me`, validation on front **and** back, email confirmation, forgot/reset/change password, signed-in devices, pages. ✅ Redirect to onboarding when the user has no workspace (with R3) | M1 | R3 |
-| M3 | W2    | Profile: edit display name, avatar upload (default avatar when none), public profile page `/u/[id]` | M2 | R2 (avatars/names in office) |
+| M3 | W2    | ⬜ Profile: edit display name, avatar upload (default avatar when none), public profile page `/u/[id]` | M2 | R2 (avatars/names in office) |
 | M4 | W2–W3 | ✅ **Invitations**: owner/admin invites by email → token link `/invite/[token]`; accept while logged in, or sign up then accept → creates `WorkspaceMember`; list and revoke pending invites; optional email via SMTP env | M2, C1 | R3 (join flow) |
 | M5 | W3    | ✅ Members management: list members, change role, remove member; roles enforced (OWNER/ADMIN/MEMBER) | M4 | everyone (role checks) |
 | M6 | W4    | ✅ OAuth: Google, GitHub and 42. ✅ 2FA (TOTP + backup codes + trusted browser), also after OAuth | M2 | — |
-| M7 | W4    | Friends (add/remove, list) + online status (from socket connection) | M3 | H2 |
-| H1 | W5    | **Helper → Chill room** (see Zakaria's list) | R4 | — |
-| H2 | W5    | **Helper → Chat**: workspace chat + direct messages, history saved in DB, typing indicator | M7 | — |
+| M7 | W4    | ⬜ Friends (add/remove, list) + online status (from socket connection) | M3 | H2 |
+| H1 | W5    | ✅ **Chill room**: (done as 'chill' room kind + minigames Foosball, Uno, Lego + leaderboard) | R4 | — |
+| H2 | W5    | 🟡 **Chat**: workspace chat + room chat built; ⬜ direct messages, typing indicator not built | M7 | — |
 | F1 | W6    | ✅ Privacy Policy + Terms of Service pages, linked in the footer (**mandatory**, real content) | — | — |
 
 ### Roy — game engine + onboarding
@@ -180,7 +199,7 @@ signed-in user, so feature routes don't need a workspace id.
 | R4 | W3    | ✅ **Zones and interactions (C3)**: `zones` layer, desk per member, `officeEvents` (near/far/distance, zone enter/leave, interact with **E**), `presence:zone` on server | R2 | **Z3 proximity, Z4, Z5, H1** |
 | R5 | W4    | ✅ Office templates (loft 8, studio 24, campus 48 desks) saved as JSON on the workspace; **office editor** for organisers (move/add/remove furniture, rename rooms, checked so the office can't break); rename or delete the workspace | R3 | — |
 | R6 | W5    | ✅ Polish: status bubble above avatars (data from Z5), minimap, reconnect after network loss, responsive layout | R4 | — |
-| F2 | W6    | Tech lead review, fresh-machine test (`git clone && make`), console has no errors | all | — |
+| F2 | W6    | ✅ Tech lead review, fresh-machine test (`git clone && make`), console has no errors | all | — |
 
 ### Zakaria — features inside the office
 
@@ -190,12 +209,12 @@ plugged into Roy's events.
 
 | #  | Week  | Task | Depends | Unblocks |
 | -- | ----- | ---- | ------- | -------- |
-| Z1 | W1    | **Task backend**: `Task` model (title, description, status TODO / IN_PROGRESS / REVIEW / DONE, priority, assignee, due date), CRUD REST with validation, scoped to a workspace | M1, C1 | Z2 |
-| Z2 | W1–W2 | **Kanban UI** (drag & drop) as a panel over the office + live updates via `/tasks` (two browsers see the same board change) | Z1 | Z5 |
-| Z3 | W2–W3 | **Voice core**: WebRTC peer-to-peer audio, `rtc:signal` on `/office` (offer/answer/ICE relay), mic permission, mute button. **First test with a "call user X" button between 2 tabs**, then plug into `player:near` / `player:far` and set volume from `player:distance` | M1; R4 for the proximity part | Z4 |
-| Z4 | W3–W4 | **Meeting room**: `zone:enter meeting:<id>` → join the group call for that room (mesh, everyone in the zone); leave on exit; participant list; "occupied" badge; optional screen share | Z3, R4 | — |
-| Z5 | W4–W5 | **Desk ↔ tasks**: `object:interact desk` opens *my* tasks; current task shown in the bubble above the avatar (with R6) | Z2, R4 | R6 |
-| H1 | W5    | **Chill room** (Helper, see below): on `zone:enter chill` → room text chat, emotes/reactions, "on break" status on the avatar | R4, H2 | — |
+| Z1 | W1    | ✅ **Task backend**: `Task` model (title, description, status TODO / IN_PROGRESS / IN_REVIEW / DONE, priority, assignee, due date), CRUD REST with validation, fractional ranking, scoped to a workspace | M1, C1 | Z2 |
+| Z2 | W1–W2 | ✅ **Kanban UI** (drag & drop) as a drawer panel over the office + live updates via `/office` `task:*` events (multiple browsers see the same board change) | Z1 | Z5 |
+| Z3 | W2–W3 | ✅ **Voice core**: WebRTC peer-to-peer audio, `rtc:signal` on `/office` (offer/answer/ICE relay), mic permission, mute/deafen button, spatial 3D audio & earshot attenuation | M1; R4 for the proximity part | Z4 |
+| Z4 | W3–W4 | 🟡 **Meeting room**: ✅ `zone:enter meeting:<id>` → join group call for that room (mesh), acoustic wall isolation, bookings timetable, participant list; ⬜ optional screen share | Z3, R4 | — |
+| Z5 | W4–W5 | ✅ **Desk ↔ tasks**: `object:interact desk` (when owner) opens *my* tasks; `kanban` opens all tasks; task counts show paper stack on desk; status bubble | Z2, R4 | R6 |
+| H1 | W5    | ✅ **Chill room** (with minigames): on `zone:enter chill` → lounge acoustics, game tables (Foosball, Uno, Lego wall), weekly leaderboards | R4, H2 | — |
 
 ### The helper for Zakaria's track
 
@@ -227,19 +246,21 @@ the team helps on it first.
 
 ## 6. Modules (target ≥ 14 points)
 
-| Module | Type | Pts | Owner(s) |
-| ------ | ---- | --- | -------- |
-| Web: frameworks for frontend (Next.js) + backend (NestJS) | Major | 2 | all |
-| Web: real-time features with WebSockets | Major | 2 | Roy, Zakaria |
-| Web: user interaction (chat + profile + friends) | Major | 2 | Mira |
-| User Mgmt: standard user management (profile, avatar, friends + online status) | Major | 2 | Mira |
-| User Mgmt: organization system (workspaces, add/remove members) | Major | 2 | Roy + Mira |
-| Module of choice: proximity voice + meeting rooms in a 2D office (needs justification in README) | Major | 2 | Zakaria |
-| Web: ORM (Prisma) | Minor | 1 | all |
-| Web: real-time collaborative features (live shared Kanban / workspace) | Minor | 1 | Zakaria |
-| User Mgmt: OAuth 2.0 | Minor | 1 | Mira |
-| **Total** | | **15** | |
-| *Buffer:* 2FA (minor, Mira), notification system (minor), advanced permissions (major, Mira) | | +1…+4 | |
+| Module | Type | Pts | Owner(s) | Status |
+| ------ | ---- | --- | -------- | ------ |
+| Web: frameworks for frontend (Next.js) + backend (NestJS) | Major | 2 | all | ✅ Built |
+| Web: real-time features with WebSockets | Major | 2 | Roy, Zakaria | ✅ Built |
+| Web: user interaction (chat + profile + friends) | Major | 2 | Mira | 🟡 Partially built (chat built; profile + friends not built) |
+| User Mgmt: standard user management (profile, avatar, friends + online status) | Major | 2 | Mira | ⬜ Not built |
+| User Mgmt: organization system (workspaces, add/remove members) | Major | 2 | Roy + Mira | ✅ Built |
+| Module of choice: proximity voice + meeting rooms in a 2D office (needs justification in README) | Major | 2 | Zakaria | ✅ Built |
+| Web: ORM (Prisma) | Minor | 1 | all | ✅ Built |
+| Web: real-time collaborative features (live shared Kanban / workspace) | Minor | 1 | Zakaria | ✅ Built |
+| User Mgmt: OAuth 2.0 | Minor | 1 | Mira | ✅ Built |
+| User Mgmt: Two-factor authentication (2FA / TOTP) *(from buffer)* | Minor | 1 | Mira | ✅ Built |
+| Web: minigames framework (Foosball, Uno, Lego wall & leaderboard) *(extra)* | Major | 2 | Zakaria | ✅ Built |
+| **Total (built modules only)** | | **14** | | |
+| *Buffer / not built:* Profile/avatar/friends (2+2 pts), direct messages & typing indicators, notification system, advanced permissions | | | | |
 
 Aim for the buffer: modules that aren't fully working during evaluation count for 0.
 
@@ -262,11 +283,9 @@ Aim for the buffer: modules that aren't fully working during evaluation count fo
 
 ## 8. Final checklist (W6)
 
-- [ ] `git clone … && make` works on a clean machine (single command)
-- [ ] Privacy Policy + Terms of Service pages with real content, linked from the footer
+- [x] `git clone … && make` works on a clean machine (single command)
+- [x] Privacy Policy + Terms of Service pages with real content, linked from the footer
 - [ ] No warnings or errors in the Chrome console
-- [ ] `.env.example` complete, no secrets committed
+- [x] `.env.example` complete, no secrets committed
 - [ ] Multiple users at the same time: no conflicts, real-time updates everywhere
-- [ ] README sections required by the subject: Description, Instructions, Resources (+ AI usage),
-      Team Information, Project Management, Technical Stack, Database Schema, Features List,
-      Modules (with points), Individual Contributions
+- [ ] README sections required by the subject exist (with `<!-- FILL: ... -->` markers for team facts to complete): Description, Instructions, Resources (+ AI usage), Team Information, Project Management, Technical Stack, Database Schema, Features List, Modules (with points), Individual Contributions
