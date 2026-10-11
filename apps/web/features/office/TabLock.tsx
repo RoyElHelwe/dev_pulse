@@ -1,13 +1,15 @@
+/**
+ * Tab takeover alert modal for multi-tab conflicts.
+ * Prompts user to transfer the active office session to the current tab.
+ */
+
 'use client';
 
 import { MonitorSmartphone } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { tabLock, useTabLock } from './tabLockStore';
 
-/**
- * Covers the office when it is live in another tab (or browser, or device):
- * only one tab at a time has the avatar, voice and chat. "Use here" moves it to this tab.
- */
+/** Renders an alert dialog when the office session is active in another tab. */
 export function TabLock() {
   const lock = useTabLock();
   if (!lock) return null;

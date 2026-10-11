@@ -1,5 +1,10 @@
 'use client';
 
+/**
+ * Visual indicators and avatars for task type, priority level, and assignee representation.
+ * Used across cards, dialogs, and filter bars in the tasks feature.
+ */
+
 import {
   Bookmark,
   Bug,
@@ -16,6 +21,7 @@ import { cn } from '@/lib/cn';
 import type { BoardMember, TaskPriority, TaskType } from './types';
 import { PRIORITY_LABEL, TYPE_LABEL } from './types';
 
+/** Renders an icon badge representing the task type. */
 export function TypeIcon({ type, className }: { type: TaskType; className?: string }) {
   const label = TYPE_LABEL[type];
 
@@ -46,6 +52,7 @@ export function TypeIcon({ type, className }: { type: TaskType; className?: stri
   );
 }
 
+/** Renders an icon glyph representing the task priority level. */
 export function PriorityIcon({
   priority,
   className,
@@ -87,6 +94,7 @@ export function PriorityIcon({
   );
 }
 
+/** Renders the character avatar or unassigned placeholder for an assignee. */
 export function AssigneeAvatar({
   member,
   className,

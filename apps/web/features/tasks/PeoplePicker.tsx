@@ -1,13 +1,22 @@
 'use client';
 
+/**
+ * Modal dialog for searching and multi-selecting workspace assignees to filter board cards.
+ * Rendered when opening assignee picker from BoardFilters.
+ */
+
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Check, Search, X } from 'lucide-react';
+import { Search, X } from 'lucide-react';
 import { useEscape } from '@/lib/escape';
-import { cn } from '@/lib/cn';
 import { compareMembers } from './BoardFilters';
-import { AssigneeAvatar } from './TaskIcons';
+import { PeoplePickerList } from './PeoplePickerList';
+import type { PickerItem } from './PeoplePickerOption';
 import type { BoardFilter, BoardMember } from './types';
+
+const FOCUS_DELAY_MS = 50;
+const SEARCH_DEBOUNCE_MS = 150;
+const LAZY_FACE_THRESHOLD = 50;
 
 export interface PeoplePickerProps {
   open: boolean;
@@ -19,65 +28,7 @@ export interface PeoplePickerProps {
   myId?: string;
 }
 
-function LazyFace({
-  member,
-  lazy,
-  containerRef,
-}: {
-  member?: BoardMember;
-  lazy: boolean;
-  containerRef: React.RefObject<HTMLDivElement | null>;
-}) {
-  const [visible, setVisible] = useState(!lazy);
-  const elRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!lazy || visible) return;
-    if (typeof IntersectionObserver === 'undefined') {
-      setVisible(true);
-      return;
-    }
-    const target = elRef.current;
-    if (!target) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0]?.isIntersecting) {
-          setVisible(true);
-          observer.disconnect();
-        }
-      },
-      {
-        root: containerRef.current,
-        rootMargin: '100px 0px',
-      },
-    );
-
-    observer.observe(target);
-    return () => observer.disconnect();
-  }, [lazy, visible, containerRef]);
-
-  if (!visible) {
-    return (
-      <div
-        ref={elRef}
-        className="size-7 shrink-0 rounded-full bg-zinc-200"
-        aria-hidden="true"
-      />
-    );
-  }
-
-  return <AssigneeAvatar member={member} className="size-7" />;
-}
-
-function formatRole(role: 'OWNER' | 'ADMIN' | 'MEMBER'): string {
-  return role.charAt(0) + role.slice(1).toLowerCase();
-}
-
-type PickerItem =
-  | { kind: 'unassigned'; id: 'none'; label: string; count: number }
-  | { kind: 'member'; id: string; label: string; member: BoardMember; count: number };
-
+/** Renders the search modal dialog allowing multi-selection of board member assignees. */
 export function PeoplePicker({
   open,
   onClose,
@@ -110,7 +61,7 @@ export function PeoplePicker({
       setActiveIndex(0);
       const timer = setTimeout(() => {
         inputRef.current?.focus();
-      }, 50);
+      }, FOCUS_DELAY_MS);
       return () => clearTimeout(timer);
     }
   }, [open]);
@@ -118,7 +69,7 @@ export function PeoplePicker({
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedQuery(searchQuery);
-    }, 150);
+    }, SEARCH_DEBOUNCE_MS);
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
@@ -157,7 +108,7 @@ export function PeoplePicker({
     return res;
   }, [unassignedMatches, matchingMembers, openCounts]);
 
-  const isLazy = items.length > 50;
+  const isLazy = items.length > LAZY_FACE_THRESHOLD;
 
   useEffect(() => {
     setActiveIndex((prev) => {
@@ -216,14 +167,12 @@ export function PeoplePicker({
         role="dialog"
         aria-modal="true"
         aria-label="Find people"
-        data-testid="people-picker"
         tabIndex={-1}
         data-captures-keys=""
         className="relative flex max-h-[85dvh] w-full max-w-md flex-col overflow-hidden rounded-2xl bg-white shadow-2xl border border-zinc-200 outline-none"
         onClick={(e) => e.stopPropagation()}
         onKeyDown={handleKeyDown}
       >
-        {/* Header */}
         <div className="flex items-center justify-between border-b border-zinc-100 px-4 py-3">
           <div className="flex items-center gap-2">
             <h3 className="text-sm font-semibold text-zinc-900">Find people</h3>
@@ -262,7 +211,6 @@ export function PeoplePicker({
           </div>
         </div>
 
-        {/* Search Input */}
         <div className="border-b border-zinc-100 px-4 py-2.5">
           <div className="relative flex items-center">
             <Search
@@ -292,79 +240,17 @@ export function PeoplePicker({
           </div>
         </div>
 
-        {/* List */}
-        <div
-          ref={listRef}
-          role="listbox"
-          aria-label="People"
-          className="max-h-80 overflow-y-auto divide-y divide-zinc-50 py-1"
-        >
-          {items.length === 0 ? (
-            <div className="py-8 text-center text-xs text-zinc-500">
-              No people match
-            </div>
-          ) : (
-            items.map((item, index) => {
-              const isSelected = filter.assignees.includes(item.id);
-              const isActive = index === activeIndex;
-
-              return (
-                <button
-                  key={item.id}
-                  ref={(el) => {
-                    itemRefs.current[index] = el;
-                  }}
-                  id={`${baseId}-item-${item.id}`}
-                  type="button"
-                  role="option"
-                  data-testid="people-picker-row"
-                  aria-selected={isSelected}
-                  data-active={isActive ? 'true' : undefined}
-                  onClick={() => toggleAssignee(item.id)}
-                  onMouseEnter={() => setActiveIndex(index)}
-                  className={cn(
-                    'flex w-full items-center gap-3 px-4 py-2 text-left transition select-none focus:outline-none',
-                    isActive ? 'bg-zinc-100' : 'hover:bg-zinc-50',
-                  )}
-                >
-                  <LazyFace
-                    member={item.kind === 'member' ? item.member : undefined}
-                    lazy={isLazy}
-                    containerRef={listRef}
-                  />
-
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-1.5">
-                      <span className="truncate text-xs font-medium text-zinc-900">
-                        {item.label}
-                      </span>
-                      {item.kind === 'member' && (
-                        <span className="shrink-0 rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] font-medium text-zinc-600">
-                          {formatRole(item.member.role)}
-                        </span>
-                      )}
-                    </div>
-                    {item.kind === 'member' && item.member.email && (
-                      <span className="block truncate text-[11px] text-zinc-400">
-                        {item.member.email}
-                      </span>
-                    )}
-                  </div>
-
-                  <span className="shrink-0 text-xs text-zinc-400">
-                    {item.count} open
-                  </span>
-
-                  <div className="flex size-4 shrink-0 items-center justify-center">
-                    {isSelected && (
-                      <Check className="size-4 text-emerald-600" aria-hidden="true" />
-                    )}
-                  </div>
-                </button>
-              );
-            })
-          )}
-        </div>
+        <PeoplePickerList
+          items={items}
+          filterAssignees={filter.assignees}
+          activeIndex={activeIndex}
+          baseId={baseId}
+          listRef={listRef}
+          itemRefs={itemRefs}
+          isLazy={isLazy}
+          onToggleAssignee={toggleAssignee}
+          onSetActiveIndex={setActiveIndex}
+        />
       </div>
     </div>,
     document.body,

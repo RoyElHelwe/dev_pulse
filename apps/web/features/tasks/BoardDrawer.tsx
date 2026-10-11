@@ -1,30 +1,38 @@
 'use client';
 
-import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { type PointerEvent, type ReactNode, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { cn } from '@/lib/cn';
-
-/** Below this the board takes the whole screen (inset by a thin margin) instead of a ~70% card. */
-const SMALL_PX = 768;
-const MAX_PX = 960;
-const GAP = 20;
-const GAP_SMALL = 8;
-/** Past this share of the way open, a released drag snaps open (and a drag back snaps shut below 1 - this). */
-const SNAP = 0.35;
-/** px/ms: a quick flick wins over the position. */
-const FLICK = 0.5;
-const MS = 340;
-const EASE = `transform ${MS}ms cubic-bezier(0.22, 1, 0.36, 1)`;
-/** Extra travel so the closed board's shadow is fully off-screen. */
-const SHADOW = 56;
-const FOCUSABLE = 'button, a[href], input, select, textarea, summary, [tabindex]';
-
 /**
- * The task board lives just off-screen on the right. Opening it slides it in as a floating card (inset from the
- * screen borders) and pushes the WHOLE office layer (canvas + every HUD element) to the left by the same motion,
- * so things really leave the screen and come back when it closes. Nothing is resized. A grab handle on the right
- * edge drags it open or shut, following the pointer.
+ * Slide-out drawer containing the task board, shifting the office layer in tandem.
+ * Wraps the workspace office and provides gesture-based edge sliding.
  */
+
+import {
+  type PointerEvent,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react';
+import { BoardDrawerHandle } from './BoardDrawerHandle';
+
+const SMALL_SCREEN_BREAKPOINT_PX = 768;
+const MAX_PANEL_WIDTH_PX = 960;
+const PANEL_GAP_PX = 20;
+const PANEL_GAP_SMALL_PX = 8;
+const SNAP_THRESHOLD_RATIO = 0.35;
+const FLICK_VELOCITY_PX_PER_MS = 0.5;
+const ANIMATION_DURATION_MS = 340;
+const SHADOW_TRAVEL_PX = 56;
+const DRAG_MOVE_THRESHOLD_PX = 4;
+const FLICK_MAX_PAUSE_MS = 100;
+const LINGER_BUFFER_MS = 150;
+const SETTLE_BUFFER_MS = 300;
+const DEFAULT_VIEWPORT_WIDTH_PX = 1280;
+const EASE_TRANSITION = `transform ${ANIMATION_DURATION_MS}ms cubic-bezier(0.22, 1, 0.36, 1)`;
+const FOCUSABLE_SELECTOR = 'button, a[href], input, select, textarea, summary, [tabindex]';
+
+/** Slides the task board into view as a floating card while pushing office content off-screen. */
 export function BoardDrawer({
   open,
   onOpenChange,
@@ -34,22 +42,20 @@ export function BoardDrawer({
 }: {
   open: boolean;
   onOpenChange(open: boolean): void;
-  /** The board (null while the office editor is open: no handle, no board). */
   drawer: ReactNode;
-  /** The office was pushed (or brought back): CSS px the view should shift so the player stays visible. */
   onPush?(shift: number): void;
-  /** The office layer: canvas and HUD. */
   children: ReactNode;
 }) {
-  const [viewport, setViewport] = useState(1280);
+  const [viewport, setViewport] = useState(DEFAULT_VIEWPORT_WIDTH_PX);
   const [dragging, setDragging] = useState(false);
-  const small = viewport < SMALL_PX;
-  const gap = small ? GAP_SMALL : GAP;
-  const width = small ? viewport - 2 * gap : Math.min(MAX_PX, Math.round(viewport * 0.7));
-  const travel = width + gap; // how far the handle (and a drag) moves
-  const push = width + 2 * gap; // how far the office is pushed: the board's width plus a gap each side
+  const small = viewport < SMALL_SCREEN_BREAKPOINT_PX;
+  const gap = small ? PANEL_GAP_SMALL_PX : PANEL_GAP_PX;
+  const width = small ? viewport - 2 * gap : Math.min(MAX_PANEL_WIDTH_PX, Math.round(viewport * 0.7));
+  const travel = width + gap;
+  const push = width + 2 * gap;
   const hasDrawer = !!drawer;
-  // The board is only rendered while it can be seen: open, being dragged, or still sliding shut.
+
+  // The board is rendered only while visible: open, actively dragged, or sliding shut.
   const [lingering, setLingering] = useState(false);
   const showBoard = open || dragging || lingering;
 
@@ -70,13 +76,12 @@ export function BoardDrawer({
     return () => window.removeEventListener('resize', sync);
   }, []);
 
-  /** Everything that moves is placed imperatively, so a drag never re-renders the office 60 times a second. */
   const place = useCallback(
     (p: number, animate: boolean) => {
-      const transition = animate && !reduced.current ? EASE : 'none';
+      const transition = animate && !reduced.current ? EASE_TRANSITION : 'none';
       for (const [el, transform] of [
         [office.current, `translate3d(${-p * push}px,0,0)`],
-        [panel.current, `translate3d(${(1 - p) * (travel + SHADOW)}px,0,0)`],
+        [panel.current, `translate3d(${(1 - p) * (travel + SHADOW_TRAVEL_PX)}px,0,0)`],
         [handle.current, `translate3d(${-p * travel}px,0,0)`],
       ] as const) {
         if (!el) continue;
@@ -84,7 +89,6 @@ export function BoardDrawer({
         el.style.transform = transform;
       }
       if (handle.current) {
-        // On a phone the board covers the handle: its own close button takes over.
         handle.current.style.opacity = small ? String(1 - p) : '1';
         handle.current.style.pointerEvents = small && p > 0.5 ? 'none' : 'auto';
       }
@@ -92,14 +96,14 @@ export function BoardDrawer({
     [push, travel, small],
   );
 
-  /** Pushed-off HUD must not be reachable by keyboard or screen reader either. */
   const releaseOffscreen = useCallback(() => {
     for (const el of inerted.current) el.removeAttribute('inert');
     inerted.current = [];
   }, []);
+
   const inertOffscreen = useCallback(() => {
     releaseOffscreen();
-    for (const el of office.current?.querySelectorAll(FOCUSABLE) ?? []) {
+    for (const el of office.current?.querySelectorAll(FOCUSABLE_SELECTOR) ?? []) {
       const r = el.getBoundingClientRect();
       if (r.width === 0 && r.height === 0) continue;
       if (r.right <= 0 || r.left >= window.innerWidth) {
@@ -114,7 +118,7 @@ export function BoardDrawer({
       setLingering(true);
       return;
     }
-    const timer = setTimeout(() => setLingering(false), MS + 150);
+    const timer = setTimeout(() => setLingering(false), ANIMATION_DURATION_MS + LINGER_BUFFER_MS);
     return () => clearTimeout(timer);
   }, [open, dragging]);
 
@@ -131,9 +135,8 @@ export function BoardDrawer({
       if (e.target === layer) inertOffscreen();
     };
     if (shown) {
-      // When the slide has really finished (a busy frame can delay it past the timer, which is only a fallback).
       layer?.addEventListener('transitionend', arrived);
-      settle.current = setTimeout(inertOffscreen, MS + 300);
+      settle.current = setTimeout(inertOffscreen, ANIMATION_DURATION_MS + SETTLE_BUFFER_MS);
     }
     onPush?.(shown ? -push / 2 : 0);
     return () => {
@@ -142,7 +145,6 @@ export function BoardDrawer({
     };
   }, [open, hasDrawer, push, onPush, inertOffscreen, releaseOffscreen]);
 
-  /** 0..1, read from where the handle really is (also right while it is still animating). */
   const progress = () => {
     const r = handle.current?.getBoundingClientRect();
     return r ? Math.min(1, Math.max(0, (window.innerWidth - r.right) / travel)) : 0;
@@ -158,10 +160,10 @@ export function BoardDrawer({
   const move = (e: PointerEvent<HTMLButtonElement>) => {
     const d = drag.current;
     if (!d) return;
-    if (!d.moved && Math.abs(e.clientX - d.x) < 4) return;
+    if (!d.moved && Math.abs(e.clientX - d.x) < DRAG_MOVE_THRESHOLD_PX) return;
     if (!d.moved) releaseOffscreen();
     d.moved = true;
-    d.v = (e.clientX - d.last) / Math.max(1, e.timeStamp - d.at); // negative = moving left = opening
+    d.v = (e.clientX - d.last) / Math.max(1, e.timeStamp - d.at);
     d.last = e.clientX;
     d.at = e.timeStamp;
     place(Math.min(1, Math.max(0, d.startP + (d.x - e.clientX) / travel)), false);
@@ -171,15 +173,19 @@ export function BoardDrawer({
     const d = drag.current;
     drag.current = null;
     setDragging(false);
-    if (!d?.moved) return; // a plain click: onClick toggles
+    if (!d?.moved) return;
     suppressClick.current = true;
     const p = progress();
-    // A pause before letting go cancels the flick: only the last moments of the gesture count.
-    const v = e.timeStamp - d.at > 100 ? 0 : d.v;
-    const next = Math.abs(v) > FLICK ? v < 0 : d.startP > 0.5 ? p > 1 - SNAP : p > SNAP;
+    const v = e.timeStamp - d.at > FLICK_MAX_PAUSE_MS ? 0 : d.v;
+    const next =
+      Math.abs(v) > FLICK_VELOCITY_PX_PER_MS
+        ? v < 0
+        : d.startP > 0.5
+          ? p > 1 - SNAP_THRESHOLD_RATIO
+          : p > SNAP_THRESHOLD_RATIO;
     place(next ? 1 : 0, true);
     if (next !== open) onOpenChange(next);
-    else if (next) settle.current = setTimeout(inertOffscreen, MS + 300);
+    else if (next) settle.current = setTimeout(inertOffscreen, ANIMATION_DURATION_MS + SETTLE_BUFFER_MS);
     if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
   };
 
@@ -195,20 +201,22 @@ export function BoardDrawer({
             ref={panel}
             aria-label="Task board drawer"
             className="absolute z-30 overflow-hidden rounded-2xl border border-zinc-200/80 bg-white/95 shadow-2xl shadow-zinc-900/25"
-            style={{ top: gap, right: gap, bottom: gap, width, transform: `translate3d(${travel + SHADOW}px,0,0)` }}
+            style={{
+              top: gap,
+              right: gap,
+              bottom: gap,
+              width,
+              transform: `translate3d(${travel + SHADOW_TRAVEL_PX}px,0,0)`,
+            }}
             inert={!open && !dragging ? true : undefined}
             aria-hidden={!open && !dragging}
           >
             {showBoard ? drawer : null}
           </aside>
 
-          {/* The grab handle: on the screen edge while closed, riding the board's left edge while open. */}
-          <button
+          <BoardDrawerHandle
             ref={handle}
-            type="button"
-            aria-label={open ? 'Close task board' : 'Open task board'}
-            aria-expanded={open}
-            title={open ? 'Drag or click to close' : 'Drag or click to open the task board'}
+            open={open}
             onPointerDown={down}
             onPointerMove={move}
             onPointerUp={up}
@@ -220,14 +228,7 @@ export function BoardDrawer({
               }
               onOpenChange(!open);
             }}
-            className={cn(
-              'absolute top-1/2 right-0 z-40 flex h-20 w-5 -translate-y-1/2 cursor-grab touch-none items-center justify-center',
-              'rounded-l-xl border border-r-0 border-zinc-200 bg-white/95 text-zinc-500 shadow-md select-none',
-              'hover:bg-white hover:text-zinc-900 focus-visible:outline-2 focus-visible:outline-emerald-500 active:cursor-grabbing',
-            )}
-          >
-            {open ? <ChevronRight className="size-4" aria-hidden="true" /> : <ChevronLeft className="size-4" aria-hidden="true" />}
-          </button>
+          />
         </>
       )}
     </>

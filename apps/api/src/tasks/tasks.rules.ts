@@ -1,5 +1,15 @@
+/**
+ * Pure task rules: key prefix, ordering ranks and delete permission. No DB or Nest here so they
+ * can be unit tested (tasks.rules.spec.ts); tasks.service.ts applies them. Explained in docs/code/tasks.md.
+ */
 import type { Role } from '@prisma/client';
 
+/**
+ * Smallest gap allowed between two neighbouring ranks in a column.
+ * Cards are ordered by a float `rank`; dropping a card between A and B gives it (A+B)/2, so inserting
+ * repeatedly in the same spot halves the gap each time. Below this value the column is renumbered 1..n.
+ * Chosen far above double precision (~1e-16 relative) so ordering never becomes ambiguous.
+ */
 export const RANK_GAP_MIN = 1e-6;
 
 /**
@@ -36,6 +46,8 @@ export function taskKey(prefix: string, number: number): string {
 /**
  * Midpoint rank between two neighbours.
  * null before -> after - 1; null after -> before + 1; both null -> 1.
+ * Mirror of `rankBetween` in apps/web/features/tasks/useBoardDrag.ts: the browser computes the dropped
+ * card's rank (so the board feels instant) and the API stores it as sent; this copy is the tested reference.
  */
 export function rankBetween(before: number | null, after: number | null): number {
   if (before === null && after === null) return 1;

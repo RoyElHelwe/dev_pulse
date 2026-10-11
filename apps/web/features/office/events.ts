@@ -1,3 +1,8 @@
+/**
+ * Event bus for Phaser game events dispatched to React UI features.
+ * Bridges room zones, proximity ranges, and furniture object interactions.
+ */
+
 import type { ZoneType } from '@/game/layout/types';
 
 // Contract C3 (docs/PLAN.md): the game emits these, features listen to them.
@@ -45,4 +50,5 @@ class TypedEmitter<Events extends object> {
   }
 }
 
+/** Singleton typed event emitter for in-game office interactions and zone transitions. */
 export const officeEvents = new TypedEmitter<OfficeEventMap>();

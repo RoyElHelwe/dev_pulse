@@ -1,12 +1,14 @@
-'use client';
+/**
+ * React state subscription hook for the office LayoutEditor instance.
+ * Re-renders subscribers whenever editor tools, dirty flags, or selections change.
+ */
 
-// React binding for the layout editor's state. The editor (game/editor/LayoutEditor) is a plain
-// class that owns the draft layout and notifies subscribers; this hook re-renders on each change.
+'use client';
 
 import { useSyncExternalStore } from 'react';
 import type { LayoutEditor } from '@/game/editor/LayoutEditor';
 
-/** The editor's current state (selection, tool, dirty flag...), live. */
+/** Subscribes to live layout editor state changes. */
 export function useEditorState(editor: LayoutEditor) {
   return useSyncExternalStore(editor.subscribe, editor.getState, editor.getState);
 }

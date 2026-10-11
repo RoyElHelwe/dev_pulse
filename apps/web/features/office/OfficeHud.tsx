@@ -1,3 +1,8 @@
+/**
+ * Heads-up display (HUD) overlay for the office canvas.
+ * Houses workspace branding, location banner, navigation controls, and help hints.
+ */
+
 'use client';
 
 import { KanbanSquare, LocateFixed, MapPin, Minus, PencilRuler, Plus, UserPlus } from 'lucide-react';
@@ -22,6 +27,8 @@ import { Joystick } from './Joystick';
 import { Minimap } from './Minimap';
 import { PresenceList } from './PresenceList';
 
+const HELP_HINT_TIMEOUT_MS = 8000;
+
 const ZONE_LABEL: Record<ZoneEvent['type'], string> = {
   meeting: 'Meeting room',
   chill: 'Break area',
@@ -40,6 +47,7 @@ interface OfficeHudProps {
   onBoard(): void;
 }
 
+/** Renders workspace controls, minimap, joystick, and status badges around the office. */
 export function OfficeHud({ controller, workspace, people, editing, onEdit, boardOpen, onBoard }: OfficeHudProps) {
   const zone = useCurrentZone();
   const openCounts = useOpenTaskCounts();
@@ -70,7 +78,7 @@ export function OfficeHud({ controller, workspace, people, editing, onEdit, boar
 
   // The controls hint fades out after a few seconds.
   useEffect(() => {
-    const timer = setTimeout(() => setShowHelp(false), 8000);
+    const timer = setTimeout(() => setShowHelp(false), HELP_HINT_TIMEOUT_MS);
     return () => clearTimeout(timer);
   }, []);
 

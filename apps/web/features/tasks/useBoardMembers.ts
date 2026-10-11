@@ -1,5 +1,10 @@
 'use client';
 
+/**
+ * Hook fetching and caching the workspace member roster for the board.
+ * Provides member profiles for assignee selectors and avatar chips.
+ */
+
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import type { BoardMember } from './types';
@@ -12,6 +17,7 @@ interface MemberApiResponse {
   role: 'OWNER' | 'ADMIN' | 'MEMBER';
 }
 
+/** Fetches and returns the list of workspace members when enabled. */
 export function useBoardMembers(enabled: boolean): BoardMember[] {
   const [members, setMembers] = useState<BoardMember[]>([]);
 

@@ -1,3 +1,7 @@
+/**
+ * Task persistence and orchestration: membership checks, per-workspace numbering, column ranking,
+ * and live `task:*` broadcasts to the office. HTTP lives in tasks.controller.ts; pure rules in tasks.rules.ts.
+ */
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { type Prisma, type Task, TaskPriority, TaskStatus, TaskType } from '@prisma/client';
 import type { Subscription } from 'rxjs';
@@ -103,6 +107,7 @@ export class TasksService implements OnModuleInit, OnModuleDestroy {
     const status = dto.status ?? TaskStatus.TODO;
 
     const task = await this.prisma.$transaction(async (tx) => {
+      // Serialise creates per workspace so two concurrent requests can't both take the same MAX(number)+1.
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${workspaceId}))`;
 
       const numAgg = await tx.task.aggregate({
@@ -161,21 +166,27 @@ export class TasksService implements OnModuleInit, OnModuleDestroy {
 
     const isMove = dto.status !== undefined || dto.rank !== undefined;
     const targetStatus = dto.status ?? task.status;
-
-    let targetRank: number | undefined;
+    const data = this.buildUpdateData(dto);
     if (isMove) {
-      if (dto.rank !== undefined) {
-        targetRank = dto.rank;
-      } else {
-        // Status given without rank: put at end of target column
-        const rankAgg = await this.prisma.task.aggregate({
-          where: { workspaceId, status: targetStatus, id: { not: task.id } },
-          _max: { rank: true },
-        });
-        targetRank = rankAgg._max.rank != null ? rankAgg._max.rank + 1 : 1;
-      }
+      data.status = targetStatus;
+      data.rank = dto.rank ?? (await this.endOfColumnRank(workspaceId, targetStatus, task.id));
     }
 
+    const updated = await this.prisma.task.update({ where: { id }, data });
+
+    if (isMove) {
+      const rebalanced = await this.rebalanceColumnIfCrowded(workspaceId, targetStatus, prefix);
+      const mine = rebalanced?.find((view) => view.id === id);
+      if (mine) return mine;
+    }
+
+    const view = toTaskView(updated, prefix);
+    this.office.broadcast(workspaceId, 'task:updated', view);
+    return view;
+  }
+
+  /** Copies only the detail fields the client sent (undefined = leave unchanged; null clears assignee/dueDate). */
+  private buildUpdateData(dto: UpdateTaskDto): Prisma.TaskUncheckedUpdateInput {
     const data: Prisma.TaskUncheckedUpdateInput = {};
     if (dto.title !== undefined) data.title = dto.title;
     if (dto.description !== undefined) data.description = dto.description;
@@ -183,51 +194,43 @@ export class TasksService implements OnModuleInit, OnModuleDestroy {
     if (dto.priority !== undefined) data.priority = dto.priority;
     if (dto.assigneeId !== undefined) data.assigneeId = dto.assigneeId;
     if (dto.dueDate !== undefined) data.dueDate = dto.dueDate ? new Date(dto.dueDate) : null;
-    if (isMove) {
-      data.status = targetStatus;
-      data.rank = targetRank;
-    }
+    return data;
+  }
 
-    const updated = await this.prisma.task.update({
-      where: { id },
-      data,
+  /** Rank that puts a task at the bottom of a column (used when a move gives a status but no rank). */
+  private async endOfColumnRank(workspaceId: string, status: TaskStatus, excludeTaskId: string): Promise<number> {
+    const rankAgg = await this.prisma.task.aggregate({
+      where: { workspaceId, status, id: { not: excludeTaskId } },
+      _max: { rank: true },
     });
+    return rankAgg._max.rank != null ? rankAgg._max.rank + 1 : 1;
+  }
 
-    if (isMove) {
-      const columnTasks = await this.prisma.task.findMany({
-        where: { workspaceId, status: targetStatus },
-        orderBy: [{ rank: 'asc' }, { createdAt: 'asc' }],
-      });
+  /**
+   * Ranks are midpoints, so repeated drops between two cards shrink the gap until floats collide.
+   * When any neighbouring pair is too close, renumber the whole column 1..n and broadcast every card;
+   * returns the renumbered views, or null when the column was fine. See docs/code/tasks.md.
+   */
+  private async rebalanceColumnIfCrowded(
+    workspaceId: string,
+    status: TaskStatus,
+    prefix: string,
+  ): Promise<TaskView[] | null> {
+    const columnTasks = await this.prisma.task.findMany({
+      where: { workspaceId, status },
+      orderBy: [{ rank: 'asc' }, { createdAt: 'asc' }],
+    });
+    const crowded = columnTasks.some((t, i) => i > 0 && needsRebalance(columnTasks[i - 1].rank, t.rank));
+    if (!crowded) return null;
 
-      let shouldRebalance = false;
-      for (let i = 0; i < columnTasks.length - 1; i++) {
-        if (needsRebalance(columnTasks[i].rank, columnTasks[i + 1].rank)) {
-          shouldRebalance = true;
-          break;
-        }
-      }
-
-      if (shouldRebalance) {
-        let currentTaskView: TaskView | null = null;
-        for (let i = 0; i < columnTasks.length; i++) {
-          const t = columnTasks[i];
-          const rebalanced = await this.prisma.task.update({
-            where: { id: t.id },
-            data: { rank: i + 1 },
-          });
-          const view = toTaskView(rebalanced, prefix);
-          if (t.id === id) {
-            currentTaskView = view;
-          }
-          this.office.broadcast(workspaceId, 'task:updated', view);
-        }
-        return currentTaskView!;
-      }
+    const views: TaskView[] = [];
+    for (const [i, t] of columnTasks.entries()) {
+      const renumbered = await this.prisma.task.update({ where: { id: t.id }, data: { rank: i + 1 } });
+      const view = toTaskView(renumbered, prefix);
+      views.push(view);
+      this.office.broadcast(workspaceId, 'task:updated', view);
     }
-
-    const view = toTaskView(updated, prefix);
-    this.office.broadcast(workspaceId, 'task:updated', view);
-    return view;
+    return views;
   }
 
   /** Deletes a task. Only reporter, OWNER, or ADMIN may delete. */
