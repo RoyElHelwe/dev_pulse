@@ -20,7 +20,9 @@ The office minigames framework enables interactive, real-time multiplayer miniga
 | `proximity.ts` | Euclidean tile distance calculations and join/leave threshold definitions. |
 | `games.module.ts` | Root NestJS games module importing core infrastructure and game submodules. |
 | `games-core.module.ts` | Shared NestJS module exporting `GamesRegistry` and `GameResultsService`. |
-| `foosball/foosball.game.ts` | Foosball match lifecycle (lobby, countdown, playing, goal, ended), seating, and disconnect grace. |
+| `foosball/foosball.roster.ts` | Pure seating roster management: seat/stand rules, team balance, and rod ownership assignment. |
+| `foosball/foosball.actions.ts` | Foosball client action handlers (sit, stand, start, aim, move, kick, rematch). |
+| `foosball/foosball.game.ts` | Foosball game session wiring, match lifecycle timers, physics simulation loop, and state projection. |
 | `foosball/foosball.physics.ts` | Deterministic 2D foosball physics engine (120x64 field, 30 Hz, 4 substeps, ball, rods, walls, kicks). |
 | `foosball/foosball.module.ts` | NestJS module registering Foosball with `GamesRegistry`. |
 | `uno/uno.rules.ts` | Pure Uno engine: 108 cards, deck construction, move legality, draw stacking, turn orders, and scoring. |
