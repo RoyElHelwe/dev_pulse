@@ -1,5 +1,12 @@
+/**
+ * Type definitions for the Uno game interface and view model.
+ * Describes card attributes, round state, and synchronization structures.
+ */
+
+/** Valid standard colors for Uno cards and game active states. */
 export type Color = 'red' | 'yellow' | 'green' | 'blue';
 
+/** Card face values including numbers and special actions. */
 export type Value =
   | '0'
   | '1'
@@ -17,13 +24,14 @@ export type Value =
   | 'wild'
   | 'wild4';
 
+/** Single Uno card representation. */
 export interface Card {
   id: number;
   color: Color | 'wild';
   value: Value;
 }
 
-export interface UnoPlayer {
+interface UnoPlayer {
   id: string;
   name: string;
   character: string;
@@ -31,11 +39,12 @@ export interface UnoPlayer {
   saidUno: boolean;
 }
 
-export interface UnoSpectator {
+interface UnoSpectator {
   id: string;
   name: string;
 }
 
+/** Complete Uno game state view synchronized from the server. */
 export interface UnoView {
   phase: 'lobby' | 'playing' | 'ended';
   hostId: string | null;
@@ -56,12 +65,3 @@ export interface UnoView {
   winnerId: string | null;
   log: string[];
 }
-
-export type UnoAction =
-  | { type: 'start' }
-  | { type: 'again' }
-  | { type: 'play'; cardId: number; color?: Color }
-  | { type: 'draw' }
-  | { type: 'pass' }
-  | { type: 'uno' }
-  | { type: 'catch' };

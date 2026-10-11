@@ -1,22 +1,39 @@
+/**
+ * Game chrome context and hook for game panel telemetry.
+ * Enables active game panels to communicate player and spectator counts to the GameHost header.
+ */
+
 'use client';
 
 import { createContext, useContext, useEffect } from 'react';
 
-/** What a game panel reports to the full-screen top bar rendered by GameHost. */
+/**
+ * Telemetry reported by an active game panel to the full-screen top navigation bar in GameHost.
+ */
 export interface GameChromeInfo {
-  /** Seated / playing people (null = unknown, hidden). */
+  /** Seated / actively playing player count (null = unknown or hidden). */
   players?: number | null;
-  /** Watching people (null = unknown, hidden). */
+  /** Passive spectator count (null = unknown or hidden). */
   spectators?: number | null;
 }
 
+/**
+ * React context providing the telemetry update callback to child game panels.
+ */
 export const GameChromeContext = createContext<((info: GameChromeInfo) => void) | null>(null);
 
-/** Call from a game panel on every render with the current counts; GameHost shows them in its top bar. */
+/**
+ * Hook invoked inside a game panel to publish live player and spectator counts to GameHost.
+ *
+ * @param info Current counts of players and spectators.
+ */
 export function useGameChromeInfo(info: GameChromeInfo): void {
   const set = useContext(GameChromeContext);
   const players = info.players ?? null;
   const spectators = info.spectators ?? null;
+
+  // WHY: Dispatching to the parent setter inside useEffect avoids React's "Cannot update
+  // a component while rendering a different component" warning during child panel render passes.
   useEffect(() => {
     set?.({ players, spectators });
   }, [set, players, spectators]);

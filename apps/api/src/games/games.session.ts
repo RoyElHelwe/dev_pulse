@@ -1,3 +1,8 @@
+/**
+ * Active game session management and spatial proximity enforcement.
+ * Binds office furniture objects to GameInstance lifecycles and routes participant interactions.
+ */
+
 import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
 import type { Subscription } from 'rxjs';
 import { OfficeGateway } from '../office/office.gateway';
@@ -15,14 +20,32 @@ import {
 import { GameResultsService } from './game-results.service';
 import { distanceInTiles, LEAVE_PROXIMITY_TILES } from './proximity';
 
-export const gameRoom = (workspaceId: string, objectId: string) =>
+/** Interval in milliseconds between background spatial proximity sweeps. */
+export const PROXIMITY_SWEEP_INTERVAL_MS = 1000;
+
+/** Time-to-live in milliseconds for cached workspace office layouts. */
+export const LAYOUT_CACHE_TTL_MS = 10_000;
+
+/**
+ * Computes the Socket.IO room name for a game instance bound to a furniture item.
+ */
+export const gameRoom = (workspaceId: string, objectId: string): string =>
   `game:${workspaceId}:${objectId}`;
 
+/**
+ * Transport abstraction allowing GameSession to deliver messages to users and rooms
+ * without being tightly coupled to a specific WebSocket implementation.
+ */
 export interface GameSessionTransport {
+  /** Sends a named event with payload directly to a specific user ID. */
   sendToUser(userId: string, event: string, payload: unknown): void;
+  /** Broadcasts a named event with payload to an entire Socket.IO room. */
   sendToRoom(room: string, event: string, payload: unknown): void;
 }
 
+/**
+ * Manages the lifecycle and participant roster of a single running minigame instance.
+ */
 export class GameSession {
   private readonly participantsMap = new Map<string, GamePlayerRef>();
   private readonly instance: GameInstance;
@@ -56,26 +79,34 @@ export class GameSession {
     this.instance = this.definition.create(ctx);
   }
 
+  /** Minigame kind identifier. */
   get kind(): GameKind {
     return this.definition.kind;
   }
 
+  /** Returns the underlying concrete GameInstance engine. */
   getInstance(): GameInstance {
     return this.instance;
   }
 
+  /** Indicates whether this session has been disposed. */
   isDisposed(): boolean {
     return this.disposed;
   }
 
+  /** Returns all current players and spectators in this session. */
   participants(): GamePlayerRef[] {
     return Array.from(this.participantsMap.values());
   }
 
+  /** Checks if a user is currently registered in this session. */
   hasParticipant(userId: string): boolean {
     return this.participantsMap.has(userId);
   }
 
+  /**
+   * Adds a player to the session, delegates to GameInstance.onJoin, and emits state.
+   */
   join(player: GamePlayerRef, intent: unknown): void {
     if (this.disposed) return;
     this.participantsMap.set(player.userId, player);
@@ -83,6 +114,13 @@ export class GameSession {
     this.emitState();
   }
 
+  /**
+   * Removes a player from the session and notifies the game engine.
+   * Disposes the session immediately if the last participant departs.
+   *
+   * WHY: Zero-participant sessions are immediately cleaned up to reclaim memory
+   * and stop any active timers or physics loops.
+   */
   leave(userId: string, reason: 'left' | 'far' | 'disconnected'): void {
     if (this.disposed) return;
     if (!this.participantsMap.has(userId)) return;
@@ -98,6 +136,9 @@ export class GameSession {
     }
   }
 
+  /**
+   * Forwards an action to the game instance if the sender is an active participant.
+   */
   action(userId: string, action: unknown): void {
     if (this.disposed) return;
     if (!this.participantsMap.has(userId)) {
@@ -106,6 +147,10 @@ export class GameSession {
     this.instance.onAction(userId, action);
   }
 
+  /**
+   * Broadcasts individualized game:state projections to each participant.
+   * WHY: Each user receives a custom view via instance.view(userId) to prevent leaking hidden state.
+   */
   emitState(): void {
     if (this.disposed) return;
     for (const player of this.participantsMap.values()) {
@@ -118,6 +163,9 @@ export class GameSession {
     }
   }
 
+  /**
+   * Dispatches a custom game event either to specific users or to the entire room.
+   */
   emitEvent(event: string, data?: unknown, only?: string[]): void {
     if (this.disposed) return;
     const payload = { id: this.objectId, event, data };
@@ -132,6 +180,9 @@ export class GameSession {
     }
   }
 
+  /**
+   * Closes the session forcibly, ejecting all participants and disposing the instance.
+   */
   close(): void {
     if (this.disposed) return;
     const participants = this.participants();
@@ -149,6 +200,9 @@ export class GameSession {
     this.dispose();
   }
 
+  /**
+   * Releases resources, triggers engine disposal, and fires the disposal callback.
+   */
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
@@ -161,6 +215,10 @@ export class GameSession {
   }
 }
 
+/**
+ * Service managing all concurrent minigame sessions across workspaces.
+ * Tracks active sessions, enforces one-session-per-user, and executes periodic proximity sweeps.
+ */
 @Injectable()
 export class GamesSessionManager implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(GamesSessionManager.name);
@@ -181,6 +239,9 @@ export class GamesSessionManager implements OnModuleInit, OnModuleDestroy {
     private readonly workspaceEvents: WorkspaceEvents,
   ) {}
 
+  /**
+   * Initializes layout cache subscriptions and starts the periodic proximity sweep loop.
+   */
   onModuleInit() {
     this.subscription = this.workspaceEvents.events$.subscribe((event) => {
       if (event.type === 'layout') {
@@ -192,9 +253,12 @@ export class GamesSessionManager implements OnModuleInit, OnModuleDestroy {
       this.sweepProximity().catch((err) => {
         this.logger.error(`Error in proximity sweep: ${(err as Error).message}`);
       });
-    }, 1000);
+    }, PROXIMITY_SWEEP_INTERVAL_MS);
   }
 
+  /**
+   * Shuts down sweep timers and disposes all active sessions on module teardown.
+   */
   onModuleDestroy() {
     if (this.sweepInterval) clearInterval(this.sweepInterval);
     this.subscription?.unsubscribe();
@@ -205,36 +269,54 @@ export class GamesSessionManager implements OnModuleInit, OnModuleDestroy {
     this.userActiveSession.clear();
   }
 
+  /**
+   * Overrides the default session transport mechanism.
+   */
   setTransport(transport: GameSessionTransport) {
     this.transport = transport;
   }
 
+  /**
+   * Returns the configured transport or a fallback bridging through OfficeGateway.
+   */
   getTransport(): GameSessionTransport {
     if (this.transport) return this.transport;
     return {
       sendToUser: (userId, event, payload) => this.officeGateway.sendTo(userId, event, payload),
       sendToRoom: (_room, _event, _payload) => {
-        // Fallback: without socket server room broadcast, send to each member
         this.logger.warn('No custom room transport set');
       },
     };
   }
 
+  /**
+   * Retrieves an active game session by workspaceId and objectId.
+   */
   getSession(workspaceId: string, objectId: string): GameSession | undefined {
     return this.sessions.get(`${workspaceId}:${objectId}`);
   }
 
+  /**
+   * Returns the active game location (workspaceId + objectId) for a user, if currently playing.
+   */
   getUserActiveSession(userId: string): { workspaceId: string; objectId: string } | undefined {
     return this.userActiveSession.get(userId);
   }
 
+  /**
+   * Returns an array of all active game sessions.
+   */
   getAllSessions(): GameSession[] {
     return Array.from(this.sessions.values());
   }
 
+  /**
+   * Fetches or retrieves cached office layout for proximity calculations.
+   * WHY: Caching layout for 10s prevents querying PostgreSQL on every 1-second proximity sweep.
+   */
   async getLayout(workspaceId: string): Promise<OfficeLayout | null> {
     const cached = this.layoutCache.get(workspaceId);
-    if (cached && Date.now() - cached.fetchedAt < 10_000) {
+    if (cached && Date.now() - cached.fetchedAt < LAYOUT_CACHE_TTL_MS) {
       return cached.layout;
     }
     const ws = await this.prisma.workspace.findUnique({ where: { id: workspaceId } });
@@ -244,6 +326,11 @@ export class GamesSessionManager implements OnModuleInit, OnModuleDestroy {
     return layout;
   }
 
+  /**
+   * Joins a player into a game session, creating a new session if none currently exists.
+   * WHY: A user can only participate in one game at a time; if they were in another session,
+   * they are automatically removed with reason 'left'.
+   */
   join(
     workspaceId: string,
     objectId: string,
@@ -251,7 +338,6 @@ export class GamesSessionManager implements OnModuleInit, OnModuleDestroy {
     player: GamePlayerRef,
     intent: unknown,
   ): GameSession {
-    // One active game per user: leaving previous game if different
     const current = this.userActiveSession.get(player.userId);
     if (current && (current.workspaceId !== workspaceId || current.objectId !== objectId)) {
       this.leave(current.workspaceId, current.objectId, player.userId, 'left');
@@ -276,6 +362,9 @@ export class GamesSessionManager implements OnModuleInit, OnModuleDestroy {
     return session;
   }
 
+  /**
+   * Removes a player from an active session.
+   */
   leave(
     workspaceId: string,
     objectId: string,
@@ -294,6 +383,9 @@ export class GamesSessionManager implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  /**
+   * Handles user socket disconnection, marking them as departed with reason 'disconnected'.
+   */
   handleDisconnect(userId: string): void {
     const active = this.userActiveSession.get(userId);
     if (active) {
@@ -301,6 +393,9 @@ export class GamesSessionManager implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  /**
+   * Dispatches an action to the target game session.
+   */
   action(workspaceId: string, objectId: string, userId: string, action: unknown): void {
     const session = this.getSession(workspaceId, objectId);
     if (!session) {
@@ -309,6 +404,11 @@ export class GamesSessionManager implements OnModuleInit, OnModuleDestroy {
     session.action(userId, action);
   }
 
+  /**
+   * Periodic sweep checking distances between joined players and their furniture items.
+   * WHY: Players walking away (> 7 tiles) are automatically ejected with reason 'far'
+   * so abandoned games do not remain blocked indefinitely.
+   */
   async sweepProximity(): Promise<void> {
     for (const session of Array.from(this.sessions.values())) {
       if (session.isDisposed()) continue;
@@ -331,6 +431,9 @@ export class GamesSessionManager implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  /**
+   * Callback invoked when a GameSession disposes, cleaning up manager maps.
+   */
   private onSessionDisposed(session: GameSession): void {
     const key = `${session.workspaceId}:${session.objectId}`;
     if (this.sessions.get(key) === session) {

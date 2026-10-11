@@ -11,7 +11,8 @@ import {
   parseBricks,
   validatePlace,
 } from './lego.rules';
-import { LegoGameInstance, LegoService } from './lego.service';
+import { LegoGameInstance } from './lego.game';
+import { LegoService } from './lego.service';
 
 describe('Lego Wall', () => {
   describe('lego.rules', () => {
