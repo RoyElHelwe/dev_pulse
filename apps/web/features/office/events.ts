@@ -8,12 +8,14 @@ import type { ZoneType } from '@/game/layout/types';
 // Contract C3 (docs/PLAN.md): the game emits these, features listen to them.
 // Proximity: game/systems/Proximity.ts. Interactions: game/systems/Interactions.ts.
 
+/** Office zone boundary transition event describing the zone category, identifier, and display name. */
 export interface ZoneEvent {
   type: ZoneType;
   id: string;
   name: string;
 }
 
+/** Type definitions for all Phaser game events dispatched to subscribing React components and hooks. */
 export interface OfficeEventMap {
   'zone:enter': ZoneEvent;
   'zone:leave': ZoneEvent;

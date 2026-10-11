@@ -3,6 +3,7 @@
 import type { Metadata } from 'next';
 import { VoiceSettings } from '@/features/voice/VoiceSettings';
 
+/** Sets the browser tab title for the proximity voice and microphone settings route. */
 export const metadata: Metadata = { title: 'Voice · Dev Pulse' };
 
 /** Voice settings page rendering microphone preferences and audio controls. */

@@ -5,6 +5,7 @@ import { Suspense } from 'react';
 import { DevSwitcherGate } from '@/features/dev/DevSwitcher';
 import { LoginForm } from '@/features/auth/LoginForm';
 
+/** Sets the browser tab title for the user sign-in page. */
 export const metadata: Metadata = { title: 'Sign in · Dev Pulse' };
 
 /** Sign-in page rendering the login form wrapped in dev switcher detection. */

@@ -7,6 +7,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 
+/** Seed user profile information exposed by the dev-login switcher during local development and testing. */
 export interface DevUser {
   id: string;
   displayName: string;
@@ -15,6 +16,7 @@ export interface DevUser {
   role: string | null;
 }
 
+/** Development authentication state indicating whether dev login is enabled alongside selectable test profiles. */
 export interface DevStatus {
   enabled: boolean;
   users: DevUser[];

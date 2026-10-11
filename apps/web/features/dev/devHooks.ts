@@ -1,6 +1,6 @@
 'use client';
 
-// Dev/test only: browser hooks the e2e suite (e2e/tests/helpers.ts) uses to drive the office;
+// Dev/test only: browser hooks the e2e suite (e2e/tests/support/office.ts) uses to drive the office;
 // never active in production because useDevHooks installs window.__devpulse only when the API
 // reports DEV_LOGIN as enabled, and the API never enables it in production.
 

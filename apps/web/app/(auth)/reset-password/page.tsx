@@ -4,6 +4,7 @@ import type { Metadata } from 'next';
 import { Suspense } from 'react';
 import { ResetPasswordForm } from '@/features/auth/ResetPasswordForm';
 
+/** Sets the browser tab title for the token-based password reset page. */
 export const metadata: Metadata = { title: 'Choose a new password · Dev Pulse' };
 
 /** Password reset page verifying a reset token and setting a new password. */

@@ -4,6 +4,7 @@
 import type { DeskOwner } from '@/game/createGame';
 import type { OfficeLayout } from '@/game/layout/types';
 
+/** Hierarchical workspace authorization level determining administrative privileges. */
 export type Role = 'OWNER' | 'ADMIN' | 'MEMBER';
 
 interface OfficeWingInfo {
@@ -39,4 +40,5 @@ export function canManage(role: Role | undefined) {
   return role === 'OWNER' || role === 'ADMIN';
 }
 
+/** User-facing display labels for each workspace authorization tier. */
 export const ROLE_LABEL: Record<Role, string> = { OWNER: 'Organiser', ADMIN: 'Admin', MEMBER: 'Member' };

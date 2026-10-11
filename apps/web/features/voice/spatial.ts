@@ -1,6 +1,7 @@
 // Spatial audio math: distance-based gain curves and listener-relative direction vectors.
 // Pure calculation helpers consumed by VoiceAudio to configure Web Audio nodes.
 
+/** Cardinal facing direction of the player avatar used to rotate spatial audio into listener-relative space. */
 export type Facing = 'up' | 'down' | 'left' | 'right';
 
 const CLOSE_RADIUS_TILES = 1;

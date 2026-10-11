@@ -12,6 +12,7 @@ import { LayoutEditor } from '@/game/editor/LayoutEditor';
 import type { OfficeLayout } from '@/game/layout/types';
 import { api, ApiError } from '@/lib/api';
 
+/** Active office layout modification session encapsulating the editor instance and optimistic lock version. */
 export interface Editing {
   editor: LayoutEditor;
   /** The layout version the edit started from: saving fails if someone saved since. */

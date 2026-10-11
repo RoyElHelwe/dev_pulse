@@ -12,6 +12,7 @@ import { cn } from '@/lib/cn';
 const MAX_STATUS_LENGTH_CHARS = 40;
 const STATUS_PRESETS = ['Focusing', 'In a meeting', 'On break ☕', 'Back soon'];
 
+/** Current presence status text and outer layout styling for the status selection section. */
 export interface StatusSectionProps {
   status: string | null;
   className?: string;

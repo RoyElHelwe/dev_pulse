@@ -4,7 +4,9 @@
 
 /** Actions configurable by user keybindings. */
 export const KEYBIND_ACTIONS = ['interact', 'mute', 'deafen', 'pushToTalk', 'chat', 'board', 'rooms', 'people'] as const;
+/** User-customizable action identifier within the keyboard shortcut configuration. */
 export type KeybindAction = (typeof KEYBIND_ACTIONS)[number];
+/** Complete mapping of configurable application actions to physical keyboard event code strings. */
 export type Keybinds = Record<KeybindAction, string>;
 
 /** Same defaults as the API. Values are KeyboardEvent.code, so they do not depend on the layout. */

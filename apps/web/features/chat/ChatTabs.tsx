@@ -7,6 +7,7 @@ import { ChevronDown } from 'lucide-react';
 import { IconButton } from '@/components/ui/IconButton';
 import { cn } from '@/lib/cn';
 
+/** Configuration descriptor mapping a chat scope tab to its display label and channel identifier. */
 export interface ChatTabItem {
   key: 'office' | 'room';
   label: string;

@@ -4,6 +4,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { LegalPage } from '@/components/LegalPage';
 
+/** Sets the browser tab title for the public Privacy Policy legal page. */
 export const metadata: Metadata = { title: 'Privacy Policy · Dev Pulse' };
 
 /** Public Privacy Policy legal page. */
