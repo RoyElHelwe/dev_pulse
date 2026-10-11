@@ -1,3 +1,4 @@
+/** Tests pure board manipulation rules, clear permissions, and action rate limiting for the lego game. */
 import { describe, expect, it } from 'vitest';
 import {
   type Brick,

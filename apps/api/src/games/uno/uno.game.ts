@@ -31,6 +31,7 @@ import {
   stackDrawPenalty,
 } from './uno.rules';
 
+/** Optional constructor argument that lets specs supply a fixed draw pile instead of a shuffled deck. */
 export interface UnoTestHooks {
   initialDeck?: Card[];
 }

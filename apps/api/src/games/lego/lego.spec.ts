@@ -1,3 +1,4 @@
+/** Tests lego rules, service persistence, game instance action handling, and controller endpoints. */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { GameError, type GamePlayerRef } from '../game.types';
 import { LegoController } from './lego.controller';

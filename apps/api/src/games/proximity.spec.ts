@@ -1,3 +1,4 @@
+/** Tests pixel-to-tile distance calculations and join/leave proximity boundary checks for minigame tables. */
 import { describe, expect, it } from 'vitest';
 import { distanceInTiles, isWithinProximity, JOIN_PROXIMITY_TILES, LEAVE_PROXIMITY_TILES } from './proximity';
 

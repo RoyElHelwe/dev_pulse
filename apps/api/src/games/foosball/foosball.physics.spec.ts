@@ -1,3 +1,4 @@
+/** Tests ball kinematics, wall collisions, goal detection, rod clamping, and kick impulses for foosball physics. */
 import { describe, expect, it } from 'vitest';
 import {
   BALL_R,

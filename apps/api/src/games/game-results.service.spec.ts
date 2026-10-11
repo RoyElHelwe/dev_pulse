@@ -1,3 +1,4 @@
+/** Tests recording match outcomes in database records and aggregating win-loss leaderboard rankings. */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { aggregateLeaderboard, GameResultsService } from './game-results.service';
 

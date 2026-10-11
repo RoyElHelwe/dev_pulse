@@ -1,3 +1,4 @@
+/** Tests session lifecycle, participant view distribution, proximity auto-leave, and action dispatching. */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { GameContext, GameDefinition, GameInstance, GamePlayerRef } from './game.types';
 import { GameError } from './game.types';
