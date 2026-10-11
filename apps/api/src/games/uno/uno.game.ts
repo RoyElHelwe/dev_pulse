@@ -106,7 +106,7 @@ function handleLeave(state: UnoGameState, ctx: GameContext, userId: string): voi
     state.vulnerableId = null;
     if (state.winnerId) {
       appendGameLog(state.log, `${state.players[0].ref.name} won!`);
-      ctx.record({ winners: [state.winnerId], losers: [] }).catch(() => {});
+      ctx.record({ winners: [state.winnerId], losers: [userId] }).catch(() => {});
       ctx.emitEvent('won', { userId: state.winnerId });
     }
     ctx.emitState();

@@ -492,7 +492,7 @@ Interactive break room framework and multiplayer arcade activities embedded in t
 
 **Code:** `apps/api/src/games/uno/`, `apps/web/features/games/uno/`
 
-- **Rules**: 2 to 6 players. Standard 108-card deck. Players match top card color or number/action. Wild cards open a color picker. Penalty card draw stacking is supported (+2 on +2, wild4 on wild4). 2-player reverse acts as a skip.
+- **Rules**: 2 to 6 players. Standard 108-card deck. Players match top card color or number/action. Wild cards open a color picker. Penalty card draw stacking is supported (+2 on +2, wild4 on wild4). 2-player reverse acts as a skip. Leaving mid-game with fewer than 2 players forfeits the match (forfeit: leaver = loser in both games).
 - **UNO! & Catch!**: Players with 2 or fewer cards must call "UNO!" before playing down to 1 card. If a player fails to call, opponents can hit "Catch!" to impose a 2-card draw penalty.
 - **Controls**: Interactive card selection, draw pile clicking, and action buttons (`Pass`, `UNO!`, `Catch!`).
 
