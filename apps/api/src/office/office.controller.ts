@@ -1,7 +1,13 @@
+/**
+ * REST controller serving office template previews and layout geometry for workspace setup.
+ * Allows clients to inspect available procedural office designs before workspace creation.
+ */
+
 import { Controller, Get, Query } from '@nestjs/common';
 import { numberedDesks } from './layout/geometry';
 import { DEFAULT_TEAM, TEMPLATES } from './templates';
 
+/** Serves office layout templates and procedural workspace previews over HTTP. */
 @Controller('office')
 export class OfficeController {
   /**

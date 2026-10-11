@@ -1,3 +1,8 @@
+/**
+ * Real-time WebSocket gateway handling virtual office presence, movement, and interaction events.
+ * Manages Socket.IO connections, room broadcasting, and bidirectional synchronization across client tabs.
+ */
+
 import { Logger, type OnModuleDestroy } from '@nestjs/common';
 import {
   ConnectedSocket,
@@ -54,7 +59,10 @@ interface SocketData {
 
 const MAX_MOVES_PER_SECOND = 40;
 
+/** Returns the Socket.IO room channel identifier for a specific workspace. */
 export const wsRoom = (id: string) => `ws:${id}`;
+
+/** Returns the Socket.IO room channel identifier targeting all active tabs of a single user. */
 export const userRoom = (id: string) => `user:${id}`;
 const sessionRoom = (id: string) => `session:${id}`;
 

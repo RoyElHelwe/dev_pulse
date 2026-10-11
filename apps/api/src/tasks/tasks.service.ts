@@ -49,6 +49,7 @@ function toTaskView(task: Task, prefix: string): TaskView {
   };
 }
 
+/** Manages task persistence, ordering, workspace membership verification, and real-time office broadcasts. */
 @Injectable()
 export class TasksService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(TasksService.name);
