@@ -109,9 +109,13 @@ export const SIDE_COLORS = {
 // State Types & Action Interfaces
 // =============================================================================
 
+/** Team side identifier distinguishing table ends ('A' for left, 'B' for right). */
 export type FoosballSide = 'A' | 'B';
+
+/** Match lifecycle state controlling lobby setup, countdown, live play, goal celebration, or completion. */
 export type FoosballPhase = 'lobby' | 'countdown' | 'playing' | 'goal' | 'ended';
 
+/** Player identity and avatar assignment occupying a team seat. */
 export interface FoosballPlayer {
   userId: string;
   name: string;
@@ -119,11 +123,13 @@ export interface FoosballPlayer {
   away?: boolean;
 }
 
+/** Lateral position offset in units and kick rotation progress (0..1) for a single rod. */
 export interface RodView {
   y: number; // pattern offset in units
   kick: number; // 0..1
 }
 
+/** Authoritative table state broadcast to clients containing score, ball physics, rod positions, and seats. */
 export interface FoosballView {
   phase: FoosballPhase;
   target: 5;
@@ -140,6 +146,7 @@ export interface FoosballView {
   now: number;
 }
 
+/** Client action payloads dispatched to the game server for seating, match control, and rod input. */
 export type FoosballAction =
   | { type: 'sit'; side: FoosballSide }
   | { type: 'stand' }

@@ -65,6 +65,7 @@ const STATIC_RODS_ORDER: readonly StaticRodConfig[] = [
   ...ROD_X_B.map((x, idx) => ({ side: 'B' as const, idx, x })),
 ].sort((a, b) => a.x - b.x);
 
+/** Current ball coordinates, rod positions per side, user selection, and pointer cursor state for canvas rendering. */
 export interface DrawFoosballSceneParams {
   ballX: number;
   ballY: number;

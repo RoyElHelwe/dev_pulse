@@ -8,6 +8,7 @@
 import { Button } from '@/components/ui/Button';
 import type { FoosballSide } from './constants';
 
+/** Outcome score, winning side, forfeit status, and rematch callback to render the match completion overlay. */
 export interface FoosballEndedProps {
   winner: FoosballSide | null;
   score: { A: number; B: number };

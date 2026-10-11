@@ -40,6 +40,7 @@ const AIM_THROTTLE_MS = 33;
 /** Minimum rod offset delta in units required to trigger an aim update. */
 const AIM_DELTA_THRESHOLD_UNITS = 0.15;
 
+/** Container refs, player rod assignments, match phase, and network dispatcher to handle foosball pointer inputs. */
 export interface UseFoosballMouseParams {
   stageRef?: React.RefObject<HTMLElement | null>;
   canvasRef?: React.RefObject<HTMLCanvasElement | null>;
@@ -48,6 +49,7 @@ export interface UseFoosballMouseParams {
   send: (action: FoosballAction) => void;
 }
 
+/** Active rod index, pointer lock state, cursor coordinate ref, and canvas event handlers for controlling the table. */
 export interface UseFoosballMouseReturn {
   activeRod: number;
   selectRod: (rod: number) => void;

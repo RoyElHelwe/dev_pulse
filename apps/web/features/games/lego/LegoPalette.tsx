@@ -8,6 +8,7 @@
 import { LEGO_PALETTE } from '@/game/render/legoArt';
 import { cn } from '@/lib/cn';
 
+/** Selected color index, active eraser mode flag, and selection callback for choosing brick colors. */
 export interface LegoPaletteProps {
   selectedColorIndex: number;
   isErasing: boolean;

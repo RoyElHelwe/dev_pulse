@@ -13,6 +13,7 @@ import {
 import { FoosballCanvas } from './FoosballCanvas';
 import { FoosballEnded } from './FoosballEnded';
 
+/** Canvas element ref, authoritative game view, input listeners, and rod switching handler to operate the table. */
 export interface FoosballTableProps {
   canvasRef: React.RefObject<HTMLCanvasElement | null>;
   view: FoosballView;
