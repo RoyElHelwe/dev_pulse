@@ -1,8 +1,6 @@
 /**
- * Dev/test only: everything that exists for local testing and browser tests (dev sign-in
- * switcher, dev:teleport). AppModule imports it through devImports(), which returns nothing
- * unless DEV_LOGIN=true outside production, so in production these routes and events do
- * not exist at all (404 / unknown event), rather than being present but refused.
+ * Dev/test only module wiring dev identity switcher and test socket gateways.
+ * Loaded conditionally via devImports() only when DEV_LOGIN=true in non-production environments.
  */
 import { Module, type Type } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
@@ -17,7 +15,9 @@ import { DevService } from './dev.service';
   controllers: [DevController],
   providers: [DevService, DevGateway],
 })
+/** Module packaging dev-only controllers and gateways for non-production environments. */
 export class DevModule {}
 
-/** `[DevModule]` when the dev flag is effective for this environment, otherwise `[]`. */
+/** Returns [DevModule] when dev login is enabled outside production, otherwise an empty array. */
 export const devImports = (env: NodeJS.ProcessEnv): Type[] => (isDevLoginEnabled(env) ? [DevModule] : []);
+

@@ -1,3 +1,7 @@
+/**
+ * Authentication HTTP controller.
+ * Exposes endpoints for credentials, 2FA, password recovery, session listings, session takeover, and token rotation.
+ */
 import { Body, Controller, Delete, Get, HttpCode, Param, Post, Req, Res } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
@@ -20,6 +24,22 @@ import { TokensService } from './tokens.service';
 import { TwoFactorService } from './two-factor.service';
 import { VerificationService } from './verification.service';
 
+const THROTTLE_WINDOW_MS = 60_000;
+const REGISTER_THROTTLE_LIMIT = 5;
+const LOGIN_THROTTLE_LIMIT = 10;
+const TWO_FACTOR_VERIFY_THROTTLE_LIMIT = 10;
+const EMAIL_RESEND_THROTTLE_LIMIT = 5;
+const PASSWORD_FORGOT_THROTTLE_LIMIT = 5;
+const PASSWORD_RESET_THROTTLE_LIMIT = 10;
+const CLOSE_SESSIONS_REQUEST_THROTTLE_LIMIT = 3;
+const CLOSE_SESSIONS_THROTTLE_LIMIT = 5;
+const REFRESH_THROTTLE_LIMIT = 60;
+
+const CLOSE_SESSIONS_COOKIE_MAX_AGE_MS = 15 * 60 * 1000;
+const MFA_COOKIE_MAX_AGE_MS = 5 * 60 * 1000;
+const MS_PER_SECOND = 1000;
+
+/** Primary controller routing HTTP authentication actions and managing token cookies. */
 @Controller('auth')
 export class AuthController {
   constructor(
@@ -33,14 +53,14 @@ export class AuthController {
   ) {}
 
   @Public()
-  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @Throttle({ default: { limit: REGISTER_THROTTLE_LIMIT, ttl: THROTTLE_WINDOW_MS } })
   @Post('register')
   async register(@Body() dto: RegisterDto, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
     return this.respond(await this.auth.register(dto, clientInfo(req)), res);
   }
 
   @Public()
-  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @Throttle({ default: { limit: LOGIN_THROTTLE_LIMIT, ttl: THROTTLE_WINDOW_MS } })
   @Post('login')
   @HttpCode(200)
   async login(@Body() dto: LoginDto, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
@@ -52,7 +72,7 @@ export class AuthController {
 
   /** After the password step: check the code and finish signing in. */
   @Public()
-  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @Throttle({ default: { limit: TWO_FACTOR_VERIFY_THROTTLE_LIMIT, ttl: THROTTLE_WINDOW_MS } })
   @Post('2fa/verify')
   @HttpCode(200)
   async verifyTwoFactor(@Body() dto: TwoFactorVerifyDto, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
@@ -102,7 +122,7 @@ export class AuthController {
 
   /** Sends a new confirmation link (same answer whether the account exists or not). */
   @Public()
-  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @Throttle({ default: { limit: EMAIL_RESEND_THROTTLE_LIMIT, ttl: THROTTLE_WINDOW_MS } })
   @Post('email/resend')
   @HttpCode(204)
   resendVerification(@Body() dto: EmailDto) {
@@ -110,7 +130,7 @@ export class AuthController {
   }
 
   @Public()
-  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @Throttle({ default: { limit: PASSWORD_FORGOT_THROTTLE_LIMIT, ttl: THROTTLE_WINDOW_MS } })
   @Post('password/forgot')
   @HttpCode(204)
   forgotPassword(@Body() dto: EmailDto) {
@@ -118,7 +138,7 @@ export class AuthController {
   }
 
   @Public()
-  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @Throttle({ default: { limit: PASSWORD_RESET_THROTTLE_LIMIT, ttl: THROTTLE_WINDOW_MS } })
   @Post('password/reset')
   @HttpCode(204)
   resetPassword(@Body() dto: ResetPasswordDto) {
@@ -165,18 +185,18 @@ export class AuthController {
 
   /** Emails a link that closes every session. Needs the takeover cookie from a full sign-in. */
   @Public()
-  @Throttle({ default: { limit: 3, ttl: 60_000 } })
+  @Throttle({ default: { limit: CLOSE_SESSIONS_REQUEST_THROTTLE_LIMIT, ttl: THROTTLE_WINDOW_MS } })
   @Post('sessions/close-request')
   @HttpCode(200)
   async requestCloseSessions(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const { sentTo, binding } = await this.takeover.requestLink(req.cookies?.[COOKIES.takeover], clientInfo(req));
-    res.cookie(COOKIES.closeSessions, binding, { ...COOKIE_OPTIONS.closeSessions, maxAge: 15 * 60 * 1000 });
+    res.cookie(COOKIES.closeSessions, binding, { ...COOKIE_OPTIONS.closeSessions, maxAge: CLOSE_SESSIONS_COOKIE_MAX_AGE_MS });
     return { sentTo };
   }
 
   /** The emailed link: closes every session (and signs out this browser too). */
   @Public()
-  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @Throttle({ default: { limit: CLOSE_SESSIONS_THROTTLE_LIMIT, ttl: THROTTLE_WINDOW_MS } })
   @Post('sessions/close')
   @HttpCode(204)
   async closeSessions(@Body() dto: CloseSessionsDto, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
@@ -188,7 +208,7 @@ export class AuthController {
 
   /** New access token + new refresh token (the old one stops working). */
   @Public()
-  @Throttle({ default: { limit: 60, ttl: 60_000 } })
+  @Throttle({ default: { limit: REFRESH_THROTTLE_LIMIT, ttl: THROTTLE_WINDOW_MS } })
   @Post('refresh')
   @HttpCode(204)
   async refresh(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
@@ -220,14 +240,15 @@ export class AuthController {
   /** Sets the cookies for the result; the body never contains tokens. */
   private respond(result: SignInResult, res: Response) {
     if (result.status === 'session-active') {
-      res.cookie(COOKIES.takeover, result.takeoverToken, { ...COOKIE_OPTIONS.takeover, maxAge: TAKEOVER_SECONDS * 1000 });
+      res.cookie(COOKIES.takeover, result.takeoverToken, { ...COOKIE_OPTIONS.takeover, maxAge: TAKEOVER_SECONDS * MS_PER_SECOND });
       return { status: result.status, device: result.device };
     }
     if (result.status === 'two-factor-required') {
-      res.cookie(COOKIES.mfa, result.mfaToken, { ...COOKIE_OPTIONS.mfa, maxAge: 5 * 60 * 1000 });
+      res.cookie(COOKIES.mfa, result.mfaToken, { ...COOKIE_OPTIONS.mfa, maxAge: MFA_COOKIE_MAX_AGE_MS });
       return { status: result.status };
     }
     if (result.status === 'signed-in') setSessionCookies(res, result.tokens, this.config);
     return { status: result.status, user: result.user };
   }
 }
+

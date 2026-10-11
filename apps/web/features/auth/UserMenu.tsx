@@ -1,5 +1,7 @@
 'use client';
 
+// User avatar trigger and dropdown menu providing access to character settings, keybinds, and account controls.
+
 import { ChevronDown, Keyboard, LogOut, Palette, Repeat, ShieldCheck, Smile, Users } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -13,6 +15,10 @@ import { cn } from '@/lib/cn';
 import { useEscape } from '@/lib/escape';
 import { useAuth } from './AuthProvider';
 import { useDevLogin } from '@/features/dev/useDevLogin';
+import type { User } from './types';
+
+const MENU_OFFSET_PX = 8;
+const MIN_VIEWPORT_MARGIN_PX = 8;
 
 export interface UserMenuProps {
   className?: string;
@@ -40,8 +46,8 @@ export function UserMenu({ className, compact, profile }: UserMenuProps) {
     if (!triggerRef.current) return;
     const rect = triggerRef.current.getBoundingClientRect();
     setCoords({
-      top: rect.bottom + 8,
-      right: Math.max(8, window.innerWidth - rect.right),
+      top: rect.bottom + MENU_OFFSET_PX,
+      right: Math.max(MIN_VIEWPORT_MARGIN_PX, window.innerWidth - rect.right),
     });
   }, []);
 
@@ -98,128 +104,32 @@ export function UserMenu({ className, compact, profile }: UserMenuProps) {
         coords &&
         typeof document !== 'undefined' &&
         createPortal(
-          <div
-            ref={menuRef}
-            role="menu"
-            style={{
-              position: 'fixed',
-              top: `${coords.top}px`,
-              right: `${coords.right}px`,
+          <UserDropdownMenu
+            menuRef={menuRef}
+            coords={coords}
+            user={user}
+            profile={profile}
+            statusExpanded={statusExpanded}
+            onToggleStatus={() => setStatusExpanded((prev) => !prev)}
+            onOpenCharacter={() => {
+              setCharacterModalOpen(true);
+              setOpen(false);
             }}
-            className="z-[60] w-64 max-h-[calc(100vh-2rem)] overflow-y-auto rounded-2xl bg-white p-1.5 shadow-xl ring-1 shadow-zinc-900/10 ring-zinc-200"
-          >
-            <div className="px-3 py-2">
-              <p className="truncate text-sm font-medium">{user.displayName}</p>
-              <p className="truncate text-xs text-zinc-500">{user.email}</p>
-              {profile?.status && (
-                <p className="mt-1 inline-block truncate rounded-md bg-zinc-100 px-2 py-0.5 text-xs font-normal text-zinc-600">
-                  {profile.status}
-                </p>
-              )}
-            </div>
-
-            <div className="my-1 h-px bg-zinc-100" />
-
-            {profile && (
-              <>
-                <button
-                  role="menuitem"
-                  type="button"
-                  onClick={() => {
-                    setCharacterModalOpen(true);
-                    setOpen(false);
-                  }}
-                  className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-100"
-                >
-                  <Palette className="size-4" /> Character
-                </button>
-                <button
-                  role="menuitem"
-                  type="button"
-                  onClick={() => setStatusExpanded((prev) => !prev)}
-                  className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-100"
-                >
-                  <div className="flex min-w-0 items-center gap-2.5">
-                    <Smile className="size-4 shrink-0" />
-                    <div className="flex min-w-0 flex-col items-start leading-tight text-left">
-                      <span>Status</span>
-                      {profile.status && (
-                        <span className="truncate text-xs font-normal text-zinc-500">{profile.status}</span>
-                      )}
-                    </div>
-                  </div>
-                  <ChevronDown
-                    className={cn('size-3.5 text-zinc-400 transition-transform', statusExpanded && 'rotate-180')}
-                  />
-                </button>
-                {statusExpanded && (
-                  <div className="px-3 pt-1 pb-2">
-                    <StatusSection status={profile.status} />
-                  </div>
-                )}
-              </>
-            )}
-
-            <button
-              role="menuitem"
-              type="button"
-              onClick={() => {
-                setKeybindsModalOpen(true);
-                setOpen(false);
-              }}
-              className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-100"
-            >
-              <Keyboard className="size-4" /> Keybinds
-            </button>
-
-            <div className="my-1 h-px bg-zinc-100" />
-
-            {user.workspace && (
-              <Link
-                role="menuitem"
-                href="/team"
-                onClick={() => setOpen(false)}
-                className="flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-100"
-              >
-                <Users className="size-4" /> Team
-              </Link>
-            )}
-
-            <Link
-              role="menuitem"
-              href="/settings/security"
-              onClick={() => setOpen(false)}
-              className="flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-100"
-            >
-              <ShieldCheck className="size-4" /> Security settings
-            </Link>
-
-            {devEnabled && (
-              <button
-                role="menuitem"
-                type="button"
-                onClick={async () => {
-                  await signOut();
-                  window.location.replace('/login');
-                }}
-                className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm text-amber-700 hover:bg-amber-50"
-              >
-                <Repeat className="size-4" /> Switch user (dev)
-              </button>
-            )}
-
-            <button
-              role="menuitem"
-              type="button"
-              onClick={async () => {
-                await signOut();
-                router.replace('/login');
-              }}
-              className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-100"
-            >
-              <LogOut className="size-4" /> Sign out
-            </button>
-          </div>,
+            onOpenKeybinds={() => {
+              setKeybindsModalOpen(true);
+              setOpen(false);
+            }}
+            onClose={() => setOpen(false)}
+            devEnabled={devEnabled}
+            onSignOutDev={async () => {
+              await signOut();
+              window.location.replace('/login');
+            }}
+            onSignOut={async () => {
+              await signOut();
+              router.replace('/login');
+            }}
+          />,
           document.body,
         )}
 
@@ -231,6 +141,149 @@ export function UserMenu({ className, compact, profile }: UserMenuProps) {
         />
       )}
       <KeybindsModal open={keybindsModalOpen} onClose={() => setKeybindsModalOpen(false)} />
+    </div>
+  );
+}
+
+interface UserDropdownMenuProps {
+  menuRef: React.RefObject<HTMLDivElement | null>;
+  coords: { top: number; right: number };
+  user: User;
+  profile?: UserMenuProps['profile'];
+  statusExpanded: boolean;
+  onToggleStatus: () => void;
+  onOpenCharacter: () => void;
+  onOpenKeybinds: () => void;
+  onClose: () => void;
+  devEnabled: boolean;
+  onSignOutDev: () => Promise<void>;
+  onSignOut: () => Promise<void>;
+}
+
+function UserDropdownMenu({
+  menuRef,
+  coords,
+  user,
+  profile,
+  statusExpanded,
+  onToggleStatus,
+  onOpenCharacter,
+  onOpenKeybinds,
+  onClose,
+  devEnabled,
+  onSignOutDev,
+  onSignOut,
+}: UserDropdownMenuProps) {
+  return (
+    <div
+      ref={menuRef}
+      role="menu"
+      style={{
+        position: 'fixed',
+        top: `${coords.top}px`,
+        right: `${coords.right}px`,
+      }}
+      className="z-[60] w-64 max-h-[calc(100vh-2rem)] overflow-y-auto rounded-2xl bg-white p-1.5 shadow-xl ring-1 shadow-zinc-900/10 ring-zinc-200"
+    >
+      <div className="px-3 py-2">
+        <p className="truncate text-sm font-medium">{user.displayName}</p>
+        <p className="truncate text-xs text-zinc-500">{user.email}</p>
+        {profile?.status && (
+          <p className="mt-1 inline-block truncate rounded-md bg-zinc-100 px-2 py-0.5 text-xs font-normal text-zinc-600">
+            {profile.status}
+          </p>
+        )}
+      </div>
+
+      <div className="my-1 h-px bg-zinc-100" />
+
+      {profile && (
+        <>
+          <button
+            role="menuitem"
+            type="button"
+            onClick={onOpenCharacter}
+            className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-100"
+          >
+            <Palette className="size-4" /> Character
+          </button>
+          <button
+            role="menuitem"
+            type="button"
+            onClick={onToggleStatus}
+            className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-100"
+          >
+            <div className="flex min-w-0 items-center gap-2.5">
+              <Smile className="size-4 shrink-0" />
+              <div className="flex min-w-0 flex-col items-start leading-tight text-left">
+                <span>Status</span>
+                {profile.status && (
+                  <span className="truncate text-xs font-normal text-zinc-500">{profile.status}</span>
+                )}
+              </div>
+            </div>
+            <ChevronDown
+              className={cn('size-3.5 text-zinc-400 transition-transform', statusExpanded && 'rotate-180')}
+            />
+          </button>
+          {statusExpanded && (
+            <div className="px-3 pt-1 pb-2">
+              <StatusSection status={profile.status} />
+            </div>
+          )}
+        </>
+      )}
+
+      <button
+        role="menuitem"
+        type="button"
+        onClick={onOpenKeybinds}
+        className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-100"
+      >
+        <Keyboard className="size-4" /> Keybinds
+      </button>
+
+      <div className="my-1 h-px bg-zinc-100" />
+
+      {user.workspace && (
+        <Link
+          role="menuitem"
+          href="/team"
+          onClick={onClose}
+          className="flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-100"
+        >
+          <Users className="size-4" /> Team
+        </Link>
+      )}
+
+      <Link
+        role="menuitem"
+        href="/settings/security"
+        onClick={onClose}
+        className="flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-100"
+      >
+        <ShieldCheck className="size-4" /> Security settings
+      </Link>
+
+      {devEnabled && (
+        <button
+          role="menuitem"
+          type="button"
+          onClick={onSignOutDev}
+          className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm text-amber-700 hover:bg-amber-50"
+        >
+          <Repeat className="size-4" /> Switch user (dev)
+        </button>
+      )}
+
+      <button
+        role="menuitem"
+        type="button"
+        onClick={onSignOut}
+        className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-100"
+      >
+        <LogOut className="size-4" /> Sign out
+      </button>
     </div>
   );
 }

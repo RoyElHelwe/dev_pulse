@@ -1,3 +1,9 @@
+// User-agent string parsing and human-readable relative time formatting utilities.
+
+const MS_PER_MINUTE = 60_000;
+const MINUTES_PER_HOUR = 60;
+const MINUTES_PER_DAY = 1440;
+
 /** "Chrome on macOS" from a user-agent string (good enough for lists and messages). */
 export function describeUserAgent(userAgent: string | null | undefined) {
   const ua = userAgent ?? '';
@@ -25,9 +31,9 @@ const relative = new Intl.RelativeTimeFormat('en', { numeric: 'auto' });
 
 /** "just now", "5 minutes ago", "2 days ago". */
 export function timeAgo(date: string | Date) {
-  const minutes = Math.round((new Date(date).getTime() - Date.now()) / 60000);
+  const minutes = Math.round((new Date(date).getTime() - Date.now()) / MS_PER_MINUTE);
   if (minutes > -1) return 'just now';
-  if (minutes > -60) return relative.format(minutes, 'minute');
-  if (minutes > -60 * 24) return relative.format(Math.round(minutes / 60), 'hour');
-  return relative.format(Math.round(minutes / 1440), 'day');
+  if (minutes > -MINUTES_PER_HOUR) return relative.format(minutes, 'minute');
+  if (minutes > -MINUTES_PER_DAY) return relative.format(Math.round(minutes / MINUTES_PER_HOUR), 'hour');
+  return relative.format(Math.round(minutes / MINUTES_PER_DAY), 'day');
 }

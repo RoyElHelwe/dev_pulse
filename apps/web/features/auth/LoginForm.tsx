@@ -1,5 +1,7 @@
 'use client';
 
+// Login form handling credentials, OAuth redirections, active session alerts, and unverified accounts.
+
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useState } from 'react';
@@ -34,6 +36,7 @@ const SIGNED_OUT: Partial<Record<SignedOutReason, string>> = {
   expired: 'Your session expired. Please sign in again.',
 };
 
+/** Form component for authenticating users via email/password or OAuth providers. */
 export function LoginForm() {
   const router = useRouter();
   const params = useSearchParams();

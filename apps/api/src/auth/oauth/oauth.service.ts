@@ -1,3 +1,7 @@
+/**
+ * OAuth 2.0 orchestration service.
+ * Manages authorization URL generation, PKCE challenge negotiation, state cookie issuance, and callback token exchange.
+ */
 import { Injectable, Logger } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import { AppConfig, type OAuthProvider } from '../../config/app-config';
@@ -8,7 +12,14 @@ import { PUBLIC_USER_INCLUDE, toPublicUser } from '../public-user';
 import { type ClientInfo, TokensService } from '../tokens.service';
 import { type OAuthProfile, PROVIDER_ORDER, PROVIDERS } from './providers';
 
-/** Shown on the sign-in page as ?error=<code>. */
+const STATE_SECONDS = 10 * 60;
+const STATE_TOKEN_BYTES = 24;
+const PKCE_VERIFIER_BYTES = 32;
+const HTTP_REQUEST_TIMEOUT_MS = 10_000;
+const MAX_DISPLAY_NAME_LENGTH = 50;
+const MS_PER_SECOND = 1000;
+
+/** Error thrown during OAuth authorization redirect or token exchange workflows. */
 export class OAuthError extends Error {
   constructor(readonly code: string) {
     super(code);
@@ -22,8 +33,7 @@ interface StatePayload {
   redirect: string;
 }
 
-const STATE_SECONDS = 10 * 60;
-
+/** Service managing third-party OAuth 2.0 lifecycle and user linking. */
 @Injectable()
 export class OAuthService {
   private readonly logger = new Logger(OAuthService.name);
@@ -46,8 +56,10 @@ export class OAuthService {
     const client = this.config.oauth[provider];
     if (!client) throw new OAuthError('oauth_unavailable');
     const spec = PROVIDERS[provider];
-    const state = randomToken(24);
-    const verifier = randomToken(32);
+    // Random state parameter mitigates cross-site request forgery on the callback endpoint.
+    const state = randomToken(STATE_TOKEN_BYTES);
+    // PKCE verifier prevents authorization code interception attacks.
+    const verifier = randomToken(PKCE_VERIFIER_BYTES);
     const params = new URLSearchParams({
       client_id: client.clientId,
       redirect_uri: this.callbackUrl(provider),
@@ -61,7 +73,7 @@ export class OAuthService {
     }
     if (provider === 'google') params.set('prompt', 'select_account');
     const cookie = this.tokens.signPurposeToken('oauth', { state, verifier, provider, redirect }, STATE_SECONDS);
-    return { url: `${spec.authorizeUrl}?${params}`, cookie, maxAgeMs: STATE_SECONDS * 1000 };
+    return { url: `${spec.authorizeUrl}?${params}`, cookie, maxAgeMs: STATE_SECONDS * MS_PER_SECOND };
   }
 
   /** Step 2: the provider sent the browser back with ?code&state. */
@@ -74,6 +86,7 @@ export class OAuthService {
   ): Promise<{ result: SignInResult; redirect: string }> {
     if (query.error) throw new OAuthError('oauth_denied');
     const saved = this.tokens.verifyPurposeToken<StatePayload & Record<string, unknown>>('oauth', stateCookie);
+    // Validate that callback state strictly matches the signed cookie issued to this browser.
     if (!saved || saved.provider !== provider || !query.state || saved.state !== query.state || !query.code) {
       throw new OAuthError('oauth_state');
     }
@@ -111,7 +124,7 @@ export class OAuthService {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
       body,
-      signal: AbortSignal.timeout(10_000),
+      signal: AbortSignal.timeout(HTTP_REQUEST_TIMEOUT_MS),
     });
     const json = (await res.json()) as { access_token?: string; error?: string };
     if (!res.ok || !json.access_token) throw new Error(`token exchange: ${json.error ?? res.status}`);
@@ -131,7 +144,7 @@ export class OAuthService {
     if (linked) return linked.user;
 
     if (!profile.email) throw new OAuthError('oauth_email_missing');
-    // Linking on an unverified email would let anyone take over an account.
+    // Pre-hijacking defense: reject linking if third-party email is unverified.
     if (!profile.emailVerified) throw new OAuthError('oauth_email_unverified');
     const email = profile.email.toLowerCase();
 
@@ -151,7 +164,7 @@ export class OAuthService {
     return this.prisma.user.create({
       data: {
         email,
-        displayName: profile.name.trim().slice(0, 50) || email.split('@')[0],
+        displayName: profile.name.trim().slice(0, MAX_DISPLAY_NAME_LENGTH) || email.split('@')[0],
         avatarUrl: profile.avatarUrl,
         emailVerifiedAt: new Date(),
         oauthAccounts: { create: { provider, providerUserId: profile.id } },
@@ -160,3 +173,4 @@ export class OAuthService {
     });
   }
 }
+

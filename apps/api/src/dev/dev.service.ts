@@ -1,7 +1,6 @@
 /**
- * Dev/test only: the logic behind the dev identity switcher. It bypasses passwords and 2FA,
- * so it must never run in production: DevModule is only loaded when DEV_LOGIN=true outside
- * production (see dev.module.ts).
+ * Dev/test only service for rapid identity switching.
+ * Bypasses passwords and 2FA; strictly gated behind DEV_LOGIN=true and non-production environments.
  */
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { randomBytes } from 'node:crypto';
@@ -15,7 +14,9 @@ const FIRST_NAMES = ['Ada', 'Linus', 'Grace', 'Alan', 'Margaret', 'Dennis', 'Bar
 const LAST_NAMES = ['Byte', 'Kernel', 'Stack', 'Pixel', 'Cache', 'Socket', 'Query', 'Cursor', 'Patch', 'Commit'];
 /** The switcher lists at most this many users (oldest first); plenty for a dev database. */
 const MAX_LISTED_USERS = 200;
+const DEV_EMAIL_RANDOM_BYTES = 4;
 
+/** Dev persona user summary returned to the switcher UI. */
 export interface DevUser {
   id: string;
   displayName: string;
@@ -24,7 +25,7 @@ export interface DevUser {
   role: string | null;
 }
 
-/** Sign in as any user in one click, or create a throwaway one. */
+/** Service managing dev-only identity switching and throwaway user creation. */
 @Injectable()
 export class DevService implements OnModuleInit {
   private readonly logger = new Logger('Dev');
@@ -67,7 +68,7 @@ export class DevService implements OnModuleInit {
   async createUser(name: string | undefined, joinUserId: string | undefined, client: ClientInfo): Promise<SignInResult> {
     const pick = <T>(list: T[]) => list[Math.floor(Math.random() * list.length)];
     const displayName = name?.trim() || `${pick(FIRST_NAMES)} ${pick(LAST_NAMES)}`;
-    const email = `dev-${randomBytes(4).toString('hex')}@devpulse.test`;
+    const email = `dev-${randomBytes(DEV_EMAIL_RANDOM_BYTES).toString('hex')}@devpulse.test`;
     const user = await this.prisma.user.create({ data: { email, displayName, emailVerifiedAt: new Date() } });
 
     if (joinUserId) {
@@ -82,3 +83,4 @@ export class DevService implements OnModuleInit {
     return this.auth.devSignIn(user.id, client);
   }
 }
+

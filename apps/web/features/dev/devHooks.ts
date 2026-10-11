@@ -1,12 +1,14 @@
 'use client';
 
-// Dev/test only: browser hooks the e2e suite (e2e/tests/helpers.ts) uses to drive the office.
-// Never active in production: `useDevHooks` installs `window.__devpulse` only when the api
-// reports DEV_LOGIN as enabled, and the api never enables it in production. The two render
-// caps below are inert unless a test sets them, so they are harmless in a real browser.
+// Dev/test only: browser hooks the e2e suite (e2e/tests/helpers.ts) uses to drive the office;
+// never active in production because useDevHooks installs window.__devpulse only when the API
+// reports DEV_LOGIN as enabled, and the API never enables it in production.
 
 import { useEffect } from 'react';
 import { useDevLogin } from './useDevLogin';
+
+const MIN_DEV_FPS = 5;
+const MAX_DEV_FPS = 60;
 
 /** What `window.__devpulse` offers to tests. */
 export interface DevPulseHook {
@@ -49,7 +51,7 @@ export function useDevHooks(hooks: DevPulseHook): void {
 /** Test-only frame-rate cap for the Phaser game (0 = uncapped). Out-of-range values are ignored. */
 export function devFpsCap(): number {
   const cap = typeof window === 'undefined' ? undefined : window.__devpulseFps;
-  return typeof cap === 'number' && cap >= 5 && cap <= 60 ? cap : 0;
+  return typeof cap === 'number' && cap >= MIN_DEV_FPS && cap <= MAX_DEV_FPS ? cap : 0;
 }
 
 /** Test-only: true when the page asked for half-resolution canvases. */

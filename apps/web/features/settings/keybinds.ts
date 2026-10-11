@@ -2,6 +2,7 @@
 // Pure data and functions; the live per-user state is in keybindStore.ts.
 // Mirror of apps/api/src/settings/keybinds.ts (defaults and key rules): change both together.
 
+/** Actions configurable by user keybindings. */
 export const KEYBIND_ACTIONS = ['interact', 'mute', 'deafen', 'pushToTalk', 'chat', 'board', 'rooms', 'people'] as const;
 export type KeybindAction = (typeof KEYBIND_ACTIONS)[number];
 export type Keybinds = Record<KeybindAction, string>;

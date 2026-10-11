@@ -1,8 +1,11 @@
+// Voice settings page for microphone device selection, volume levels, and activation modes.
+
 import type { Metadata } from 'next';
 import { VoiceSettings } from '@/features/voice/VoiceSettings';
 
 export const metadata: Metadata = { title: 'Voice · Dev Pulse' };
 
+/** Voice settings page rendering microphone preferences and audio controls. */
 export default function VoicePage() {
   return (
     <>

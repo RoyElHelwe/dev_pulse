@@ -1,5 +1,7 @@
 'use client';
 
+// Accessible portal modal dialog with backdrop overlay and escape key dismissal.
+
 import { type ReactNode, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { cn } from '@/lib/cn';
@@ -13,6 +15,7 @@ export interface ModalProps {
   className?: string;
 }
 
+/** Accessible portal modal dialog with keyboard escape capture and click-outside dismissal. */
 export function Modal({ open, onClose, title, children, className }: ModalProps) {
   const [mounted, setMounted] = useState(false);
 

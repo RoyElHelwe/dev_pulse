@@ -1,7 +1,12 @@
+/**
+ * Transactional email delivery service.
+ * Renders HTML email templates and delivers messages via SMTP, or logs to console when SMTP is not configured.
+ */
 import { Injectable, Logger } from '@nestjs/common';
 import { createTransport, type Transporter } from 'nodemailer';
 import { AppConfig } from '../config/app-config';
 
+/** Email message content structure for transactional notifications. */
 export interface MailContent {
   subject: string;
   /** Short paragraphs of plain text. */
@@ -16,6 +21,7 @@ export interface MailContent {
  */
 @Injectable()
 export class MailService {
+
   private readonly logger = new Logger(MailService.name);
   private readonly transport: Transporter | null;
 

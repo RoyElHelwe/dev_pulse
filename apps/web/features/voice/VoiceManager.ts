@@ -1,33 +1,21 @@
+// Coordinator for proximity voice chat: socket signalling, membership/room layout tracking, and periodic tick loops.
+// Coordinates VoicePeer connection instances and VoiceAudio processing.
+
 import type { Socket } from 'socket.io-client';
 import type { OfficeController, OfficeSnapshot } from '@/game/createGame';
 import type { OfficeLayout, RoomKind } from '@/game/layout/types';
 import { NEAR_RADIUS as NEAR } from '@/game/systems/Proximity';
-import { meetingGain, openGain, relativeTo } from './spatial';
+import { relativeTo } from './spatial';
 import { voiceStates } from './voiceStore';
+import { calculateSpatialGain, setupUserAudio, VoiceLevel } from './VoiceAudio';
+import { type VoiceSignal, VoicePeer } from './VoicePeer';
 
-// Proximity voice: one peer-to-peer WebRTC audio call per person we can hear.
-// Who we call comes from the game (same room, and close by or in a meeting room);
-// the server relays the signaling only when it agrees (apps/api/src/voice).
+const ANSWER_RADIUS_TILES = NEAR + 1;
+const TICK_INTERVAL_MS = 150;
+const CALL_RETRY_DELAY_MS = 5_000;
+const EARLY_CANDIDATES_TTL_MS = 2_000;
+const MASTER_GAIN_RAMP_SMOOTH_SEC = 0.02;
 
-const ICE_SERVERS: RTCIceServer[] = [{ urls: 'stun:stun.l.google.com:19302' }];
-/** Tiles. Call under NEAR; answer and stay connected up to ANSWER (no flicker at the edge). */
-const ANSWER = NEAR + 1;
-const TICK_MS = 150;
-/** A call that doesn't connect in time is dropped and tried again later. */
-const CONNECT_TIMEOUT_MS = 12_000;
-const RETRY_MS = 5_000;
-/** Candidates that arrive before the offer are kept this long. */
-const EARLY_MS = 2_000;
-/** RMS level above which someone is talking; the light stays on a moment after. */
-const TALKING_LEVEL = 0.02;
-const TALKING_HOLD_MS = 300;
-
-/** Loudness is ours (spatial.ts, one GainNode per call): the panner only does direction (no distance gain). */
-const PANNER: PannerOptions = { panningModel: 'HRTF', distanceModel: 'linear', refDistance: 1, maxDistance: 10_000, rolloffFactor: 0 };
-const SMOOTH_S = 0.08;
-
-/** What travels through the server. `bye`: hung up. */
-type Signal = { description?: RTCSessionDescriptionInit; candidate?: RTCIceCandidateInit; bye?: true };
 type Spot = OfficeSnapshot['me'];
 
 export interface VoiceSnapshot {
@@ -48,26 +36,23 @@ interface Options {
   onChange(): void;
 }
 
-/** Plain-class voice engine; VoiceControls owns one per office connection. */
+/** Coordinates proximity voice signalling, peer connections, and room audio updates. */
 export class VoiceManager {
   private ctx: AudioContext | null = null;
   private master: GainNode | null = null;
   private mic: MediaStream | null = null;
-  private micLevel: Level | null = null;
-  private peers = new Map<string, Peer>();
+  private micLevel: VoiceLevel | null = null;
+  private peers = new Map<string, VoicePeer>();
   private retryAt = new Map<string, number>();
-  /** Candidates from someone whose offer hasn't made a call yet. */
   private early = new Map<string, { at: number; candidates: RTCIceCandidateInit[] }>();
   private timer: ReturnType<typeof setInterval> | null = null;
   private kinds = new Map<string, RoomKind>();
-  /** Longer side of each room, tiles: the far-wall distance of a meeting room. */
   private spans = new Map<string, number>();
   private muted = false;
   private deafened = false;
   private pushToTalk = false;
   private keyHeld = false;
   private destroyed = false;
-  /** What we last told the game about our own avatar. */
   private me = { inCall: false, talking: false };
 
   constructor(private readonly opts: Options) {
@@ -92,42 +77,25 @@ export class VoiceManager {
     this.spans = new Map(layout.rooms.map((r) => [r.id, Math.max(r.w, r.h)]));
   }
 
-  /**
-   * Turns the mic on and starts calling people nearby. Call it from a click: the
-   * AudioContext is created right away, inside the user gesture, so it can play.
-   */
   async join(): Promise<'ok' | 'denied' | 'no-mic' | 'unsupported'> {
     if (this.ctx) return 'ok';
-    if (!navigator.mediaDevices?.getUserMedia || typeof RTCPeerConnection === 'undefined') return 'unsupported';
-    const ctx = new AudioContext();
-    this.ctx = ctx;
-    void ctx.resume().catch(() => {});
-    let mic: MediaStream;
-    try {
-      mic = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-      });
-    } catch (err) {
-      this.ctx = null;
-      void ctx.close().catch(() => {});
-      const name = err instanceof DOMException ? err.name : '';
-      return name === 'NotAllowedError' || name === 'SecurityError' ? 'denied' : 'no-mic';
-    }
-    if (this.destroyed || this.ctx !== ctx) {
-      mic.getTracks().forEach((t) => t.stop());
+    const res = await setupUserAudio();
+    if (!res.ok) return res.status;
+    if (this.destroyed) {
+      res.mic.getTracks().forEach((t) => t.stop());
       return 'ok';
     }
-    this.mic = mic;
-    this.master = ctx.createGain();
-    this.master.connect(ctx.destination);
-    this.micLevel = new Level(ctx, ctx.createMediaStreamSource(mic));
+    this.ctx = res.ctx;
+    this.mic = res.mic;
+    this.master = res.ctx.createGain();
+    this.master.connect(res.ctx.destination);
+    this.micLevel = new VoiceLevel(res.ctx, res.ctx.createMediaStreamSource(res.mic));
     this.applyMic();
-    this.timer = setInterval(this.tick, TICK_MS);
+    this.timer = setInterval(this.tick, TICK_INTERVAL_MS);
     this.opts.onChange();
     return 'ok';
   }
 
-  /** Hangs up everyone, turns the mic off. */
   leave() {
     if (!this.ctx) return;
     if (this.timer) clearInterval(this.timer);
@@ -158,7 +126,6 @@ export class VoiceManager {
     this.applyMic();
   }
 
-  /** Deafened: we hear nobody and our mic is off too; undeafen restores both. */
   setDeafened(deafened: boolean) {
     if (this.deafened === deafened) return;
     this.deafened = deafened;
@@ -171,14 +138,11 @@ export class VoiceManager {
     this.applyMic();
   }
 
-  /** The push-to-talk key is held down (or was released). */
   setKeyHeld(held: boolean) {
     if (this.keyHeld === held) return;
     this.keyHeld = held;
     this.applyMic();
   }
-
-  // ---- internals ------------------------------------------------------------------
 
   private micOpen() {
     return !!this.mic && !this.muted && !this.deafened && (!this.pushToTalk || this.keyHeld);
@@ -187,7 +151,7 @@ export class VoiceManager {
   private applyMic() {
     const open = this.micOpen();
     this.mic?.getAudioTracks().forEach((t) => (t.enabled = open));
-    if (this.master && this.ctx) this.master.gain.setTargetAtTime(this.deafened ? 0 : 1, this.ctx.currentTime, 0.02);
+    if (this.master && this.ctx) this.master.gain.setTargetAtTime(this.deafened ? 0 : 1, this.ctx.currentTime, MASTER_GAIN_RAMP_SMOOTH_SEC);
     this.sendState();
     this.opts.onChange();
   }
@@ -198,26 +162,17 @@ export class VoiceManager {
     }
   }
 
-  /** Back online after a network drop: the server forgot our state. */
   private onConnect = () => this.sendState();
+  private inMeeting = (room: string | null) => room !== null && this.kinds.get(room) === 'meeting';
+  private hearable = (me: Spot, other: Spot, radius: number) =>
+    other.room === me.room && (this.inMeeting(me.room) || Math.hypot(other.x - me.x, other.y - me.y) < radius);
 
-  private inMeeting(room: string | null) {
-    return room !== null && this.kinds.get(room) === 'meeting';
-  }
-
-  /** Can `me` hear `other`? Same room, and within `radius` tiles (meeting rooms: anyone inside). */
-  private hearable(me: Spot, other: Spot, radius: number) {
-    return other.room === me.room && (this.inMeeting(me.room) || Math.hypot(other.x - me.x, other.y - me.y) < radius);
-  }
-
-  /** Is `id` in voice and close enough to answer their call? */
   private inEarshot(id: string) {
     const snap = this.opts.controller()?.snapshot();
     const other = snap?.others.find((o) => o.id === id);
-    return !!snap && !!other && voiceStates.has(id) && this.hearable(snap.me, other, ANSWER);
+    return !!snap && !!other && voiceStates.has(id) && this.hearable(snap.me, other, ANSWER_RADIUS_TILES);
   }
 
-  /** Every ~150 ms: who to call or hang up, where they are, who is talking. */
   private tick = () => {
     const snap = this.opts.controller()?.snapshot();
     if (!snap || !this.ctx) return;
@@ -229,30 +184,28 @@ export class VoiceManager {
     for (const other of snap.others) {
       seen.add(other.id);
       let peer = this.peers.get(other.id);
-      // Keep a call up to ANSWER, start one only under NEAR: the same rule on both sides.
-      const want = voiceStates.has(other.id) && this.hearable(snap.me, other, peer ? ANSWER : NEAR);
+      // Hysteresis: only dial new calls inside NEAR, but maintain connected calls up to ANSWER_RADIUS_TILES to avoid perimeter flickering.
+      const want = voiceStates.has(other.id) && this.hearable(snap.me, other, peer ? ANSWER_RADIUS_TILES : NEAR);
       if (peer && (!want || peer.stuck(now))) {
-        if (want) this.retryAt.set(other.id, now + RETRY_MS);
+        if (want) this.retryAt.set(other.id, now + CALL_RETRY_DELAY_MS);
         this.hangUp(other.id);
         continue;
       }
-      // Only the smaller id calls, the other answers: two offers crossing ("glare") can lose
-      // ICE candidates. Offline: no new calls (the socket would queue the offers and send them all at once later).
+      // Lexicographically smaller userId initiates call to prevent glare collisions over signalling.
       const caller = this.opts.myId < other.id;
-      if (!peer && want && caller && this.opts.socket.connected && (this.retryAt.get(other.id) ?? 0) <= now) peer = this.call(other.id);
+      if (!peer && want && caller && this.opts.socket.connected && (this.retryAt.get(other.id) ?? 0) <= now) {
+        peer = this.call(other.id);
+      }
       if (peer) {
-        // Loudness from the distance (meeting room: whole room, floor at the far wall; open space:
-        // silent at ANSWER); direction from where we face (our seat's direction when sitting).
         const dx = other.x - snap.me.x;
         const dy = other.y - snap.me.y;
         const distance = Math.hypot(dx, dy);
-        const gain = span > 0 ? meetingGain(distance, span) : openGain(distance, ANSWER);
+        const gain = calculateSpatialGain(distance, span, ANSWER_RADIUS_TILES);
         peer.place(relativeTo(dx, dy, snap.me.dir), gain);
       }
     }
     for (const id of [...this.peers.keys()]) if (!seen.has(id)) this.hangUp(id);
 
-    // Headsets and talking lights (the game only hears about changes).
     for (const peer of this.peers.values()) {
       const talking = peer.talking(now);
       if (peer.shown !== talking) {
@@ -264,9 +217,7 @@ export class VoiceManager {
     if (this.peerKeys() !== before) this.opts.onChange();
   };
 
-  private peerKeys() {
-    return [...this.peers.keys()].join();
-  }
+  private peerKeys = () => [...this.peers.keys()].join();
 
   private showMe(inCall: boolean, talking: boolean) {
     if (this.me.inCall === inCall && this.me.talking === talking) return;
@@ -276,15 +227,13 @@ export class VoiceManager {
 
   private call(id: string) {
     const { socket } = this.opts;
-    const peer = new Peer(id, this.opts.myId < id, this.ctx!, this.master!, this.mic!, (data) => {
-      // Dropped while offline rather than queued; a stuck call is retried.
+    const peer = new VoicePeer(id, this.opts.myId < id, this.ctx!, this.master!, this.mic!, (data) => {
       if (socket.connected) socket.emit('rtc:signal', { to: id, data });
     });
     this.peers.set(id, peer);
     return peer;
   }
 
-  /** `tell`: let them know, so they hang up at once too. */
   private hangUp(id: string, tell = true) {
     const peer = this.peers.get(id);
     if (!peer) return;
@@ -294,13 +243,11 @@ export class VoiceManager {
     this.opts.controller()?.setVoice(id, false, false);
   }
 
-  private onSignal = ({ from, data }: { from: string; data: Signal }) => {
-    // Not in voice yet (or still joining): nothing to answer with.
+  private onSignal = ({ from, data }: { from: string; data: VoiceSignal }) => {
     if (!this.ctx || !this.mic || typeof from !== 'string' || !data || typeof data !== 'object') return;
     let peer = this.peers.get(from);
     if (data.bye) {
-      // They hung up: don't call straight back (they'd just hang up again).
-      this.retryAt.set(from, performance.now() + RETRY_MS);
+      this.retryAt.set(from, performance.now() + CALL_RETRY_DELAY_MS);
       if (peer) {
         this.hangUp(from, false);
         this.opts.onChange();
@@ -310,168 +257,28 @@ export class VoiceManager {
     if (!peer) {
       const now = performance.now();
       if (data.candidate) {
-        // Arrived before the offer: keep it a moment.
+        // Buffer early ICE candidates that arrive ahead of the SDP offer description.
         const early = this.early.get(from);
-        if (early && now - early.at < EARLY_MS) early.candidates.push(data.candidate);
+        if (early && now - early.at < EARLY_CANDIDATES_TTL_MS) early.candidates.push(data.candidate);
         else this.early.set(from, { at: now, candidates: [data.candidate] });
         return;
       }
-      // Someone calls us: answer if we can hear them too.
       if (data.description?.type !== 'offer' || !this.inEarshot(from)) return;
       peer = this.call(from);
       this.opts.onChange();
       void peer.receive(data);
       const early = this.early.get(from);
       this.early.delete(from);
-      if (early && now - early.at < EARLY_MS) early.candidates.forEach((candidate) => void peer!.receive({ candidate }));
+      if (early && now - early.at < EARLY_CANDIDATES_TTL_MS) early.candidates.forEach((candidate) => void peer!.receive({ candidate }));
       return;
     }
     void peer.receive(data);
   };
 
-  /** The server says we may not talk to them (booked meeting, too far by its clock). */
   private onRefused = ({ to }: { to: string }) => {
     if (typeof to !== 'string' || !this.peers.has(to)) return;
-    this.retryAt.set(to, performance.now() + RETRY_MS);
+    this.retryAt.set(to, performance.now() + CALL_RETRY_DELAY_MS);
     this.hangUp(to, false);
     this.opts.onChange();
   };
-}
-
-/** One call: the RTCPeerConnection (perfect negotiation) and the sound we hear from it. */
-class Peer {
-  /** Talking state last shown on the avatar (null = not shown yet). */
-  shown: boolean | null = null;
-  private readonly pc: RTCPeerConnection;
-  private readonly createdAt = performance.now();
-  private readonly panner: PannerNode;
-  /** Distance falloff (the panner only pans). Starts silent until the first `place`. */
-  private readonly volume: GainNode;
-  private makingOffer = false;
-  private ignoreOffer = false;
-  private audio: HTMLAudioElement | null = null;
-  private source: MediaStreamAudioSourceNode | null = null;
-  private level: Level | null = null;
-
-  constructor(
-    readonly id: string,
-    /** The polite side gives way when both send an offer at once. */
-    private readonly polite: boolean,
-    private readonly ctx: AudioContext,
-    out: AudioNode,
-    mic: MediaStream,
-    private readonly send: (data: Signal) => void,
-  ) {
-    // Listener stays at the origin facing "up the screen" (the default: forward = -z); the
-    // speaker's offset is rotated by our facing before it gets here (spatial.ts `relativeTo`).
-    this.panner = new PannerNode(ctx, PANNER);
-    this.volume = new GainNode(ctx, { gain: 0 });
-    this.panner.connect(this.volume);
-    this.volume.connect(out);
-
-    this.pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
-    for (const track of mic.getAudioTracks()) this.pc.addTrack(track, mic);
-    this.pc.onnegotiationneeded = async () => {
-      try {
-        this.makingOffer = true;
-        await this.pc.setLocalDescription();
-        if (this.pc.localDescription) this.send({ description: this.pc.localDescription.toJSON() });
-      } catch {
-        // Closed meanwhile.
-      } finally {
-        this.makingOffer = false;
-      }
-    };
-    this.pc.onicecandidate = ({ candidate }) => candidate && this.send({ candidate: candidate.toJSON() });
-    this.pc.ontrack = ({ track, streams }) => this.listen(streams[0] ?? new MediaStream([track]));
-  }
-
-  async receive({ description, candidate }: Signal) {
-    try {
-      if (description) {
-        const collision = description.type === 'offer' && (this.makingOffer || this.pc.signalingState !== 'stable');
-        this.ignoreOffer = !this.polite && collision;
-        if (this.ignoreOffer) return;
-        await this.pc.setRemoteDescription(description);
-        if (description.type === 'offer') {
-          await this.pc.setLocalDescription();
-          if (this.pc.localDescription) this.send({ description: this.pc.localDescription.toJSON() });
-        }
-      } else if (candidate) {
-        await this.pc.addIceCandidate(candidate).catch(() => {
-          // Candidates of an offer we ignored, or a closed call: expected.
-        });
-      }
-    } catch {
-      // A broken or closed call: the tick drops it and calls again.
-    }
-  }
-
-  /** Not connected after a while, or the connection failed. */
-  stuck(now: number) {
-    const state = this.pc.connectionState;
-    return state === 'failed' || state === 'closed' || (state !== 'connected' && now - this.createdAt > CONNECT_TIMEOUT_MS);
-  }
-
-  /** Where they stand in our frame (tiles, forward = -z) and how loud they are (0..1). */
-  place(at: { x: number; z: number }, gain: number) {
-    const t = this.ctx.currentTime;
-    this.panner.positionX.setTargetAtTime(at.x, t, SMOOTH_S);
-    this.panner.positionZ.setTargetAtTime(at.z, t, SMOOTH_S);
-    this.volume.gain.setTargetAtTime(gain, t, SMOOTH_S);
-  }
-
-  talking(now: number) {
-    return !!this.level?.talking(now);
-  }
-
-  close() {
-    this.pc.close();
-    this.source?.disconnect();
-    this.level?.disconnect();
-    this.panner.disconnect();
-    this.volume.disconnect();
-    if (this.audio) {
-      this.audio.pause();
-      this.audio.srcObject = null;
-    }
-  }
-
-  private listen(stream: MediaStream) {
-    if (this.source) return;
-    // Chrome only feeds a remote WebRTC stream to Web Audio while a media element
-    // plays it too; the element stays muted, the sound goes through the panner.
-    this.audio = new Audio();
-    this.audio.muted = true;
-    this.audio.srcObject = stream;
-    void this.audio.play().catch(() => {});
-    this.source = this.ctx.createMediaStreamSource(stream);
-    this.source.connect(this.panner);
-    this.level = new Level(this.ctx, this.source);
-  }
-}
-
-/** Is a stream loud enough to count as talking? (AnalyserNode RMS.) */
-class Level {
-  private readonly analyser: AnalyserNode;
-  private readonly buffer: Float32Array<ArrayBuffer>;
-  private loudAt = -Infinity;
-
-  constructor(ctx: AudioContext, source: AudioNode) {
-    this.analyser = new AnalyserNode(ctx, { fftSize: 512 });
-    this.buffer = new Float32Array(this.analyser.fftSize);
-    source.connect(this.analyser);
-  }
-
-  talking(now: number) {
-    this.analyser.getFloatTimeDomainData(this.buffer);
-    let sum = 0;
-    for (const v of this.buffer) sum += v * v;
-    if (Math.sqrt(sum / this.buffer.length) > TALKING_LEVEL) this.loudAt = now;
-    return now - this.loudAt < TALKING_HOLD_MS;
-  }
-
-  disconnect() {
-    this.analyser.disconnect();
-  }
 }

@@ -1,42 +1,32 @@
-// Spatial voice maths: how loud someone is, and where the sound comes from. Pure functions
-// (tiles in, 0..1 gain out); VoiceManager feeds them into one GainNode + PannerNode per call.
+// Spatial audio math: distance-based gain curves and listener-relative direction vectors.
+// Pure calculation helpers consumed by VoiceAudio to configure Web Audio nodes.
 
 export type Facing = 'up' | 'down' | 'left' | 'right';
 
-/** Open space: full volume within this distance (tiles). */
-const CLOSE = 1;
-/** Meeting room: the far wall (the room's longer side) still sounds like this. */
-const MEETING_FLOOR = 0.3;
-/** Meeting room: inside this distance (tiles) everyone is at full volume. */
-const MEETING_CLOSE = 1.5;
+const CLOSE_RADIUS_TILES = 1;
+const MEETING_VOLUME_FLOOR = 0.3;
+const MEETING_CLOSE_RADIUS_TILES = 1.5;
+const MEETING_DISTANCE_EXPONENT = 1.5;
 
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
 
-/**
- * Open space: full volume within `CLOSE`, then a smooth (cosine) fall to silence at `edge`
- * (the distance where the call is dropped).
- */
+/** Calculates distance attenuation gain using a cosine falloff curve falling to zero at edge radius. */
 export function openGain(distance: number, edge: number): number {
-  const t = clamp01((distance - CLOSE) / (edge - CLOSE));
+  // Use a cosine curve between full volume and drop edge to guarantee a smooth transition without audio clipping.
+  const t = clamp01((distance - CLOSE_RADIUS_TILES) / (edge - CLOSE_RADIUS_TILES));
   return 0.5 * (1 + Math.cos(Math.PI * t));
 }
 
-/**
- * Meeting room: everyone is heard, but clearly quieter the farther they are. Falls from 1
- * (within a tile and a half) to `MEETING_FLOOR` at `span` tiles (the room's longer side, so
- * both people hear each other the same, wherever they stand).
- */
+/** Calculates distance attenuation gain for meeting rooms with a minimum floor at far-wall distance. */
 export function meetingGain(distance: number, span: number): number {
-  const t = clamp01((distance - MEETING_CLOSE) / Math.max(1, span - MEETING_CLOSE));
-  return MEETING_FLOOR + (1 - MEETING_FLOOR) * Math.pow(1 - t, 1.5);
+  // Everyone in a meeting room remains audible, but volume drops gently toward far-wall distance for natural presence.
+  const t = clamp01((distance - MEETING_CLOSE_RADIUS_TILES) / Math.max(1, span - MEETING_CLOSE_RADIUS_TILES));
+  return MEETING_VOLUME_FLOOR + (1 - MEETING_VOLUME_FLOOR) * Math.pow(1 - t, MEETING_DISTANCE_EXPONENT);
 }
 
-/**
- * Turns the screen-space offset to a speaker into the listener's frame, where the Web Audio
- * default listener looks "up the screen" (forward = -z, right = +x). Someone facing `dir`
- * (or sitting at a chair that faces `dir`) hears what is in front of them in front.
- */
+/** Rotates screen-space coordinate offsets into the avatar's facing orientation frame. */
 export function relativeTo(dx: number, dy: number, dir: Facing): { x: number; z: number } {
+  // In the Web Audio listener reference frame, forward is -Z and right is +X.
   switch (dir) {
     case 'right':
       return { x: dy, z: -dx };

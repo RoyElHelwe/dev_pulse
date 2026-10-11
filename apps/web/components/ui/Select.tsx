@@ -1,3 +1,5 @@
+// Form select dropdown component styled consistently with text fields.
+
 import { ChevronDown } from 'lucide-react';
 import { type ComponentProps, useId } from 'react';
 import { cn } from '@/lib/cn';

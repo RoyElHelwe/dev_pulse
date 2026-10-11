@@ -1,3 +1,8 @@
+/**
+ * Service managing meeting room reservations, overlap conflict prevention, and active room states.
+ * Serves calendar queries and coordinates room privacy locks for voice and chat gateways.
+ */
+
 import { Injectable } from '@nestjs/common';
 import { FormError } from '../common/form-error';
 import type { OfficeLayout } from '../office/layout/types';
@@ -7,19 +12,23 @@ import { CAN_MANAGE, MembershipService } from '../workspace/membership.service';
 import { clock, MAX_ATTENDEES, slotProblem } from './meetings.rules';
 import type { CreateBookingDto } from './meetings.dto';
 
-/** A booking running right now in a meeting room (what voice and chat need of it). */
+/** Represents an ongoing meeting room booking and its authorized attendees. */
 export interface ActiveBooking {
   id: string;
   attendeeIds: string[];
 }
 
-const DAY = 24 * 60 * 60_000;
+const DAY_MS = 24 * 60 * 60_000;
 /** Running bookings are looked up at most every few seconds per room (ICE candidates come in bursts). */
 const ACTIVE_CACHE_MS = 3_000;
 /** Longest range one list request may cover. */
 const MAX_LIST_DAYS = 62;
+/** Default duration in days returned if list range upper bound is omitted. */
+const DEFAULT_LIST_DAYS = 7;
+/** Bound size of active booking memory cache to prevent memory leaks in large deployments. */
+const MAX_ACTIVE_CACHE_ENTRIES = 1000;
 
-/** Meeting room bookings: list, book (no overlaps), cancel. */
+/** Service handling meeting room reservations, conflict serialization, and schedule querying. */
 @Injectable()
 export class MeetingsService {
   /** `workspaceId:roomId` → the running booking, cleared when a booking is made or cancelled. */
@@ -39,13 +48,14 @@ export class MeetingsService {
   async activeBooking(workspaceId: string, roomId: string): Promise<ActiveBooking | null> {
     const key = `${workspaceId}:${roomId}`;
     const cached = this.active.get(key);
+    // Short cache window buffers against ICE candidate renegotiation bursts while keeping state fresh.
     if (cached && Date.now() - cached.at < ACTIVE_CACHE_MS) return cached.booking;
     const now = new Date();
     const booking = await this.prisma.roomBooking.findFirst({
       where: { workspaceId, roomId, startsAt: { lte: now }, endsAt: { gt: now } },
       select: { id: true, attendeeIds: true },
     });
-    if (this.active.size > 1000) this.active.clear();
+    if (this.active.size > MAX_ACTIVE_CACHE_ENTRIES) this.active.clear();
     this.active.set(key, { at: Date.now(), booking });
     return booking;
   }
@@ -54,9 +64,9 @@ export class MeetingsService {
   async list(userId: string, from?: string, to?: string) {
     const me = await this.membership.require(userId);
     const start = from ? new Date(from) : new Date(new Date().setUTCHours(0, 0, 0, 0));
-    let end = to ? new Date(to) : new Date(start.getTime() + 7 * DAY);
+    let end = to ? new Date(to) : new Date(start.getTime() + DEFAULT_LIST_DAYS * DAY_MS);
     if (end <= start) throw new FormError('BAD_RANGE', 'The end of the range must be after its start.');
-    if (end.getTime() - start.getTime() > MAX_LIST_DAYS * DAY) end = new Date(start.getTime() + MAX_LIST_DAYS * DAY);
+    if (end.getTime() - start.getTime() > MAX_LIST_DAYS * DAY_MS) end = new Date(start.getTime() + MAX_LIST_DAYS * DAY_MS);
     const bookings = await this.prisma.roomBooking.findMany({
       where: { workspaceId: me.workspaceId, startsAt: { lt: end }, endsAt: { gt: start } },
       include: { createdBy: { select: { displayName: true } } },
@@ -84,8 +94,9 @@ export class MeetingsService {
     }
 
     const booking = await this.prisma.$transaction(async (tx) => {
-      // One booking at a time per room: a second request waits here, then sees the first one.
+      // Postgres advisory transaction lock prevents concurrent booking requests for the same room from double-booking.
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`booking:${workspaceId}:${room.id}`}))`;
+      // Intervals overlap if and only if existing.start < new.end AND existing.end > new.start.
       const clash = await tx.roomBooking.findFirst({
         where: { workspaceId, roomId: room.id, startsAt: { lt: endsAt }, endsAt: { gt: startsAt } },
         include: { createdBy: { select: { displayName: true } } },
@@ -154,3 +165,4 @@ function publicBooking(b: {
     attendeeIds: b.attendeeIds,
   };
 }
+

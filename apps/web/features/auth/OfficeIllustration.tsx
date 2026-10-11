@@ -1,3 +1,5 @@
+// Decorative vector graphic illustrating an office floorplan with meeting rooms, desks, and avatars.
+
 /** A tiny top-down office: desks, a glass meeting room and teammates talking. */
 export function OfficeIllustration({ className }: { className?: string }) {
   return (

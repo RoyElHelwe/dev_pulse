@@ -1,3 +1,7 @@
+/**
+ * Two-factor authentication (2FA) domain service.
+ * Manages TOTP secret provisioning, encrypted storage at rest, verification rate limiting, backup codes, and trusted device tokens.
+ */
 import { Injectable } from '@nestjs/common';
 import { FormError } from '../common/form-error';
 import { AppConfig } from '../config/app-config';
@@ -14,10 +18,13 @@ import {
 import { generateTotpSecret, otpauthUrl, verifyTotp } from './crypto/totp';
 import { TokensService } from './tokens.service';
 
-const MAX_ATTEMPTS = 5;
-const LOCK_MS = 5 * 60 * 1000;
-const TRUST_DAYS = 30;
+const MAX_TWO_FACTOR_ATTEMPTS = 5;
+const TWO_FACTOR_LOCKOUT_MS = 5 * 60 * 1000;
+const TRUSTED_DEVICE_TTL_DAYS = 30;
+const SECONDS_PER_DAY = 86400;
+const MS_PER_SECOND = 1000;
 
+/** Service managing TOTP enrollment, validation, backup codes, and device trust. */
 @Injectable()
 export class TwoFactorService {
   private readonly key: Buffer;
@@ -27,6 +34,7 @@ export class TwoFactorService {
     private readonly tokens: TokensService,
     config: AppConfig,
   ) {
+    // Derive independent AES encryption key for TOTP secrets stored in the database.
     this.key = deriveKey(config.jwtSecret, 'totp-secret');
   }
 
@@ -60,7 +68,7 @@ export class TwoFactorService {
       where: { userId },
       data: { enabledAt: new Date(), lastUsedStep: step, backupCodes: backupCodes.map((c) => sha256(normalizeBackupCode(c))) },
     });
-    // Other devices signed in without 2FA: sign them out.
+    // Invalidate other devices that signed in before 2FA was enabled.
     await this.tokens.revokeAllSessions(userId, sessionId, 'security_alert');
     return { backupCodes };
   }
@@ -100,6 +108,7 @@ export class TwoFactorService {
     const code = input.trim();
     if (/^\d{6}$/.test(code)) {
       const step = verifyTotp(decrypt(record.secret, this.key), code);
+      // Replay prevention: verify step is strictly greater than the last used step counter.
       if (step !== null && step > (record.lastUsedStep ?? -1)) {
         await this.prisma.twoFactor.update({ where: { userId }, data: { lastUsedStep: step, failedAttempts: 0 } });
         return;
@@ -107,6 +116,7 @@ export class TwoFactorService {
     } else {
       const hash = sha256(normalizeBackupCode(code));
       if (record.backupCodes.includes(hash)) {
+        // Burn used backup code immediately from the set.
         await this.prisma.twoFactor.update({
           where: { userId },
           data: { backupCodes: record.backupCodes.filter((c) => c !== hash), failedAttempts: 0 },
@@ -116,10 +126,10 @@ export class TwoFactorService {
     }
 
     const failedAttempts = record.failedAttempts + 1;
-    const locked = failedAttempts >= MAX_ATTEMPTS;
+    const locked = failedAttempts >= MAX_TWO_FACTOR_ATTEMPTS;
     await this.prisma.twoFactor.update({
       where: { userId },
-      data: locked ? { failedAttempts: 0, lockedUntil: new Date(Date.now() + LOCK_MS) } : { failedAttempts },
+      data: locked ? { failedAttempts: 0, lockedUntil: new Date(Date.now() + TWO_FACTOR_LOCKOUT_MS) } : { failedAttempts },
     });
     throw new FormError('INVALID_CODE', 'That code is not right.', 'code');
   }
@@ -128,7 +138,8 @@ export class TwoFactorService {
 
   async trustedDeviceToken(userId: string) {
     const record = await this.prisma.twoFactor.findUniqueOrThrow({ where: { userId } });
-    return this.tokens.signPurposeToken('trust', { sub: userId, v: record.enabledAt!.getTime() }, TRUST_DAYS * 86400);
+    // Embed enabledAt timestamp so re-enabling 2FA automatically invalidates all previous trusted device cookies.
+    return this.tokens.signPurposeToken('trust', { sub: userId, v: record.enabledAt!.getTime() }, TRUSTED_DEVICE_TTL_DAYS * SECONDS_PER_DAY);
   }
 
   /** True if this browser passed 2FA for this user since 2FA was last turned on. */
@@ -139,5 +150,6 @@ export class TwoFactorService {
     return record?.enabledAt?.getTime() === payload.v;
   }
 
-  static readonly trustMaxAgeMs = TRUST_DAYS * 86400 * 1000;
+  static readonly trustMaxAgeMs = TRUSTED_DEVICE_TTL_DAYS * SECONDS_PER_DAY * MS_PER_SECOND;
 }
+

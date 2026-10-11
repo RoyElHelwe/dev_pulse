@@ -1,9 +1,14 @@
+/**
+ * Email verification workflow service.
+ * Handles dispatching verification links and marking accounts verified upon token confirmation.
+ */
 import { Injectable } from '@nestjs/common';
 import { AppConfig } from '../config/app-config';
 import { MailService } from '../mail/mail.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { EmailTokensService } from './email-tokens.service';
 
+/** Service orchestrating user email address verification and confirmation flows. */
 @Injectable()
 export class VerificationService {
   constructor(
@@ -23,7 +28,7 @@ export class VerificationService {
     });
   }
 
-  /** Resend on request. Same answer whether the email exists or not. */
+  /** Resend on request. Produces identical timing whether email exists to prevent user enumeration. */
   async resend(email: string) {
     const user = await this.prisma.user.findUnique({ where: { email } });
     if (user && !user.emailVerifiedAt) await this.sendVerificationEmail(user);
@@ -34,3 +39,4 @@ export class VerificationService {
     await this.prisma.user.update({ where: { id: userId }, data: { emailVerifiedAt: new Date() } });
   }
 }
+

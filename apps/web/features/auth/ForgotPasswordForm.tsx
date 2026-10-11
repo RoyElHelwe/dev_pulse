@@ -1,5 +1,7 @@
 'use client';
 
+// Form for requesting a password reset email link.
+
 import { MailCheck } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
@@ -10,6 +12,7 @@ import { api, ApiError } from '@/lib/api';
 import { AuthShell } from './AuthShell';
 import { emailField } from './schemas';
 
+/** Form for initiating password recovery by entering an email address. */
 export function ForgotPasswordForm() {
   const [error, setError] = useState('');
   const [formError, setFormError] = useState('');

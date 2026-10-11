@@ -1,3 +1,5 @@
+// Shared split-screen wrapper for authentication views with responsive branding graphics.
+
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { SiteFooter } from '@/components/SiteFooter';

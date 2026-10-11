@@ -1,11 +1,16 @@
 'use client';
 
+// Interactive timetable grid displaying room schedules across 30-minute intervals.
+// Fits into MeetingsPanel as the primary schedule view for booking and reviewing meetings.
+
 import { useEffect, useRef, useState } from 'react';
 import type { Room } from '@/game/layout/types';
 import { cn } from '@/lib/cn';
 import { type Booking, firstName, hm, ROW_MINUTES, ROWS, rowTime } from './time';
 
-const ROW_H = 28;
+const ROW_HEIGHT_PX = 28;
+const MS_PER_MINUTE = 60_000;
+const HOURS_PER_HEADER_LABEL = 2;
 
 interface TimetableProps {
   rooms: Room[];
@@ -19,7 +24,7 @@ interface TimetableProps {
   onOpen(booking: Booking): void;
 }
 
-/** One column per meeting room, 08:00–20:00 in 30-minute rows; click or drag over free slots to book. */
+/** Timetable grid showing 08:00–20:00 availability per room with drag-to-book and booking details click. */
 export function Timetable({ rooms, day, bookings, now, myId, nameOf, onPick, onOpen }: TimetableProps) {
   // Mouse drag over several slots of one room.
   const [drag, setDrag] = useState<{ roomId: string; from: number; to: number } | null>(null);
@@ -35,7 +40,7 @@ export function Timetable({ rooms, day, bookings, now, myId, nameOf, onPick, onO
   }, [drag, onPick]);
 
   const top = rowTime(day, 0).getTime();
-  const rowOf = (at: Date) => (at.getTime() - top) / (ROW_MINUTES * 60_000);
+  const rowOf = (at: Date) => (at.getTime() - top) / (ROW_MINUTES * MS_PER_MINUTE);
   const nowRow = rowOf(new Date(now));
 
   return (
@@ -43,10 +48,10 @@ export function Timetable({ rooms, day, bookings, now, myId, nameOf, onPick, onO
       {/* Hours */}
       <div className="sticky left-0 z-20 w-12 shrink-0 bg-white/90">
         <div className="sticky top-0 h-8 bg-white/90" />
-        <div className="relative" style={{ height: ROWS * ROW_H }}>
-          {Array.from({ length: ROWS / 2 }, (_, i) => (
-            <span key={i} style={{ top: i * 2 * ROW_H - 7 }} className="absolute right-2 text-[11px] text-zinc-400 tabular-nums">
-              {i > 0 && hm(rowTime(day, i * 2))}
+        <div className="relative" style={{ height: ROWS * ROW_HEIGHT_PX }}>
+          {Array.from({ length: ROWS / HOURS_PER_HEADER_LABEL }, (_, i) => (
+            <span key={i} style={{ top: i * HOURS_PER_HEADER_LABEL * ROW_HEIGHT_PX - 7 }} className="absolute right-2 text-[11px] text-zinc-400 tabular-nums">
+              {i > 0 && hm(rowTime(day, i * HOURS_PER_HEADER_LABEL))}
             </span>
           ))}
         </div>
@@ -54,14 +59,14 @@ export function Timetable({ rooms, day, bookings, now, myId, nameOf, onPick, onO
 
       {rooms.map((room) => {
         const roomBookings = bookings.filter((b) => b.roomId === room.id);
-        // Slots under a booking block can't be reached: keep them out of the tab order too.
+        // Covered slots cannot be clicked, so disable and hide them from accessibility tab order.
         const covered = (row: number) => roomBookings.some((b) => rowOf(new Date(b.startsAt)) < row + 1 && rowOf(new Date(b.endsAt)) > row);
         return (
           <div key={room.id} className="w-36 shrink-0 border-l border-zinc-100 sm:w-40">
             <div className="sticky top-0 z-10 flex h-8 items-center justify-center truncate bg-white/90 px-2 text-sm font-semibold text-zinc-700">
               {room.name}
             </div>
-            <div className="relative" style={{ height: ROWS * ROW_H }}>
+            <div className="relative" style={{ height: ROWS * ROW_HEIGHT_PX }}>
               {Array.from({ length: ROWS }, (_, row) => {
                 const past = rowTime(day, row + 1).getTime() <= now;
                 const hidden = covered(row);
@@ -73,7 +78,7 @@ export function Timetable({ rooms, day, bookings, now, myId, nameOf, onPick, onO
                     disabled={past || hidden}
                     aria-hidden={hidden || undefined}
                     aria-label={`Book ${room.name} at ${hm(rowTime(day, row))}`}
-                    style={{ top: row * ROW_H, height: ROW_H }}
+                    style={{ top: row * ROW_HEIGHT_PX, height: ROW_HEIGHT_PX }}
                     className={cn(
                       'absolute inset-x-0 border-t text-[11px] text-transparent transition',
                       row % 2 ? 'border-dashed border-zinc-100' : 'border-zinc-200/70',
@@ -87,7 +92,7 @@ export function Timetable({ rooms, day, bookings, now, myId, nameOf, onPick, onO
                     onPointerEnter={() => {
                       if (drag?.roomId === room.id && !past && !hidden) setDrag({ ...drag, to: row });
                     }}
-                    // Touch and keyboard: one tap books one slot (drag is mouse only, so touch can scroll).
+                    // Touch and keyboard: drag is restricted to mouse so touch devices can freely scroll the grid.
                     onClick={(e) => {
                       if (e.detail === 0 || pointer.current !== 'mouse') onPick(room.id, row, row + 1);
                     }}
@@ -108,7 +113,7 @@ export function Timetable({ rooms, day, bookings, now, myId, nameOf, onPick, onO
                     key={b.id}
                     type="button"
                     onClick={() => onOpen(b)}
-                    style={{ top: from * ROW_H + 1, height: (to - from) * ROW_H - 2 }}
+                    style={{ top: from * ROW_HEIGHT_PX + 1, height: (to - from) * ROW_HEIGHT_PX - 2 }}
                     className={cn(
                       'absolute inset-x-1 overflow-hidden rounded-lg px-2 py-1 text-left text-xs leading-tight shadow-sm ring-1 transition hover:brightness-95',
                       mine ? 'bg-emerald-500 text-white ring-emerald-600' : 'bg-zinc-200 text-zinc-800 ring-zinc-300',
@@ -124,7 +129,7 @@ export function Timetable({ rooms, day, bookings, now, myId, nameOf, onPick, onO
               })}
 
               {nowRow > 0 && nowRow < ROWS && (
-                <div className="pointer-events-none absolute inset-x-0 h-0.5 bg-rose-500/80" style={{ top: nowRow * ROW_H }} />
+                <div className="pointer-events-none absolute inset-x-0 h-0.5 bg-rose-500/80" style={{ top: nowRow * ROW_HEIGHT_PX }} />
               )}
             </div>
           </div>

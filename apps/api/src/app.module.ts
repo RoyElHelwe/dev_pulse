@@ -1,3 +1,7 @@
+/**
+ * Root NestJS application module.
+ * Wires together configuration, database, authentication, real-time gateways, feature modules, and global middleware.
+ */
 import { type MiddlewareConsumer, Module, type NestModule } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
@@ -18,10 +22,13 @@ import { SettingsModule } from './settings/settings.module';
 import { VoiceModule } from './voice/voice.module';
 import { WorkspaceModule } from './workspace/workspace.module';
 
+const DEFAULT_THROTTLE_TTL_MS = 60_000;
+const DEFAULT_THROTTLE_LIMIT = 300;
+
 @Module({
   imports: [
-    // Default limit per client IP; sensitive routes set lower ones with @Throttle().
-    ThrottlerModule.forRoot([{ ttl: 60_000, limit: 300 }]),
+    // Baseline rate limit per client IP; sensitive auth endpoints override this with strict @Throttle limits.
+    ThrottlerModule.forRoot([{ ttl: DEFAULT_THROTTLE_TTL_MS, limit: DEFAULT_THROTTLE_LIMIT }]),
     ConfigModule,
     PrismaModule,
     MailModule,
@@ -41,8 +48,11 @@ import { WorkspaceModule } from './workspace/workspace.module';
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })
+/** Root application module wiring feature domains and global middleware. */
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
+    // CSRF protection: verify Origin header on state-changing requests across all API routes.
     consumer.apply(OriginMiddleware).forRoutes('*');
   }
 }
+

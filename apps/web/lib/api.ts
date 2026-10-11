@@ -2,6 +2,11 @@
 // Tokens live in httpOnly cookies, so this code never sees them: the browser
 // sends them automatically.
 
+const HTTP_STATUS_TOO_MANY_REQUESTS = 429;
+const HTTP_STATUS_SERVER_ERROR = 500;
+const DEFAULT_TOKEN_FRESHNESS_MARGIN_MS = 30_000;
+
+/** Error thrown when an API request fails, carrying status, code, and optional form field metadata. */
 export class ApiError extends Error {
   constructor(
     readonly status: number,
@@ -30,6 +35,7 @@ export function onSessionEnded(listener: (() => void) | null) {
   sessionEndedListener = listener;
 }
 
+/** Performs typed fetch requests to the backend API with cookie credentials and error translation. */
 export async function api<T = void>(path: string, options: { method?: Method; body?: unknown } = {}): Promise<T> {
   const send = () =>
     fetch(`/api${path}`, {
@@ -64,8 +70,8 @@ async function toApiError(res: Response): Promise<ApiError> {
 }
 
 function friendlyStatus(status: number) {
-  if (status === 429) return 'Too many attempts. Please wait a minute and try again.';
-  if (status >= 500) return 'Something went wrong on our side. Please try again.';
+  if (status === HTTP_STATUS_TOO_MANY_REQUESTS) return 'Too many attempts. Please wait a minute and try again.';
+  if (status >= HTTP_STATUS_SERVER_ERROR) return 'Something went wrong on our side. Please try again.';
   return 'Something went wrong. Please try again.';
 }
 
@@ -108,12 +114,13 @@ export function clearSignedInCookie() {
   document.cookie = 'signed_in=; Max-Age=0; path=/; secure; samesite=lax';
 }
 
+/** Checks whether the readable signed_in cookie is present. */
 export function isSignedInCookieSet() {
   return accessTokenExpiry() !== null;
 }
 
 /** True if the access token is still valid for at least `marginMs`. */
-export function isAccessTokenFresh(marginMs = 30_000) {
+export function isAccessTokenFresh(marginMs = DEFAULT_TOKEN_FRESHNESS_MARGIN_MS) {
   const expiry = accessTokenExpiry();
   return expiry !== null && expiry - Date.now() > marginMs;
 }

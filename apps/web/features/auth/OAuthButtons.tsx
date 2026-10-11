@@ -1,5 +1,7 @@
 'use client';
 
+// OAuth buttons allowing sign-in with third-party providers configured on the backend.
+
 import { useEffect, useState } from 'react';
 import { buttonStyles } from '@/components/ui/Button';
 import { api } from '@/lib/api';

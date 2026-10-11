@@ -1,6 +1,9 @@
+// Form checkbox input component with custom label styling.
+
 import type { ComponentProps, ReactNode } from 'react';
 import { cn } from '@/lib/cn';
 
+/** Form checkbox input accompanied by an aligned label. */
 export function Checkbox({ label, className, ...props }: ComponentProps<'input'> & { label: ReactNode }) {
   return (
     <label className={cn('flex cursor-pointer items-center gap-2.5 text-sm text-zinc-700 select-none', className)}>

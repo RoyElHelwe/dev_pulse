@@ -1,3 +1,7 @@
+/**
+ * Real-time session monitoring WebSocket gateway.
+ * Maintains persistent connections for active browser tabs to push instant logout signals upon session revocation.
+ */
 import type { OnModuleDestroy } from '@nestjs/common';
 import {
   type OnGatewayConnection,
@@ -12,12 +16,10 @@ import { authenticateSocket } from '../common/auth/socket-auth';
 import { SessionEvents } from './session-events';
 import { TokensService } from './tokens.service';
 
-/**
- * Every signed-in tab keeps a connection here. When its device is signed out
- * (another device took over, "sign out everywhere", password changed...), the
- * tab is told at once and goes to the sign-in page, even in the middle of
- * walking around the office.
- */
+// Grace period allows client socket to receive 'session:ended' packet before connection teardown.
+const DISCONNECT_GRACE_PERIOD_MS = 1000;
+
+/** Real-time gateway notifying connected browser tabs immediately when their session family is revoked. */
 @WebSocketGateway({ namespace: '/session' })
 export class SessionGateway implements OnGatewayInit, OnGatewayConnection, OnModuleDestroy {
   @WebSocketServer() private server!: Namespace;
@@ -42,8 +44,8 @@ export class SessionGateway implements OnGatewayInit, OnGatewayConnection, OnMod
     this.subscription = this.events.ended$.subscribe(({ familyIds, reason }) => {
       for (const id of familyIds) {
         this.server.to(roomOf(id)).emit('session:ended', { reason });
-        // Give the message a moment to arrive, then hang up.
-        setTimeout(() => this.server.in(roomOf(id)).disconnectSockets(true), 1000);
+        // Give the message a moment to arrive before hanging up.
+        setTimeout(() => this.server.in(roomOf(id)).disconnectSockets(true), DISCONNECT_GRACE_PERIOD_MS);
       }
     });
   }
@@ -59,3 +61,4 @@ export class SessionGateway implements OnGatewayInit, OnGatewayConnection, OnMod
 }
 
 const roomOf = (sessionId: string) => `session:${sessionId}`;
+

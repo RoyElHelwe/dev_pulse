@@ -1,3 +1,6 @@
+// External state store tracking office-wide voice presence, mute, and deafen states.
+// Consumed by presence lists and VoiceControls to maintain real-time voice indicators.
+
 import { useSyncExternalStore } from 'react';
 
 export interface VoiceState {
@@ -19,10 +22,7 @@ function publish(next: States) {
   listeners.forEach((listener) => listener());
 }
 
-/**
- * Who is in voice in the office and whether they muted (from `office:voice`).
- * VoiceControls fills it; the people list and the VoiceManager read it.
- */
+/** Voice state store updated by server broadcasts and queried by UI components. */
 export const voiceStates = {
   get: () => states,
   has: (userId: string) => states.has(userId),
@@ -42,7 +42,7 @@ export const voiceStates = {
   },
 };
 
-/** The voice states, re-rendering when they change. */
+/** React hook subscribing to the global voice presence map. */
 export function useVoiceStates(): States {
   return useSyncExternalStore(voiceStates.subscribe, voiceStates.get, () => EMPTY);
 }

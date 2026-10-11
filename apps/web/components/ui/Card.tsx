@@ -1,3 +1,5 @@
+// Section card component providing standardized border, padding, and header layout.
+
 import type { ReactNode } from 'react';
 import { cn } from '@/lib/cn';
 
@@ -10,6 +12,7 @@ interface CardProps {
   className?: string;
 }
 
+/** Section card component providing standardized styling and optional header actions. */
 export function Card({ title, description, aside, children, className }: CardProps) {
   return (
     <section className={cn('rounded-2xl bg-white p-5 ring-1 ring-zinc-200/80 sm:p-6', className)}>

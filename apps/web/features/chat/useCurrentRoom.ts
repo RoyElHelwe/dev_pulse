@@ -1,13 +1,13 @@
+// Hook tracking the office room (meeting room or lounge) currently occupied by the player.
+// Fits into the chat feature to provide room-scoped chat channels.
+
 import { useEffect, useState } from 'react';
 import type { OfficeController } from '@/game/createGame';
 import type { OfficeLayout, Room } from '@/game/layout/types';
 
-/**
- * The meeting room or lounge the local player stands in (null in the open
- * space). Polled from the game twice a second; a room counts once we were in it
- * on two polls in a row, so walking through a doorway doesn't flicker and the
- * server (which checks room chat) has our new position by then.
- */
+const ROOM_POLL_INTERVAL_MS = 500;
+
+/** Tracks the meeting room or lounge the local player stands in, debounced across ticks. */
 export function useCurrentRoom(controller: OfficeController | null, layout: OfficeLayout) {
   const [room, setRoom] = useState<Room | null>(null);
 
@@ -18,11 +18,12 @@ export function useCurrentRoom(controller: OfficeController | null, layout: Offi
     const tick = () => {
       const found = rooms.get(controller.snapshot()?.me.room ?? '');
       const next = found && found.kind !== 'open' ? found : null;
+      // Require room presence across two consecutive ticks so crossing doorways does not cause channel flicker.
       if (next === last) setRoom((prev) => (prev?.id === next?.id && prev?.name === next?.name ? prev : next));
       last = next;
     };
     tick();
-    const timer = setInterval(tick, 500);
+    const timer = setInterval(tick, ROOM_POLL_INTERVAL_MS);
     return () => clearInterval(timer);
   }, [controller, layout]);
 

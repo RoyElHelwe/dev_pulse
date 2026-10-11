@@ -1,10 +1,15 @@
+/**
+ * HTTP controller exposing personal user settings and keybind preferences.
+ * Requires user authentication to inspect and update preferences.
+ */
+
 import { Body, Controller, Get, Patch } from '@nestjs/common';
 import type { AuthUser } from '../common/auth/auth-user';
 import { CurrentUser } from '../common/auth/current-user.decorator';
 import { UpdateSettingsDto } from './settings.dto';
 import { SettingsService } from './settings.service';
 
-/** The signed-in user's preferences: voice mode and push-to-talk key. */
+/** REST controller managing the authenticated user's audio and keybind configurations. */
 @Controller('settings')
 export class SettingsController {
   constructor(private readonly settings: SettingsService) {}
@@ -19,3 +24,4 @@ export class SettingsController {
     return this.settings.update(user.id, dto);
   }
 }
+

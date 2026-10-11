@@ -1,5 +1,7 @@
 'use client';
 
+// Verification page validating emailed email-confirmation tokens.
+
 import { CircleCheck, CircleX } from 'lucide-react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';

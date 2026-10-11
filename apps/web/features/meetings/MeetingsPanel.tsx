@@ -1,5 +1,8 @@
 'use client';
 
+// HUD panel and meeting rooms timetable dialog with presence/collision management.
+// Fits into OfficeFeatures to coordinate room access permissions and schedule reminders.
+
 import { CalendarClock, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Socket } from 'socket.io-client';
@@ -16,13 +19,16 @@ import { BookingForm } from './BookingForm';
 import { Timetable } from './Timetable';
 import { addDays, type Booking, dayLabel, firstName, hm, type Member, minutesOf, ROW_MINUTES, rowTime, startOfDay } from './time';
 
+const MS_PER_MINUTE = 60_000;
+const MEETING_START_ANNOUNCE_WINDOW_MS = 2 * MS_PER_MINUTE;
+const MIN_PAST_DAYS_OFFSET = -7;
+const MAX_FUTURE_DAYS_OFFSET = 30;
+const TIME_POLL_INTERVAL_MS = 10_000;
+const BOOKING_FETCH_AHEAD_DAYS = 2;
+
 type View = { kind: 'grid' } | { kind: 'new'; roomId: string; start: number; end: number } | { kind: 'booking'; id: string };
 
-/**
- * Meeting rooms: the "Rooms" button and its day timetable, plus the rules in
- * the office: rooms booked without you are closed to you (the game makes them
- * solid), and a toast says when a meeting you're in starts.
- */
+/** Meetings panel component managing room schedules, occupant collisions, and booking dialogs. */
 export function MeetingsPanel({ socket, controller, workspace, myId, onToast, editing }: OfficeFeatureProps) {
   const rooms = useMemo(() => workspace.layout.rooms.filter((r) => r.kind === 'meeting'), [workspace.layout]);
   const now = useMinute();
@@ -38,14 +44,13 @@ export function MeetingsPanel({ socket, controller, workspace, myId, onToast, ed
   );
   const roomName = useCallback((id: string) => rooms.find((r) => r.id === id)?.name ?? 'This room', [rooms]);
 
-  // ---- the office follows the bookings ------------------------------------------------
-
+  // Active bookings in meeting rooms covering the current minute.
   const active = useMemo(
     () => bookings.filter((b) => Date.parse(b.startsAt) <= now && now < Date.parse(b.endsAt) && rooms.some((r) => r.id === b.roomId)),
     [bookings, now, rooms],
   );
 
-  // Tell the game only when what it shows changes (not every minute).
+  // Synchronize room locking and occupancy only when active bookings change to avoid expensive layout recomputations every minute.
   const officeKey = active.map((b) => `${b.roomId}:${b.endsAt}:${b.attendeeIds.includes(myId)}`).join();
   const activeRef = useRef(active);
   activeRef.current = active;
@@ -59,17 +64,15 @@ export function MeetingsPanel({ socket, controller, workspace, myId, onToast, ed
     if (booking) onToast(`${roomName(booking.roomId)} is booked until ${hm(new Date(booking.endsAt))}.`);
   }, [controller, officeKey, myId, onToast, roomName]);
 
-  // "Your meeting starts" once per booking, when it has just started.
+  // Announce meeting starts once per booking to avoid repeating toasts across polling updates.
   const announced = useRef(new Set<string>());
   useEffect(() => {
     for (const b of active) {
       if (!b.attendeeIds.includes(myId) || announced.current.has(b.id)) continue;
       announced.current.add(b.id);
-      if (now - Date.parse(b.startsAt) < 2 * 60_000) onToast(`“${b.title}” is starting in ${roomName(b.roomId)}.`);
+      if (now - Date.parse(b.startsAt) < MEETING_START_ANNOUNCE_WINDOW_MS) onToast(`“${b.title}” is starting in ${roomName(b.roomId)}.`);
     }
   }, [active, myId, now, onToast, roomName]);
-
-  // ---- panel ----------------------------------------------------------------------------
 
   // Focus moves into the panel when it opens, and back to the "Rooms" button when it closes.
   const panelRef = useRef<HTMLDivElement>(null);
@@ -98,8 +101,8 @@ export function MeetingsPanel({ socket, controller, workspace, myId, onToast, ed
   if (rooms.length === 0 || editing) return null;
   const dayBookings = bookings.filter((b) => Date.parse(b.startsAt) < addDays(day, 1).getTime() && Date.parse(b.endsAt) > day.getTime());
   const selected = view.kind === 'booking' ? bookings.find((b) => b.id === view.id) : undefined;
-  const minDay = addDays(today, -7);
-  const maxDay = addDays(today, 30);
+  const minDay = addDays(today, MIN_PAST_DAYS_OFFSET);
+  const maxDay = addDays(today, MAX_FUTURE_DAYS_OFFSET);
 
   return (
     <>
@@ -285,23 +288,19 @@ function BookingDetails({
   );
 }
 
-// ---- data ---------------------------------------------------------------------------------
-
-/** The current time, updated every minute boundary (checked every 10 s). */
 function useMinute() {
-  const [minute, setMinute] = useState(() => Math.floor(Date.now() / 60_000) * 60_000);
+  const [minute, setMinute] = useState(() => Math.floor(Date.now() / MS_PER_MINUTE) * MS_PER_MINUTE);
   useEffect(() => {
-    const timer = setInterval(() => setMinute(Math.floor(Date.now() / 60_000) * 60_000), 10_000);
+    const timer = setInterval(() => setMinute(Math.floor(Date.now() / MS_PER_MINUTE) * MS_PER_MINUTE), TIME_POLL_INTERVAL_MS);
     return () => clearInterval(timer);
   }, []);
   return minute;
 }
 
-/** Bookings covering today and the shown day; reloaded whenever someone books or cancels. */
 function useBookings(socket: Socket | null, today: Date, day: Date) {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const from = Math.min(today.getTime(), day.getTime());
-  const to = Math.max(addDays(today, 2).getTime(), addDays(day, 1).getTime());
+  const to = Math.max(addDays(today, BOOKING_FETCH_AHEAD_DAYS).getTime(), addDays(day, 1).getTime());
 
   const reload = useCallback(async () => {
     const query = `from=${new Date(from).toISOString()}&to=${new Date(to).toISOString()}`;
@@ -327,7 +326,6 @@ function useBookings(socket: Socket | null, today: Date, day: Date) {
   return { bookings, reload };
 }
 
-/** Everyone in the office (names, people to invite); loaded when the panel opens. */
 function useMembers(open: boolean) {
   const [members, setMembers] = useState<Member[]>([]);
   useEffect(() => {

@@ -1,5 +1,7 @@
 'use client';
 
+// Card displaying all active browser sessions with single and global revocation options.
+
 import { Laptop, Smartphone, Terminal } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
@@ -24,6 +26,7 @@ function describe(userAgent: string | null) {
   return { label, Icon: browser === 'curl' ? Terminal : mobile ? Smartphone : Laptop };
 }
 
+/** Displays active browser sessions and provides session revocation actions. */
 export function SessionsCard() {
   const { signOut } = useAuth();
   const router = useRouter();

@@ -1,3 +1,7 @@
+/**
+ * Authentication orchestration domain service.
+ * Coordinates user registration, password verification, 2FA challenges, session establishment, and timing-attack defenses.
+ */
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { FormError } from '../common/form-error';
 import { AppConfig } from '../config/app-config';
@@ -12,7 +16,7 @@ import { describeUserAgent } from './user-agent';
 import { TwoFactorService } from './two-factor.service';
 import { VerificationService } from './verification.service';
 
-/** Result of a sign-in attempt. */
+/** Result state union returned by authentication attempts indicating next action or established session. */
 export type SignInResult =
   | { status: 'signed-in'; user: PublicUser; tokens: SessionTokens }
   | { status: 'verification-required'; user: PublicUser }
@@ -22,13 +26,15 @@ export type SignInResult =
 /** How long the user has to type the 2FA code after the password step. */
 const MFA_STEP_SECONDS = 5 * 60;
 
-/** How long the "close the other session" button keeps working after signing in. */
+/** Time-to-live in seconds for session takeover tokens allowing remote session closure. */
 export const TAKEOVER_SECONDS = 10 * 60;
+const MAX_USER_AGENT_LENGTH = 300;
 
 // Compared against when the email is unknown, so a wrong email takes as long
-// as a wrong password (no way to guess which emails have accounts).
+// as a wrong password (no way to guess which emails have accounts via timing side-channels).
 const DUMMY_HASH = hashPassword('dummy-password-for-timing');
 
+/** Core authentication service orchestrating user credentials, MFA, and device sessions. */
 @Injectable()
 export class AuthService {
   constructor(
@@ -54,6 +60,7 @@ export class AuthService {
 
   async login(dto: LoginDto, client: ClientInfo, trustedDevice?: string): Promise<SignInResult> {
     const user = await this.prisma.user.findUnique({ where: { email: dto.email }, include: PUBLIC_USER_INCLUDE });
+    // Timing defense: execute full scrypt verification against DUMMY_HASH if user does not exist.
     const valid = await verifyPassword(dto.password, user?.passwordHash ?? (await DUMMY_HASH));
     if (!user || !user.passwordHash || !valid) {
       throw new FormError('INVALID_CREDENTIALS', 'Wrong email or password.');
@@ -71,6 +78,7 @@ export class AuthService {
    */
   async devSignIn(userId: string, client: ClientInfo): Promise<SignInResult> {
     const user = await this.me(userId);
+    // Dev login forces session takeover without requiring user confirmation email.
     await this.tokens.revokeAllSessions(user.id, undefined, 'signed_in_elsewhere');
     return { status: 'signed-in', user, tokens: await this.tokens.createSession(user.id, client) };
   }
@@ -100,6 +108,7 @@ export class AuthService {
     if (this.config.requireEmailVerification && !user.emailVerified) {
       return { status: 'verification-required', user };
     }
+    // Skip 2FA prompt only if this device possesses a valid, non-expired trusted device cookie.
     if (user.twoFactorEnabled && !(await this.twoFactor.isTrustedDevice(user.id, trustedDevice))) {
       const mfaToken = this.tokens.signPurposeToken('mfa', { sub: user.id }, MFA_STEP_SECONDS);
       return { status: 'two-factor-required', mfaToken };
@@ -118,9 +127,10 @@ export class AuthService {
   private async openSession(user: PublicUser, client: ClientInfo): Promise<SignInResult> {
     const active = await this.tokens.findActiveSession(user.id, client.refreshToken);
     if (active) {
+      // Account is actively in use elsewhere: emit takeover token rather than session credentials.
       const takeoverToken = this.tokens.signPurposeToken(
         'takeover',
-        { sub: user.id, ua: client.userAgent?.slice(0, 300), ip: client.ip },
+        { sub: user.id, ua: client.userAgent?.slice(0, MAX_USER_AGENT_LENGTH), ip: client.ip },
         TAKEOVER_SECONDS,
       );
       return {
@@ -129,7 +139,9 @@ export class AuthService {
         device: { name: describeUserAgent(active.userAgent), lastActiveAt: active.createdAt },
       };
     }
+    // Single-device policy: revoke any idle previous sessions before granting the new one.
     await this.tokens.revokeAllSessions(user.id, undefined, 'signed_in_elsewhere');
     return { status: 'signed-in', user, tokens: await this.tokens.createSession(user.id, client) };
   }
 }
+

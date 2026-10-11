@@ -16,6 +16,8 @@ import { api, ApiError } from '@/lib/api';
 import { safeRedirect } from '@/lib/redirect';
 import { useDevLogin, type DevUser } from './useDevLogin';
 
+const MAX_TEST_USER_NAME_LENGTH = 60;
+
 /**
  * Wraps the sign-in / register forms: when DEV_LOGIN is on, shows the identity
  * switcher instead (with a link back to the real forms).
@@ -102,7 +104,7 @@ function DevSwitcher({ initialUsers, onUseReal }: { initialUsers: DevUser[]; onU
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Name (random if empty)"
-            maxLength={60}
+            maxLength={MAX_TEST_USER_NAME_LENGTH}
             className="rounded-xl border border-zinc-200 px-3 py-2 text-sm"
           />
           <select

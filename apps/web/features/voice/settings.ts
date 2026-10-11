@@ -1,6 +1,9 @@
+// Configuration types, default values, and key display formatters for proximity voice.
+// Fits into the voice feature and settings UI to support open mic and push-to-talk modes.
+
 export type VoiceMode = 'OPEN' | 'PUSH_TO_TALK';
 
-/** GET / PATCH /api/settings. */
+/** GET / PATCH /api/settings voice payload. */
 export interface VoiceSettings {
   voiceMode: VoiceMode;
   /** KeyboardEvent.code ("KeyV", "Space"...). */
@@ -10,7 +13,7 @@ export interface VoiceSettings {
 
 export const DEFAULT_VOICE_SETTINGS: VoiceSettings = { voiceMode: 'OPEN', pushToTalkKey: 'KeyV' };
 
-const NAMES: Record<string, string> = {
+const KEY_DISPLAY_NAMES: Record<string, string> = {
   Backquote: '`',
   Minus: '-',
   Equal: '=',
@@ -31,9 +34,9 @@ const NAMES: Record<string, string> = {
   CapsLock: 'Caps Lock',
 };
 
-/** "KeyV" → "V", "Digit1" → "1", "Backquote" → "`", "Numpad0" → "Num 0". */
+/** Formats a KeyboardEvent.code into a user-friendly display string ("KeyV" → "V"). */
 export function keyName(code: string) {
-  if (NAMES[code]) return NAMES[code];
+  if (KEY_DISPLAY_NAMES[code]) return KEY_DISPLAY_NAMES[code];
   if (/^(Key|Digit)./.test(code)) return code.replace(/^(Key|Digit)/, '');
   if (code.startsWith('Numpad')) return `Num ${code.slice(6)}`;
   if (code.startsWith('Arrow')) return `${code.slice(5)} arrow`;

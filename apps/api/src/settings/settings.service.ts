@@ -1,3 +1,8 @@
+/**
+ * Service managing user settings persistence, voice modes, and customized keybindings.
+ * Persists sparse diffs against defaults in Prisma to allow default keybind updates to propagate.
+ */
+
 import { Injectable } from '@nestjs/common';
 import { VoiceMode } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -10,6 +15,7 @@ import {
   resolveKeybinds,
 } from './keybinds';
 
+/** Fully resolved user settings including voice mode and active keybinding map. */
 export interface Settings {
   voiceMode: VoiceMode;
   pushToTalkKey: string;
@@ -22,7 +28,7 @@ const DEFAULTS: Settings = {
   keybinds: { ...DEFAULT_KEYBINDS },
 };
 
-/** Personal preferences (voice for now). No row = the defaults. */
+/** Service handling retrieval and partial updates of user personal preferences and keybinds. */
 @Injectable()
 export class SettingsService {
   constructor(private readonly prisma: PrismaService) {}
@@ -50,6 +56,7 @@ export class SettingsService {
       current = applyKeybindChanges(current, changes);
     }
 
+    // Persist only overrides against defaults so future default keybind updates reach the user.
     const diffKeybinds: Record<string, string> = {};
     for (const action of ACTIONS) {
       if (action === 'pushToTalk') continue;
@@ -60,6 +67,7 @@ export class SettingsService {
 
     const voiceMode = dto.voiceMode ?? row?.voiceMode ?? DEFAULTS.voiceMode;
 
+    // Maintain pushToTalkKey column alongside keybinds JSON for backward schema compatibility.
     const saved = await this.prisma.userSettings.upsert({
       where: { userId },
       create: {
@@ -82,3 +90,4 @@ export class SettingsService {
     };
   }
 }
+

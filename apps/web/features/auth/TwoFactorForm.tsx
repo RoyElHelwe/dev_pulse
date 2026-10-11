@@ -1,5 +1,7 @@
 'use client';
 
+// Form handling the second factor of authentication with TOTP app or backup codes.
+
 import { ShieldCheck } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -14,6 +16,10 @@ import { ActiveSessionNotice } from './ActiveSessionNotice';
 import { AuthShell } from './AuthShell';
 import { useAuth } from './AuthProvider';
 import type { ActiveDevice, SignInResponse } from './types';
+
+const MIN_BACKUP_CODE_LENGTH = 10;
+const TOTP_CODE_LENGTH = 6;
+const MAX_BACKUP_CODE_LENGTH = 20;
 
 /** Second sign-in step when 2FA is on: a code from the app, or a backup code. */
 export function TwoFactorForm() {
@@ -33,7 +39,7 @@ export function TwoFactorForm() {
   async function onSubmit(event: React.FormEvent) {
     event.preventDefault();
     const clean = code.replace(/\s/g, '');
-    if (useBackup ? clean.length < 10 : !/^\d{6}$/.test(clean)) {
+    if (useBackup ? clean.length < MIN_BACKUP_CODE_LENGTH : !/^\d{6}$/.test(clean)) {
       return setError(
         useBackup ? 'Enter one of your backup codes.' : 'Enter the 6-digit code from your app.',
       );
@@ -102,7 +108,7 @@ export function TwoFactorForm() {
             inputMode={useBackup ? 'text' : 'numeric'}
             autoComplete="one-time-code"
             autoFocus
-            maxLength={useBackup ? 20 : 6}
+            maxLength={useBackup ? MAX_BACKUP_CODE_LENGTH : TOTP_CODE_LENGTH}
             placeholder={useBackup ? 'xxxxx-xxxxx' : '123456'}
             className="[&_input]:text-center [&_input]:font-mono [&_input]:text-lg [&_input]:tracking-[0.35em]"
           />

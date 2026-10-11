@@ -1,3 +1,5 @@
+// Styled interactive button component with variant styles and loading state support.
+
 import type { ComponentProps } from 'react';
 import { cn } from '@/lib/cn';
 
@@ -28,6 +30,7 @@ export function buttonStyles(variant: Variant = 'primary', size: Size = 'md', cl
 
 type ButtonProps = ComponentProps<'button'> & { variant?: Variant; size?: Size; loading?: boolean };
 
+/** Interactive button component supporting variants, sizes, and loading spinners. */
 export function Button({ variant, size, className, type = 'button', loading, disabled, children, ...props }: ButtonProps) {
   return (
     <button

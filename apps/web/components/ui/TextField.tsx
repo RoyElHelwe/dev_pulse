@@ -1,5 +1,7 @@
 'use client';
 
+// Form text field component with accessibility wiring, validation states, and password visibility toggle.
+
 import { Eye, EyeOff } from 'lucide-react';
 import { type ComponentProps, type ReactNode, useId, useState } from 'react';
 import { cn } from '@/lib/cn';

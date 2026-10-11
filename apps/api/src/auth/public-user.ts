@@ -1,3 +1,7 @@
+/**
+ * Public user representation and transformation utilities.
+ * Strips sensitive fields (hashes, secrets) before sending user records to clients.
+ */
 import type { OAuthAccount, Role, TwoFactor, User, Workspace, WorkspaceMember } from '@prisma/client';
 
 /** The user as the frontend sees it: never the password hash or secrets. */
@@ -15,6 +19,7 @@ export interface PublicUser {
   createdAt: Date;
 }
 
+/** Prisma include clause required to assemble a full PublicUser record. */
 export const PUBLIC_USER_INCLUDE = {
   twoFactor: true,
   oauthAccounts: true,
@@ -27,6 +32,7 @@ type UserWithRelations = User & {
   membership: (WorkspaceMember & { workspace: Workspace }) | null;
 };
 
+/** Sanitizes an internal database User record into a safe PublicUser model. */
 export function toPublicUser(user: UserWithRelations): PublicUser {
   return {
     id: user.id,
@@ -43,3 +49,4 @@ export function toPublicUser(user: UserWithRelations): PublicUser {
     createdAt: user.createdAt,
   };
 }
+
