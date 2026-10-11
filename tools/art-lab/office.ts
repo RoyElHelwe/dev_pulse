@@ -26,6 +26,7 @@ const PAD = 6;
 
 type Activity = 'arriving' | 'desk' | 'coffee' | 'lounge' | 'visit' | 'meeting' | 'leaving' | 'away';
 
+/** Simulated office worker with a display name and procedural appearance recipe. */
 export interface Person {
   name: string;
   recipe: Recipe;
@@ -56,6 +57,7 @@ interface Agent extends Person {
   with: number | null;
 }
 
+/** Configuration settings and interaction callbacks for running an office simulation. */
 export interface OfficeOptions {
   /** Called when someone is clicked. */
   onPick?: (person: Person) => void;

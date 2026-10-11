@@ -1,13 +1,6 @@
 /**
- * Ref-counted cached shape texture manager.
- *
- * Why this exists (perf report 18b part 2):
- * Phaser replays and re-triangulates Graphics objects on every frame, which caused heavy CPU
- * overhead when multiple avatars or UI bubbles were active. Instead of persistent Graphics
- * objects, shapes (avatar shadows, name badges, speech and status bubbles) are drawn once into
- * dynamic textures and displayed as lightweight Phaser Images. Each texture key is reference-counted
- * across users and evicted when the last user releases it, keeping texture counts flat and
- * eliminating per-frame re-tessellation without memory leaks.
+ * Ref-counted dynamic texture cache for recurring shapes (shadows, badges, bubbles).
+ * Eliminates per-frame Phaser Graphics re-tessellation CPU overhead by baking to Images.
  */
 import * as Phaser from 'phaser';
 
@@ -28,6 +21,7 @@ const MIN_SHAPE_SCALE = 1;
 const MAX_SHAPE_SCALE = 3;
 
 /**
+ * Why this exists (perf report 18b part 2):
  * Phaser replays (and re-triangulates) a Graphics object's shapes on every frame, so a persistent
  * Graphics (name tag, bubble, shadow) costs CPU forever. A baked shape is drawn once into a texture
  * shared by everything with the same key, then shown as a plain Image. Reference counted: the texture

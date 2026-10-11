@@ -1,7 +1,5 @@
-// Office E2E test suite covering creation, invitations, proximity voice, chat,
-// room booking, status changes, desk interactions, layout editing, and teammate management.
-// Each test builds its own fresh office environment via fixtures or dev sign-in helpers so tests
-// run independently in any order or in parallel without serial dependencies or state leakage.
+// Office E2E tests for workspace lifecycle, interaction, voice, and team features.
+// Tests provision isolated office environments using fixtures to run independently without state leakage.
 
 import { type Page } from '@playwright/test';
 import { closeContexts, connectedCalls, openPage } from './support/browser';

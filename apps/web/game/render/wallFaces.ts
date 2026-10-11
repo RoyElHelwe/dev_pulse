@@ -1,13 +1,7 @@
 /**
  * Wall faces rendering and transparency management.
- *
- * How Wall Fade works:
- * Wall faces are baked once into textures and displayed as depth-sorted Phaser Images.
- * When players walk behind tall solid horizontal walls, the wall would normally occlude them.
- * To provide visibility without continuous re-rendering, horizontal solid wall faces are sliced
- * into 1-tile wide column frames. During update(), any column within reach of a person's feet
- * fades smoothly to FADE_ALPHA. Columns concealing furniture are also kept semi-transparent at
- * FURNITURE_ALPHA. Wall-mounted items query alphaFor() to match the fading wall behind them.
+ * Slices solid walls into 1-tile columns baked to textures that smoothly fade
+ * when occluding walking players or behind-wall furniture.
  */
 import type * as Phaser from 'phaser';
 import { TILE } from '../constants';

@@ -1,18 +1,6 @@
 /**
  * Main office scene lifecycle, coordinating rendering, physics, systems, and networking.
- *
- * Delegates specialized behaviors to dedicated systems:
- * - ViewControl: Camera tracking, zoom levels, and layout drawer view shift
- * - NetSync: Remote player lifecycle, positional lerping, minimap snapshots, and character appearances
- * - FurnitureSprites: Furniture rendering, dynamic overlays, and desk paper stacks
- * - DeskPlates: Desk occupant name tags and status bubbles
- * - RoomBadges: Meeting room booking status indicators and occupancy counters
- * - RoomLocks: Room access permissions, boundary enforcement, obstacle collisions, and spawn arrival points
- * - Zones: Zone boundary tracking and enter/leave event dispatching
- * - Seating: Chair proximity detection and sit/stand animations
- * - Interactions: Interactive elements (TV, whiteboard, foosball, desk prompt)
- * - Proximity: Voice proximity tracking and room audio containment
- * - EditMode: Interactive office layout editor
+ * Serves as the primary Phaser scene hosting avatar gameplay and workspace interaction.
  */
 
 import * as Phaser from 'phaser';
@@ -100,7 +88,18 @@ export interface OfficeSceneData {
 
 /**
  * Core Phaser scene managing the interactive office environment, avatar physics,
- * scenery rendering, and delegated subsystem coordination.
+ * scenery rendering, and delegated subsystem coordination:
+ * - ViewControl: Camera tracking, zoom levels, and layout drawer view shift
+ * - NetSync: Remote player lifecycle, positional lerping, minimap snapshots, and character appearances
+ * - FurnitureSprites: Furniture rendering, dynamic overlays, and desk paper stacks
+ * - DeskPlates: Desk occupant name tags and status bubbles
+ * - RoomBadges: Meeting room booking status indicators and occupancy counters
+ * - RoomLocks: Room access permissions, boundary enforcement, obstacle collisions, and spawn arrival points
+ * - Zones: Zone boundary tracking and enter/leave event dispatching
+ * - Seating: Chair proximity detection and sit/stand animations
+ * - Interactions: Interactive elements (TV, whiteboard, foosball, desk prompt)
+ * - Proximity: Voice proximity tracking and room audio containment
+ * - EditMode: Interactive office layout editor
  */
 export class OfficeScene extends Phaser.Scene {
   private opts!: OfficeSceneData;

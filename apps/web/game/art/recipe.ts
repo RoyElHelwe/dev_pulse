@@ -1,9 +1,6 @@
 /**
- * Character recipe data model and compact DNA encoding.
- *
- * A Recipe defines procedural character attributes (build, hair, clothing, vibe) chosen from discrete menus.
- * A DNA code is a compact, versioned base-36 string ("1" prefix followed by one base-36 digit per field in FIELDS)
- * stored in WorkspaceMember.character, interoperable with legacy named character presets (maya, sam, etc.).
+ * Procedural character recipe data model and compact base-36 DNA encoding.
+ * Defines modular avatar traits and preset interoperability for office members.
  */
 
 import { pick, type Random, weighted } from '../render/draw';

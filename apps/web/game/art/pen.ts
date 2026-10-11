@@ -1,9 +1,7 @@
 /**
- * Unified drawing abstraction (Pen) for procedural characters, desks, and props.
- * Decouples drawing recipes from render backends:
- * - Phaser Graphics backend (`phaserPen`) for live in-game rendering.
- * - HTML5 Canvas 2D backend (`canvasPen`) for off-screen textures and art lab rendering.
- * Also provides an SVG string builder (`svgPen`) for static React UI previews.
+ * Unified drawing abstraction (Pen) decoupling art recipes from render backends.
+ * Targets Phaser graphics for live gameplay, HTML5 Canvas 2D for textures and lab,
+ * and SVG string generation for static React UI previews.
  */
 
 import type * as Phaser from 'phaser';
