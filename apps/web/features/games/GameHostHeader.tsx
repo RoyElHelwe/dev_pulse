@@ -6,7 +6,6 @@
 'use client';
 
 import { X } from 'lucide-react';
-import type { Socket } from 'socket.io-client';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import type { GameChromeInfo } from './GameChrome';
@@ -22,7 +21,6 @@ export interface GameHostHeaderProps {
   /** Live participant telemetry (seated players, spectators). */
   chromeInfo: GameChromeInfo;
   /** Socket instance for real-time leaderboard match updates. */
-  socket: Socket | null;
   /** Whether the floating leaderboard popover is currently expanded. */
   leaderboardOpen: boolean;
   /** Toggle callback to open or close the leaderboard popover. */
@@ -38,7 +36,6 @@ export function GameHostHeader({
   name,
   gameKind,
   chromeInfo,
-  socket,
   leaderboardOpen,
   onToggleLeaderboard,
   onClose,
@@ -91,7 +88,6 @@ export function GameHostHeader({
       {leaderboardOpen && (
         <Leaderboard
           game={gameKind}
-          socket={socket}
           className="absolute top-12 right-4 z-50 w-80 shadow-xl max-h-[70vh] overflow-auto bg-white"
         />
       )}

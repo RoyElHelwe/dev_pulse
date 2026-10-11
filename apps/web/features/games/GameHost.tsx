@@ -131,7 +131,6 @@ export function GameHost({ socket, me, onOpenChange }: GameHostProps) {
           name={activeGame.name}
           gameKind={activeGame.kind}
           chromeInfo={chromeInfo}
-          socket={socket}
           leaderboardOpen={leaderboardOpen}
           onToggleLeaderboard={() => setLeaderboardOpen((prev) => !prev)}
           onClose={handleClose}

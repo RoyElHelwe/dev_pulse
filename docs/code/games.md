@@ -42,7 +42,7 @@ The office minigames framework enables interactive, real-time multiplayer miniga
 | `GameHostHeader.tsx` | Modal top bar rendering game title, live player/spectator counts, leaderboard toggle, and close button. |
 | `GameChrome.tsx` | React Context allowing mounted game panels to push player/spectator counts to `GameHostHeader`. |
 | `useGameSession.ts` | React networking hook managing socket subscriptions, RAF state throttling, action dispatch, and lifecycle. |
-| `Leaderboard.tsx` | Leaderboard drawer fetching weekly stats via REST and auto-refreshing on `game:ended` socket events. |
+| `Leaderboard.tsx` | Leaderboard drawer fetching weekly stats via REST each time it is opened (it is unmounted while closed). |
 | `foosball/FoosballPanel.tsx` | Foosball panel composing audio synthesis, lobby seating controls, HUD, and table canvas. |
 | `foosball/FoosballTable.tsx` | Interactive table container rendering scores, rod switcher buttons, pointer lock hints, and rematch controls. |
 | `foosball/FoosballCanvas.tsx` | Canvas element executing foosball rendering routines. |
@@ -132,7 +132,7 @@ The host framework supplies `GameContext` to `GameInstance`:
 | `game:state` | Server -> Client | `{ id: string, game: GameKind, state: unknown }` | Target user socket | `useGameSession.ts` |
 | `game:event` | Server -> Client | `{ id: string, event: string, data?: unknown }` | Room or target users | `useGameSession.ts` |
 | `game:left` | Server -> Client | `{ id: string, reason: 'left' \| 'far' \| 'disconnected' \| 'closed' }` | Target user socket | `useGameSession.ts` |
-| `game:ended` | Server -> Client | `{ id: string, result?: unknown }` | Target user socket / room | `useGameSession.ts`, `Leaderboard.tsx` |
+| `game:ended` | Server -> Client | `{ id: string, result?: unknown }` | Each seated player (`sendToUser`), only when a session is force-closed (`result.reason: 'closed'`); a normal match end is a `game:state` with `phase: 'ended'` instead | `useGameSession.ts` |
 | `game:error` | Server -> Client | `{ id?: string, code: string, message: string }` | Target user socket | `useGameSession.ts` |
 | `lego:art` | Server -> Client | `{ id: string, bricks: Brick[] }` | Workspace room broadcast | `LegoSync.tsx`, `FurnitureSprites.ts` |
 
@@ -148,7 +148,7 @@ The host framework supplies `GameContext` to `GameInstance`:
 
 - **Recording**: Games trigger `ctx.record({ winners: string[], losers: string[] })`, persisted to `GameResult` table in PostgreSQL by `GameResultsService`. Forfeit: leaver = loser in both games (in Foosball, a team abandoning/timing out yields a forfeit loss; in Uno, a player leaving mid-game leaving fewer than 2 players ends the match and the leaver is recorded as the loser).
 - **Aggregation**: `aggregateLeaderboard()` aggregates rows over a query window (default 7 days). Each match gives 1 win/game to unique winners and 1 loss/game to unique losers (a player in both gets 1 win, 1 loss, 1 game). Sorted by `wins desc`, `losses asc`, `games desc` (top 10).
-- **REST & Real-time**: `GET /workspace/games/leaderboard` returns ranked entries with user names and avatar characters. `Leaderboard.tsx` also listens to `game:ended` socket events to re-fetch rankings live without polling.
+- **REST & Real-time**: `GET /workspace/games/leaderboard` returns ranked entries with user names and avatar characters. `Leaderboard.tsx` fetches once when the drawer opens; there is no live refresh (the server has no "match recorded" event), reopening the drawer shows the new result.
 
 ## Rules & invariants
 
