@@ -1,10 +1,8 @@
 # Authentication
 
-**Owner:** Roy · **Code:** `apps/api/src/auth`, `apps/api/src/common/auth`, `apps/web/features/auth`
+**Owner:** Roy · **Implementation details:** see [docs/code/auth.md](code/auth.md)
 
-Based on Roy's first version (Better Auth, database sessions), rebuilt on our NestJS API
-with **JWT access tokens + rotating refresh tokens**, and finished: password reset, 42
-sign-in, 2FA for every sign-in method, backend validation, rate limits, HTTPS and Docker.
+Rebuilt on our NestJS API with secure access tokens and rotating refresh tokens, featuring password reset, social sign-in (Google, GitHub, 42), two-factor authentication (2FA) for all sign-in methods, full validation, rate limits, HTTPS, and single-device session enforcement.
 
 ---
 
@@ -12,247 +10,94 @@ sign-in, 2FA for every sign-in method, backend validation, rate limits, HTTPS an
 
 | Feature | Where |
 | ------- | ----- |
-| Sign up / sign in / sign out with email + password (scrypt, salted) | `/register`, `/login` |
-| Validation on the frontend (Zod) **and** the backend (class-validator DTOs), same rules | `features/auth/schemas.ts`, `auth/dto/` |
+| Sign up / sign in / sign out with email + password | `/register`, `/login` |
+| Form validation on frontend and backend | `/register`, `/login`, settings |
 | Email confirmation + "send again" | `/verify-email` |
 | Forgot / reset password (1-hour link), change or set a password | `/forgot-password`, `/reset-password`, settings |
-| Sign in with **Google, GitHub, 42** (OAuth 2.0, state + PKCE) | buttons appear when configured |
-| **2FA**: authenticator app (TOTP), 10 backup codes, "trust this browser for 30 days" | `/two-factor`, settings |
-| 2FA is also asked after Google / GitHub / 42 sign-in | |
-| Signed-in devices: list, sign out one, sign out everywhere | `/settings/security` |
-| **One device at a time**: a second device is refused; an emailed link closes every session | `/close-sessions` |
-| Signed-out devices leave **at once** (live socket), even in the middle of the office | |
-| Rate limits, origin check (CSRF), "wrong email or password" never tells which one | |
-| Privacy Policy, Terms of Service (mandatory) | `/privacy`, `/terms` |
+| Sign in with **Google, GitHub, 42** | buttons appear when configured |
+| **2FA**: authenticator app (TOTP), 10 single-use backup codes, "trust this browser for 30 days" | `/two-factor`, settings |
+| 2FA prompt after Google / GitHub / 42 sign-in | `/two-factor` |
+| Active devices: list, sign out one, sign out everywhere | `/settings/security` |
+| **One device at a time**: second device blocked if active; emailed link closes all sessions | `/close-sessions` |
+| Signed-out devices leave **at once** in real time, even in the middle of the office | office view |
+| Rate limits, CSRF protection, uniform error messages preventing account enumeration | all auth views |
+| Privacy Policy, Terms of Service | `/privacy`, `/terms` |
 
 ---
 
-## 2. How sign-in works
+## 2. User Experience & Flows
 
-```
-           POST /api/auth/login (email, password)
-Browser ───────────────────────────────────────────► API
-        ◄─── Set-Cookie: access_token  (JWT, 15 min, path /)
-             Set-Cookie: refresh_token (random, 30 days, path /api/auth only)
-             Set-Cookie: signed_in     (readable hint: "access token expires at …")
+### Standard Sign-In
+1. The user signs in at `/login` with email and password.
+2. If credentials match, the session is established and the user is redirected to `/office`.
+3. The session remains active automatically as long as the user has Dev Pulse open in their browser.
+4. If an account does not exist or credentials fail, a generic error message ("Wrong email or password") is displayed to prevent email enumeration.
 
-Every request:  cookie access_token ──► AuthGuard checks the JWT signature
-                                        (no database query)
+### Two-Factor Authentication (2FA)
+- Once enabled in `/settings/security`, sign-in requires a 6-digit verification code from an authenticator app (Google Authenticator, 1Password, etc.) or a recovery backup code.
+- 2FA also applies to social logins (Google, GitHub, 42).
+- Users can check **"Trust this browser for 30 days"** to bypass 2FA prompts on recognized computers.
+- If the authenticator is lost, any of the 10 backup codes generated during setup can be used. Each backup code works only once.
+- Entering 5 incorrect 2FA codes locks verification attempts for 5 minutes.
 
-~1 min before expiry:  POST /api/auth/refresh ──► old refresh token revoked,
-                                                  new access + refresh token
-```
-
-- **Access token**: a JWT (`sub` = user id, `sid` = device id), signed with a key derived
-  from `JWT_SECRET`. Short-lived, so a leaked one is useless quickly.
-- **Refresh token**: 32 random bytes. The database only stores its SHA-256 hash. Each one
-  works **once**: refreshing gives a new one (rotation). All tokens of one sign-in share a
-  `familyId` = one device in the "signed-in devices" list.
-- **Theft detection**: if an already-used refresh token comes back later, someone copied
-  it, so that device is signed out. (A reuse within 30 s is two tabs refreshing at the same
-  time, not theft: the frontend also prevents that with a Web Lock.)
-- **Sign out** revokes the device's refresh tokens. Every request also checks that its
-  device session is still alive (one small indexed query), so a signed-out device stops
-  working immediately, not when its access token expires.
-- All tokens are in **httpOnly cookies**: JavaScript on the page can't read them, so an XSS
-  bug can't steal them. Same site through nginx, so no CORS. `SameSite` + an origin check
-  block cross-site requests.
-
-### With 2FA on
-
-```
-password ✔ ──► { status: "two-factor-required" } + cookie mfa_token (5 min)
-           ──► /two-factor ──► POST /api/auth/2fa/verify { code } ──► session cookies
-```
-
-Same after Google / GitHub / 42. The secret is stored AES-256-GCM encrypted, each code
-works once, 5 wrong codes lock 2FA for 5 minutes.
-
-### One device at a time
-
-```
-PC:A signed in, used in the last 20 min
-PC:B: password ✔ (+ 2FA ✔) ──► { status: "session-active", device: "Chrome on macOS" }
-                                  + cookie takeover_token (10 min)
-PC:B: "Close the other session" ──► email to the account's own address
-                                      + cookie close_sessions (ties the link to PC:B)
-link opened ──► every session revoked ──► PC:B: /login ("all sessions are closed")
-                                       └─► PC:A: told over the /session socket,
-                                            leaves the office for /login at once
-PC:B: signs in normally
-```
-
-- **Active** = used in the last 20 minutes (an open app renews every ~14 minutes). A
-  session left open on a sleeping or closed computer doesn't block: it is closed when you
-  sign in elsewhere. Signing in again in the same browser is not "another device".
-- **Who can close sessions**:
-  1. Asking for the email needs the takeover token, which only a **complete** sign-in
-     gets (password or Google/GitHub/42, plus 2FA when it's on). Knowing someone's email
-     is not enough, and the email always goes to the account's own address.
-  2. The link proves access to the inbox. It works **once**, for **15 minutes**, is stored
-     only as a hash, and only works in **the browser that asked for it**. Anywhere else the
-     account **password** is also required (accounts without a password: same browser only).
-  3. Limits: 3 requests per minute per IP, 1 email per minute per account, only the newest
-     link works. An email is sent when the link is requested and when sessions are closed,
-     with the browser and IP, so the owner notices if it wasn't them.
-- Kicked devices see why on the sign-in page (`?reason=sessions_closed`,
-  `signed_in_elsewhere`, `password_changed`...).
-
-### Cookies
-
-| Cookie | Content | Lifetime | Path | JS can read |
-| ------ | ------- | -------- | ---- | ----------- |
-| `access_token` | JWT | 15 min | `/` | no |
-| `refresh_token` | random token | 30 days | `/api/auth` | no |
-| `signed_in` | access token expiry (ms) | 30 days | `/` | **yes** (not secret) |
-| `mfa_token` | signed "password OK" step | 5 min | `/api/auth` | no |
-| `trusted_device` | signed "2FA passed here" | 30 days | `/api/auth` | no |
-| `oauth_state` | state + PKCE verifier | 10 min | `/api/auth/oauth` | no |
-| `takeover_token` | signed "signed in OK, but open elsewhere" | 10 min | `/api/auth/sessions` | no |
-| `close_sessions` | secret tying the email link to this browser | 15 min | `/api/auth/sessions` | no |
+### One Device at a Time
+To ensure presence integrity in the virtual office, each account can only be actively used on one device at a time:
+- **Active Session**: A device is considered active if it has been used within the last 20 minutes. Idle or sleeping computers do not block new sign-ins; they are replaced automatically.
+- **Second Device Blocked**: If you sign in on Device B while Device A is actively in use, Device B is notified that the account is currently open elsewhere (showing Device A's browser and operating system).
+- **Session Takeover via Email**:
+  1. Device B can request a "Close all sessions" email link.
+  2. The link is sent directly to the account's registered email address, expiring after 15 minutes.
+  3. Clicking the link immediately closes all open sessions. Device A is notified in real time and evicted from the virtual office to `/login`.
+  4. Device B can then sign in normally.
+  5. If the link is opened in a different browser than the one that requested it, the account password must be provided to confirm ownership.
 
 ---
 
-## 3. API
+## 3. Security Guarantees
 
-All under `/api/auth`. Bodies are JSON.
-
-| Method | Path | Who | What |
-| ------ | ---- | --- | ---- |
-| POST | `/register` | public | `{ displayName, email, password }` |
-| POST | `/login` | public | `{ email, password }` → `signed-in` / `two-factor-required` |
-| POST | `/2fa/verify` | public (mfa cookie) | `{ code, trustDevice? }` |
-| POST | `/refresh` | public (refresh cookie) | new tokens |
-| POST | `/logout`, `/logout-all` | signed in | this device / every device |
-| GET | `/me` | signed in | the user (never secrets) |
-| GET / DELETE | `/sessions`, `/sessions/:id` | signed in | devices |
-| POST | `/sessions/close-request` | public (takeover cookie) | emails the "close all sessions" link |
-| POST | `/sessions/close` | public | `{ token, password? }`: closes every session |
-| POST | `/email/verify`, `/email/resend` | public | `{ token }` / `{ email }` |
-| POST | `/password/forgot`, `/password/reset` | public | `{ email }` / `{ token, password }` |
-| POST | `/password/change` | signed in | `{ currentPassword?, newPassword }` |
-| POST | `/2fa/setup`, `/2fa/enable`, `/2fa/disable`, `/2fa/backup-codes` | signed in | `{ password }` / `{ code }` |
-| GET | `/providers` | public | configured OAuth providers |
-| GET | `/oauth/:provider`, `/oauth/:provider/callback` | public | browser redirects |
-
-**Errors.** Expected mistakes (wrong password, email taken, wrong code, expired link) come
-back as **HTTP 200** with `{ "error": { "code", "message", "field"? } }`. Chrome prints every
-4xx response as a red console error and the subject wants a clean console, so we keep 4xx for
-real problems (no/expired token = 401, rate limit = 429, invalid input = 400). The frontend
-`api()` helper turns both into an `ApiError`.
+- **Browser Storage Security**: All authentication credentials and session tokens are stored in secure, `httpOnly` cookies. Client-side JavaScript cannot read them, preventing token theft via Cross-Site Scripting (XSS).
+- **Protection Against Token Replay**: Device sessions use single-use rotating tokens. If an expired or copied session token is detected, that device session is immediately revoked across all tabs.
+- **Instant Revocation**: When you sign out, change your password, or close sessions from another device, your browser is disconnected immediately over a real-time channel rather than waiting for an expiration timer.
+- **Brute-Force & Flood Protection**: All authentication endpoints enforce strict rate limits (e.g. 5 registrations/min, 10 logins/min, 10 2FA attempts/min).
+- **Encrypted Secrets**: Passwords are salted and hashed using memory-hard scrypt algorithms. 2FA secrets are encrypted at rest with authenticated AES-256-GCM.
 
 ---
 
-## 4. Using auth in your code
+## 4. Configuration (`.env`)
 
-### Backend
+No external services are required for local development: startup scripts generate a secure secret, and without SMTP configured, email links are printed directly to the server logs.
 
-**Every route needs a signed-in user**, unless marked `@Public()`.
+| Variable | Description |
+| -------- | ----------- |
+| `JWT_SECRET` | Secret key (minimum 32 characters) used to sign authentication tokens. |
+| `REQUIRE_EMAIL_VERIFICATION` | Set to `true` to block login until the email confirmation link has been clicked. |
+| `SMTP_*`, `EMAIL_FROM` | Outgoing SMTP mail credentials (e.g. Resend, SendGrid, or local SMTP). |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Google OAuth app credentials. |
+| `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` | GitHub OAuth app credentials. |
+| `FORTYTWO_CLIENT_ID`, `FORTYTWO_CLIENT_SECRET` | 42 Intra OAuth app credentials. |
 
-```ts
-import { Controller, Get } from '@nestjs/common';
-import type { AuthUser } from '../common/auth/auth-user';
-import { CurrentUser } from '../common/auth/current-user.decorator';
-import { Public } from '../common/auth/public.decorator';
+Social sign-in buttons appear automatically on `/login` and `/register` only when their respective client credentials are configured.
 
-@Controller('tasks')
-export class TasksController {
-  @Get('mine')
-  mine(@CurrentUser() user: AuthUser) {
-    return this.tasks.forUser(user.id); // user = { id, sessionId }
-  }
-
-  @Public()
-  @Get('stats')
-  stats() {}
-}
-```
-
-Sockets (Socket.IO): the browser sends the same cookie on the handshake. The frontend
-already keeps one connection on the `/session` namespace for instant sign-out; feature
-gateways use their own namespace.
-
-```ts
-@WebSocketGateway({ namespace: '/office' })
-export class OfficeGateway implements OnGatewayConnection {
-  constructor(private readonly tokens: TokensService) {} // import AuthModule in your module
-
-  handleConnection(socket: Socket) {
-    if (!authenticateSocket(socket, this.tokens)) socket.disconnect(true);
-  }
-  // later: socket.data.user.id
-}
-```
-
-A wrong value typed by the user → `throw new FormError('CODE', 'Message for the user.', 'field')`.
-
-### Frontend
-
-```tsx
-const { status, user, signOut } = useAuth(); // 'loading' | 'signed-in' | 'signed-out'
-const tasks = await api<Task[]>('/tasks/mine'); // cookies + token refresh handled
-await api('/tasks', { body: { title } });       // POST with JSON
-```
-
-Pages under `/office` and `/settings` redirect to `/login` when signed out (`proxy.ts`).
-Add new protected sections to the `PROTECTED` list there.
+OAuth callback URLs to configure with identity providers (adjust host and port as needed):
+- `https://localhost:8443/api/auth/oauth/google/callback`
+- `https://localhost:8443/api/auth/oauth/github/callback`
+- `https://localhost:8443/api/auth/oauth/42/callback`
 
 ---
 
-## 5. Configuration (`.env`)
+## 5. Dev Identity Switcher (`DEV_LOGIN`)
 
-Nothing is required to run locally: `make` generates `JWT_SECRET`, and without SMTP the
-emails are printed in the API logs (`make logs s=api`), links included.
+When running locally or in staging environments, setting `DEV_LOGIN=true` in `.env` turns on a developer identity switcher (**strictly disabled in production**):
 
-| Variable | Meaning |
-| -------- | ------- |
-| `JWT_SECRET` | ≥ 32 random characters. Changing it signs everyone out and resets 2FA secrets. |
-| `REQUIRE_EMAIL_VERIFICATION` | `true` = no sign-in before clicking the email link. Turn on once SMTP works. |
-| `SMTP_*`, `EMAIL_FROM` | Any SMTP server. Resend: `smtp.resend.com`, port 465, secure, user `resend`, password = API key. |
-| `GOOGLE_*`, `GITHUB_*`, `FORTYTWO_*` | OAuth apps. A button shows up only when both id and secret are set. |
-
-Callback URL to register at Google / GitHub / 42 (adapt host and port to `SERVER_NAME` /
-`HTTPS_PORT`): `https://localhost:8443/api/auth/oauth/<google|github|42>/callback`.
-
-- **42**: intra → Settings → API → Register a new app.
-- **GitHub**: Settings → Developer settings → OAuth Apps.
-- **Google**: Cloud console → Google Auth Platform → Clients (add your account as a test user).
+- `/login` and `/register` display an identity switcher listing existing users. Clicking any user signs in immediately without requiring passwords or 2FA.
+- You can create disposable test users with random names and avatars, optionally placing them in an existing office.
+- A "Switch user (dev)" item appears in the top navigation user menu.
+- Standard sign-in forms remain accessible via a "Use real sign-in" toggle.
 
 ---
 
-## 6. Tests
+## 6. Implementation & Code Architecture
 
-- `cd apps/api && pnpm test`: password hashing, TOTP (RFC 6238 test vectors), encryption,
-  backup codes, redirect checks.
-- Every flow above was tried end to end through nginx (HTTPS): sign up, sign in, wrong
-  password, refresh, sign out, 2FA with app and backup codes, lockout, trusted browser,
-  password reset, email confirmation, OAuth redirects and account linking.
-- One device at a time, in two browsers: PC:B refused, link emailed, PC:A kicked out of the
-  office ~1 s after the link was opened, PC:B signs in; link in a third browser needs the
-  password; reused, forged or too-frequent links refused; no takeover without a full sign-in.
+For technical architecture, data flows, database schemas, cryptographic details, and guides for extending authentication (such as adding OAuth providers), see:
 
-## 7. Known limits
-
-- Real Google / GitHub / 42 sign-in needs their credentials in `.env` (not committed).
-- Without SMTP, emails only go to the API logs.
-- Next for Roy: profile + avatar (M3), invitations (M4), members and roles (M5).
-
-## 8. Dev identity switcher (`DEV_LOGIN`)
-
-Set `DEV_LOGIN=true` in `.env` (default `false`; **never in production**: it is ignored when
-`NODE_ENV=production`, and the api logs a loud warning at startup when on), then recreate the api
-(`docker compose ... up -d api`).
-
-- `/login` and `/register` show an identity switcher instead of the forms: click a user to sign in as
-  them (no password, no 2FA), or create a test user (random name, verified email, optionally joining an
-  existing office with a random character). "Use the real sign-in" shows the normal forms.
-- The user menu gets "Switch user (dev)" (signs out, then back to the switcher).
-- `GET /api/auth/dev` -> `{ enabled }` is always there (AuthController), so the login page gets a 200
-  in production too and the console stays clean.
-- The switcher's endpoints are public and **absent when off** (the api does not load `DevModule`):
-  `GET /api/auth/dev/users` -> `{ users[] }`, `POST /api/auth/dev/login { userId }`,
-  `POST /api/auth/dev/users { name?, joinUserId? }`. They use the normal session code, so the
-  one-device rule still applies. The same module adds the `dev:teleport`
-  socket event used by browser tests.
-- Code: `apps/api/src/dev/` (module, controller, service, gateway, dto, spec), the web switcher
-  `DevSwitcher.tsx` under `apps/web/features/`.
+👉 **[docs/code/auth.md](code/auth.md)**
