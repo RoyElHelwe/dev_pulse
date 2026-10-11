@@ -800,7 +800,7 @@ describe('Uno Game Engine', () => {
     const view = game.view('u2') as UnoView;
     expect(view.phase).toBe('ended');
     expect(view.winnerId).toBe('u2');
-    expect(recorded).toEqual([{ winners: ['u2'], losers: [] }]);
+    expect(recorded).toEqual([{ winners: ['u2'], losers: ['u1'] }]);
     expect(events.some((e) => e.event === 'won' && (e.data as any)?.userId === 'u2')).toBe(true);
   });
 

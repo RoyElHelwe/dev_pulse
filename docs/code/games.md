@@ -146,7 +146,7 @@ The host framework supplies `GameContext` to `GameInstance`:
 
 ### Results & leaderboard
 
-- **Recording**: Games trigger `ctx.record({ winners: string[], losers: string[] })`, persisted to `GameResult` table in PostgreSQL by `GameResultsService`.
+- **Recording**: Games trigger `ctx.record({ winners: string[], losers: string[] })`, persisted to `GameResult` table in PostgreSQL by `GameResultsService`. Forfeit: leaver = loser in both games (in Foosball, a team abandoning/timing out yields a forfeit loss; in Uno, a player leaving mid-game leaving fewer than 2 players ends the match and the leaver is recorded as the loser).
 - **Aggregation**: `aggregateLeaderboard()` aggregates rows over a query window (default 7 days). Each match gives 1 win/game to unique winners and 1 loss/game to unique losers (a player in both gets 1 win, 1 loss, 1 game). Sorted by `wins desc`, `losses asc`, `games desc` (top 10).
 - **REST & Real-time**: `GET /workspace/games/leaderboard` returns ranked entries with user names and avatar characters. `Leaderboard.tsx` also listens to `game:ended` socket events to re-fetch rankings live without polling.
 
@@ -173,7 +173,7 @@ The host framework supplies `GameContext` to `GameInstance`:
 
 ### Uno
 
-- **Rules**: 2 to 6 players (`MIN_PLAYERS = 2`, `MAX_PLAYERS = 6`). Standard 108-card deck. Players match top card color or number/action. Wild cards require choosing a color. Stacking is supported: `+2` stacks on `+2`, `wild4` stacks on `wild4`. Reverse with 2 players acts as a Skip. Hand <= 2 cards enables the `UNO!` call; failing to call before playing down to 1 card leaves the player vulnerable to being `caught` (+2 card penalty).
+- **Rules**: 2 to 6 players (`MIN_PLAYERS = 2`, `MAX_PLAYERS = 6`). Standard 108-card deck. Players match top card color or number/action. Wild cards require choosing a color. Stacking is supported: `+2` stacks on `+2`, `wild4` stacks on `wild4`. Reverse with 2 players acts as a Skip. Hand <= 2 cards enables the `UNO!` call; failing to call before playing down to 1 card leaves the player vulnerable to being `caught` (+2 card penalty). Leaving mid-game with fewer than 2 players forfeits the match (forfeit: leaver = loser in both games).
 - **Controls & Keybinds**:
   - Click card in hand: Plays card (opens `UnoColorPicker` if Wild/Wild4).
   - Click Deck button: Draws 1 card (or draws accumulated stacked penalty).
