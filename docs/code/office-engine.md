@@ -32,7 +32,7 @@ The office game engine resides in `apps/web/game/` and integrates with React UI 
 | `objects/Bubble.ts` | Speech, status, and interaction prompt bubble display objects utilizing shared ref-counted cached textures. |
 | `objects/DeskPlates.ts` | Workstation owner nameplate labels floating on desk edges, tinted emerald green for the local player. |
 | `objects/RemotePlayer.ts` | Network player avatar entity buffering position snapshots and smoothly interpolating coordinates with a 100 ms delay. |
-| `objects/RoomBadges.ts` | Meeting room occupancy and schedule badges mounted above glass and solid meeting room walls. |
+| `objects/RoomBadges.ts` | Meeting room occupancy and schedule badges mounted above walls with dirty-tracked occupancy aggregation. |
 | `render/draw.ts` | Canvas drawing primitives (rounded rectangles, circles, color shading) and deterministic seeded PRNG utilities. |
 | `render/floors.ts` | Procedural floor pattern graphics rendering for oak planks, carpet tile grids, and speckled terrazzo chips. |
 | `render/furniture.ts` | Procedural drawing recipes, solid flags, and layer specifications for all 21 furniture kinds in `FURNITURE`. |
@@ -44,14 +44,15 @@ The office game engine resides in `apps/web/game/` and integrates with React UI 
 | `render/walls.ts` | 2.5D wall geometry calculations, physical collider bounds, front faces, skirting boards, and dark wall caps. |
 | `scenes/OfficeScene.ts` | Core Phaser scene lifecycle coordinator managing physics, player locomotion, scenery, and subsystem delegation. |
 | `systems/Depth.ts` | Render depth band constants and sorting formulas for floors, rugs, shadows, Y-sorted entities, badges, and hints. |
-| `systems/FurnitureSprites.ts` | Placed furniture sprite manager handling dynamic textures, drop shadows, desk paper updates, and wall transparency syncing. |
+| `systems/FurnitureSprites.ts` | Placed furniture sprite manager handling dynamic textures, drop shadows, desk owner customization, paper stack updates, and wall transparency syncing. |
 | `systems/Interactions.ts` | Spatial interaction triggers and prompt bubbles for desks, task boards, TV screens, and minigames. |
-| `systems/NetSync.ts` | Network movement dispatcher (50 ms cadence), remote avatar roster lifecycle, and proximity audio feeds. |
+| `systems/NetSync.ts` | Network movement dispatcher (50 ms cadence), remote avatar roster lifecycle, minimap snapshot generation, and proximity audio feeds. |
 | `systems/Proximity.ts` | Spatial voice distance tracking with hysteresis (3.0 near, 3.5 far) and room containment checks. |
-| `systems/RoomLocks.ts` | Solid collider manager for booked meeting rooms, enforcing lockout boundaries and evicting unauthorized players. |
+| `systems/RoomLocks.ts` | Solid collider manager for booked rooms, obstacle tracking, boundary enforcement, and spawn arrival point selection. |
 | `systems/rooms.ts` | Spatial room query utility locating the enclosing room ID for given tile coordinates (smallest area wins). |
 | `systems/Seating.ts` | Chair detection, dwell timers (500 ms), stand hold timers (500 ms), and directional step-off math. |
 | `systems/ViewControl.ts` | Camera follow controller managing zoom limits, viewport tweening, and horizontal view shifting. |
+| `systems/Zones.ts` | Zone boundary tracking system detecting player crossings and emitting zone transition events. |
 
 ---
 
@@ -88,13 +89,14 @@ When modals or drawers cover the canvas, `setPaused(paused, mode)` pauses the di
 
 ### 2. OfficeScene lifecycle & subsystem delegation
 
-`OfficeScene` coordinates eight specialized subsystems, owning only the top-level loop:
+`OfficeScene` coordinates nine specialized subsystems, owning only the top-level loop:
 - **Depth (`systems/Depth.ts`)**: Calculates numeric depth values based on entity category and Y coordinates. Owns no mutable state.
 - **ViewControl (`systems/ViewControl.ts`)**: Owns camera tracking, viewport bounds, user zoom level (`userZoom`), and horizontal drawer offset (`viewShift`).
-- **RoomLocks (`systems/RoomLocks.ts`)**: Owns solid physics colliders over booked meeting rooms (`lockedSolids`) and unauthorized occupant detection.
+- **RoomLocks (`systems/RoomLocks.ts`)**: Owns solid physics colliders over booked meeting rooms (`lockedSolids`), static obstacle geometry (`obstacles`), spatial free-space checks (`isFree`), and arrival point selection (`arrivalPoint`).
+- **Zones (`systems/Zones.ts`)**: Owns derived zone boundaries (`zones`), active player zone state (`currentZone`), and entry/exit event emission (`zone:enter`, `zone:leave`).
 - **Seating (`systems/Seating.ts`)**: Owns candidate seat dwell timing (`dwellMs`), stand hold timing (`standHoldMs`), current seat state (`seat`), and just-left re-sit guards (`justLeft`).
-- **NetSync (`systems/NetSync.ts`)**: Owns remote player entity instances (`remotes`), remote zone cache (`remoteZones`), and rate-limited movement broadcasts (`lastSent`).
-- **FurnitureSprites (`systems/FurnitureSprites.ts`)**: Owns placed furniture sprite game objects (`sprites`), drop shadows, and wall-mounted fade registrations (`wallMounted`).
+- **NetSync (`systems/NetSync.ts`)**: Owns remote player entity instances (`remotes`), remote zone cache (`remoteZones`), minimap snapshot generation (`snapshot`), and rate-limited movement broadcasts (`lastSent`).
+- **FurnitureSprites (`systems/FurnitureSprites.ts`)**: Owns placed furniture sprite game objects (`sprites`), drop shadows, desk owner customization, paper stack updates, lego board subscriptions, and wall-mounted fade registrations (`wallMounted`).
 - **Interactions (`systems/Interactions.ts`)**: Owns interactive trigger bounding boxes (`targets`), active hover target, and prompt bubble display objects (`hint`).
 - **Proximity (`systems/Proximity.ts`)**: Owns peer distance cache (`near`), threshold hysteresis, and proximity event dispatching (`player:near`, `player:distance`, `player:far`).
 
@@ -102,14 +104,15 @@ When modals or drawers cover the canvas, `setPaused(paused, mode)` pauses the di
                               ┌────────────────────────┐
                               │      OfficeScene       │
                               └───────────┬────────────┘
-         ┌────────────┬─────────────┬─────┴──────┬────────────┬─────────────┐
-         ▼            ▼             ▼            ▼            ▼             ▼
-   ViewControl    RoomLocks      Seating      NetSync    Furniture   Interactions
-   (Camera/Pan)  (Colliders)  (Dwell/State)  (Remotes)    Sprites     & Proximity
-                                                 │       (Textures)   (Spatial UI)
-                                                 ▼            │
-                                            RemotePlayer      ▼
-                                            (Avatar lerp)   Avatar (Local)
+         ┌────────────┬─────────────┬─────┴──────┬────────────┬─────────────┬─────────────┐
+         ▼            ▼             ▼            ▼            ▼             ▼             ▼
+   ViewControl    RoomLocks       Zones       Seating      NetSync      Furniture    Interactions
+   (Camera/Pan)  (Colliders/   (Boundaries/ (Dwell/State)  (Remotes/     Sprites     & Proximity
+                  Arrival)       Events)                  Snapshots)    (Textures/   (Spatial UI)
+                                                               │          Desks)
+                                                               ▼            │
+                                                          RemotePlayer      ▼
+                                                          (Avatar lerp)   Avatar (Local)
 ```
 
 ### 3. Rendering pipeline
