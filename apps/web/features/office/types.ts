@@ -1,13 +1,14 @@
+/**
+ * Shared type contracts for features mounted in the office canvas.
+ * Defines the common dependencies passed down to voice, chat, meetings, and games.
+ */
+
 import type { Socket } from 'socket.io-client';
 import type { MyWorkspace } from '@/features/workspace/types';
 import type { OfficeController } from '@/game/createGame';
 import type { Presence } from './connection';
 
-/**
- * What every feature mounted in the office gets (voice, chat, meetings).
- * They talk to the server over the office socket (namespace /office) and
- * read the game through the controller and `officeEvents`.
- */
+/** Props contract passed to every live feature mounted inside the office. */
 export interface OfficeFeatureProps {
   /** The live /office socket; null until the office is loaded. */
   socket: Socket | null;

@@ -1,8 +1,15 @@
+/**
+ * Real-time socket transport and sync layer for the office Phaser game.
+ * Multiplexes movements, zone changes, avatar appearance, and presence tracking.
+ */
+
 import type { DeskOwner, OfficeController, PlayerState } from '@/game/createGame';
 import type { OfficeLayout } from '@/game/layout/types';
 import { refreshTokens } from '@/lib/api';
 import { openSocket } from '@/lib/socket';
 import { tabLock } from './tabLockStore';
+
+const RECONNECT_DELAY_MS = 2000;
 
 /** Identifies this browser tab (new on each page load) to the server. */
 const tabId = typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `t${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`;
@@ -38,11 +45,7 @@ interface Handlers {
   onRemoved(reason: 'removed' | 'deleted' | 'no_workspace'): void;
 }
 
-/**
- * Connects the game to the live office (Socket.IO namespace /office):
- * sends our position, applies everyone else's. Returns a disconnect function
- * and the function the game calls when we move.
- */
+/** Connects the Phaser game to the live office Socket.IO namespace. */
 export function connectOffice(controller: () => OfficeController | null, handlers: Handlers) {
   // One office tab at a time: the server knows tabs by this id. `takeover` is set only by "Use here",
   // so a tab that was replaced while offline never takes the office back by reconnecting.
@@ -162,7 +165,7 @@ export function connectOffice(controller: () => OfficeController | null, handler
     }
     // The server refused for a passing reason (database restarting...): socket.io
     // doesn't retry refusals by itself, so try again in a moment.
-    if (!socket.active && error.message !== 'SESSION_ENDED') connection.retry(2000);
+    if (!socket.active && error.message !== 'SESSION_ENDED') connection.retry(RECONNECT_DELAY_MS);
   });
 
   return {

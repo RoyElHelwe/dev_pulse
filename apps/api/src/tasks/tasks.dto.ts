@@ -1,3 +1,4 @@
+/** Validated request bodies for creating and updating tasks (class-validator; see tasks.controller.ts). */
 import { Transform } from 'class-transformer';
 import {
   IsEnum,

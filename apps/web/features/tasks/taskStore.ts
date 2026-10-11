@@ -1,12 +1,14 @@
 'use client';
 
+/**
+ * Global reactive client store managing workspace tasks and real-time socket synchronization.
+ * Serves tasks data to TaskBoard, desk paper stacks, and office HUD counters.
+ */
+
 import { useEffect, useMemo, useSyncExternalStore } from 'react';
 import type { Socket } from 'socket.io-client';
 import { api } from '@/lib/api';
 import type { NewTask, TaskPatch, TaskStatus, TaskView } from './types';
-
-// The workspace's tasks, shared by everything in the office (board, desk paper
-// stacks...). `useTaskSync(socket)` keeps it loaded and live; the rest only reads.
 
 interface State {
   prefix: string;
@@ -48,12 +50,12 @@ const getSnapshot = () => state;
 const SERVER_STATE: State = { prefix: '', tasks: [], loaded: false };
 const getServerSnapshot = (): State => SERVER_STATE;
 
-/** Mount once in the office: loads the tasks and applies `task:*` events live. */
+/** Subscribes to live socket task events and maintains synchronized store state. */
 export function useTaskSync(socket: Socket | null) {
   useEffect(() => {
     if (!socket) return;
     const reload = () => void load().catch(() => undefined);
-    // Also on every reconnect (after a network loss): catch up on what was missed.
+    // WHY: Catches up on changes that occurred during a network disconnect.
     const onConnect = reload;
     reload();
     socket.on('connect', onConnect);
@@ -70,12 +72,12 @@ export function useTaskSync(socket: Socket | null) {
   }, [socket]);
 }
 
-/** All tasks (sorted by rank), the key prefix and whether they have loaded. */
+/** Subscribes to the task store returning all tasks, key prefix, and loading state. */
 export function useTasks() {
   return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 }
 
-/** Open tasks (status is not DONE) per assignee id. */
+/** Tallies non-completed tasks grouped by assignee user identifier. */
 export function countOpenTasks(tasks: TaskView[]) {
   const counts = new Map<string, number>();
   for (const t of tasks) {
@@ -85,14 +87,13 @@ export function countOpenTasks(tasks: TaskView[]) {
   return counts;
 }
 
-/** Open-task count per user id (for the paper stacks on desks). */
+/** Returns a memoized map of open task counts per assignee for desk indicators. */
 export function useOpenTaskCounts() {
   const { tasks } = useTasks();
   return useMemo(() => countOpenTasks(tasks), [tasks]);
 }
 
-// ---- actions (the server echoes every change on the socket; the store also applies the response) ----
-
+/** Dispatches task mutations with optimistic store updates and backend persistence. */
 export const taskActions = {
   async create(input: NewTask) {
     const task = await api<TaskView>('/workspace/tasks', { method: 'POST', body: input });
@@ -106,10 +107,7 @@ export const taskActions = {
     return task;
   },
 
-  /**
-   * Move a card: optimistic (the card jumps at once), rolled back if refused.
-   * `rank` omitted + new status = end of that column.
-   */
+  // WHY: Optimistically shifts card in local state for zero-latency drop feedback; rolls back if backend call fails.
   async move(id: string, status: TaskStatus, rank?: number) {
     const before = state.tasks.find((t) => t.id === id);
     if (!before) return;

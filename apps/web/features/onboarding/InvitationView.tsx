@@ -1,3 +1,6 @@
+// Landing page component for users accepting or declining workspace invitation tokens.
+// Mounted at the /invite/[token] route.
+
 'use client';
 
 import { CircleX, PartyPopper } from 'lucide-react';
@@ -23,6 +26,10 @@ interface Invitation {
   accountExists: boolean;
 }
 
+interface InvitationViewProps {
+  token: string;
+}
+
 const CLOSED: Record<Exclude<Invitation['status'], 'pending'>, string> = {
   expired: 'This invitation has expired. Ask the organiser to send a new one.',
   accepted: 'This invitation was already used.',
@@ -30,8 +37,8 @@ const CLOSED: Record<Exclude<Invitation['status'], 'pending'>, string> = {
   revoked: 'This invitation was cancelled by the organiser.',
 };
 
-/** The page an invitation email links to. */
-export function InvitationView({ token }: { token: string }) {
+/** View displaying workspace invitation details and handling user acceptance or decline. */
+export function InvitationView({ token }: InvitationViewProps) {
   const { status, user, reloadUser, signOut } = useAuth();
   const router = useRouter();
   const [invitation, setInvitation] = useState<Invitation | null>(null);
@@ -54,7 +61,7 @@ export function InvitationView({ token }: { token: string }) {
     try {
       await api(`/invitations/${encodeURIComponent(token)}/accept`, { body: { character } });
       await reloadUser();
-      router.replace('/office'); // straight into the office
+      router.replace('/office');
     } catch (err) {
       setBusy(null);
       setError(err instanceof ApiError ? err.message : 'Could not reach the server.');

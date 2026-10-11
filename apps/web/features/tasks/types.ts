@@ -1,4 +1,7 @@
-// Mirrors apps/api/src/tasks (see docs/HANDOFF.md section 5).
+/**
+ * Type definitions, status/priority constants, and filter interfaces for tasks.
+ * Mirrors apps/api/src/tasks and serves as the core schema for the tasks feature.
+ */
 
 export type TaskStatus = 'TODO' | 'IN_PROGRESS' | 'IN_REVIEW' | 'DONE';
 export type TaskPriority = 'HIGHEST' | 'HIGH' | 'MEDIUM' | 'LOW' | 'LOWEST';

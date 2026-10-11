@@ -1,3 +1,8 @@
+/**
+ * Single-tab concurrency store for the office session.
+ * Tracks multi-tab conflict state received from the office socket gateway.
+ */
+
 import { useSyncExternalStore } from 'react';
 
 /**
@@ -26,6 +31,7 @@ export const tabLock = {
   },
 };
 
+/** Subscribes to the active browser tab lock state. */
 export const useTabLock = () =>
   useSyncExternalStore(
     (listener) => {

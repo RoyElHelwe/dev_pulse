@@ -1,10 +1,15 @@
+/**
+ * Prompt overlay when standing at an available office desk.
+ * Allows members to claim or switch their active workstation.
+ */
+
 'use client';
 
 import { Button } from '@/components/ui/Button';
 import { Panel } from '@/components/ui/Panel';
 import { useEscape } from '@/lib/escape';
 
-/** E at a free desk: asks before moving your seat there (E again confirms, Esc cancels). */
+/** Renders a confirmation prompt to claim or move to an unassigned desk. */
 export function MoveDeskPrompt({
   name,
   hasDesk,

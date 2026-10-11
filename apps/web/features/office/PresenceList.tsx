@@ -1,3 +1,8 @@
+/**
+ * Presence indicator and attendee dropdown for the office HUD.
+ * Renders avatar bubbles, coworker count, locations, voice status, and proximity.
+ */
+
 'use client';
 
 import { HeadphoneOff, MicOff, Users } from 'lucide-react';
@@ -10,6 +15,8 @@ import { useKeybind, useKeyName } from '@/features/settings/keybindStore';
 import { useEscape } from '@/lib/escape';
 import type { Presence } from './connection';
 
+const MAX_AVATAR_PREVIEWS = 3;
+
 interface PresenceListProps {
   people: Presence[];
   /** "Atlas · Meeting room" for a zone id, or null for the open space. */
@@ -20,7 +27,7 @@ interface PresenceListProps {
   nearby: Set<string>;
 }
 
-/** "3 in the office" with their faces; click for the list (where everyone is, their status). */
+/** Displays the coworker headcount button and presence details popover list. */
 export function PresenceList({ people, placeOf, myZone, myStatus, nearby }: PresenceListProps) {
   const { user } = useAuth();
   const voice = useVoiceStates();
@@ -50,7 +57,7 @@ export function PresenceList({ people, placeOf, myZone, myStatus, nearby }: Pres
           className="flex h-9 items-center gap-2 rounded-full px-2.5 text-sm font-medium text-zinc-700 transition hover:bg-zinc-900/5"
         >
           <span className="flex -space-x-2">
-            {people.slice(0, 3).map((p) => (
+            {people.slice(0, MAX_AVATAR_PREVIEWS).map((p) => (
               <CharacterFace key={p.id} character={p.character} className="size-6 ring-2 ring-white" />
             ))}
             {people.length === 0 && <Users className="size-4" aria-hidden="true" />}

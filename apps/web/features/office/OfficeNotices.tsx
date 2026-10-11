@@ -1,12 +1,14 @@
+/**
+ * Top and bottom viewport notices for connection alerts and toasts.
+ * Positioned outside the sliding task board layer to remain continuously visible.
+ */
+
 'use client';
 
 import { WifiOff } from 'lucide-react';
 import { Panel } from '@/components/ui/Panel';
 
-/**
- * Toast and connection banner. Rendered OUTSIDE the layer the task board pushes aside (OfficeView), so they stay
- * on screen while the board is open.
- */
+/** Renders toast notifications and offline reconnecting banners. */
 export function OfficeNotices({ toast, online, editing }: { toast: string; online: boolean; editing: boolean }) {
   return (
     <>

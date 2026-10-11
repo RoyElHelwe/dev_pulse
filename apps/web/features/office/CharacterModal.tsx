@@ -1,3 +1,8 @@
+/**
+ * Character customization dialog in the office view.
+ * Enables editing the player avatar and updates workspace state on save.
+ */
+
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -12,6 +17,7 @@ export interface CharacterModalProps {
   character: string;
 }
 
+/** Renders a modal dialog to preview and edit the player's character avatar. */
 export function CharacterModal({ open, onClose, character }: CharacterModalProps) {
   const [draft, setDraft] = useState(character);
   const [saving, setSaving] = useState(false);

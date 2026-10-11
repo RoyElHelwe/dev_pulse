@@ -1,3 +1,4 @@
+/** HTTP surface of the task board: parses params/body and delegates to TasksService. */
 import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import type { AuthUser } from '../common/auth/auth-user';

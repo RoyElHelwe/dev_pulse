@@ -1,3 +1,6 @@
+// Workspace domain types and role permission utilities.
+// Used across office, team, and onboarding feature modules.
+
 import type { DeskOwner } from '@/game/createGame';
 import type { OfficeLayout } from '@/game/layout/types';
 
@@ -31,7 +34,7 @@ export interface MyWorkspace {
   canAddChill?: boolean;
 }
 
-/** Owners and admins invite people and edit the office. */
+/** Determines whether the given role has administrative permissions to manage the workspace. */
 export function canManage(role: Role | undefined) {
   return role === 'OWNER' || role === 'ADMIN';
 }

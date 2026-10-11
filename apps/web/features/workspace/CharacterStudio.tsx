@@ -1,3 +1,6 @@
+// Interactive avatar studio providing character attribute customization and real-time previews.
+// Used during onboarding and from in-office profile customization modals.
+
 'use client';
 
 import { Dices, Sparkles } from 'lucide-react';
@@ -13,6 +16,21 @@ import {
 import { seededRandom } from '@/game/render/draw';
 import { cn } from '@/lib/cn';
 import { CharacterPreview } from './CharacterPreview';
+
+/** Width of the desk canvas in the studio preview. */
+const DESK_PREVIEW_WIDTH_PX = 96;
+
+/** Height of the desk canvas in the studio preview. */
+const DESK_PREVIEW_HEIGHT_PX = 48;
+
+/** Gradient angle for dual-color swatch buttons. */
+const SWATCH_GRADIENT_DEG = 135;
+
+/** Split percentage for the base color on swatch buttons. */
+const SWATCH_BASE_SPLIT_PCT = 55;
+
+/** Split percentage for the shadow color on swatch buttons. */
+const SWATCH_SHADOW_SPLIT_PCT = 56;
 
 const GROUPS: { title: string; keys: (keyof Recipe)[] }[] = [
   { title: 'Body', keys: ['build', 'height', 'skin', 'freckles'] },
@@ -32,17 +50,20 @@ const SWATCHES: Partial<Record<keyof Recipe, Swatch[]>> = {
 
 const DIRS: Direction[] = ['down', 'right', 'up', 'left'];
 
+interface CharacterStudioProps {
+  value: string;
+  onChange: (code: string) => void;
+  disabled?: boolean;
+  className?: string;
+}
+
+/** Interactive avatar creator and customizer allowing visual tuning of character recipes. */
 export function CharacterStudio({
   value,
   onChange,
   disabled,
   className,
-}: {
-  value: string;
-  onChange: (code: string) => void;
-  disabled?: boolean;
-  className?: string;
-}) {
+}: CharacterStudioProps) {
   const recipe = recipeOf(value);
   const code = encode(recipe);
 
@@ -54,7 +75,7 @@ export function CharacterStudio({
       return { dir, markup: pen.markup() };
     });
     const deskPen = svgPen();
-    drawDesk(deskPen, 96, 48, { seed: `studio-${r.vibe}`, owner: r });
+    drawDesk(deskPen, DESK_PREVIEW_WIDTH_PX, DESK_PREVIEW_HEIGHT_PX, { seed: `studio-${r.vibe}`, owner: r });
     return { dirs: renderedDirs, desk: deskPen.markup() };
   }, [code]);
 
@@ -170,7 +191,7 @@ export function CharacterStudio({
                             aria-pressed={on}
                             disabled={disabled}
                             onClick={() => setField(key, i)}
-                            style={{ background: `linear-gradient(135deg, ${css(swatch.ramp.base)} 55%, ${css(swatch.ramp.shadow)} 56%)` }}
+                            style={{ background: `linear-gradient(${SWATCH_GRADIENT_DEG}deg, ${css(swatch.ramp.base)} ${SWATCH_BASE_SPLIT_PCT}%, ${css(swatch.ramp.shadow)} ${SWATCH_SHADOW_SPLIT_PCT}%)` }}
                             className={cn(
                               'size-6 rounded-full transition ring-2 ring-offset-1 shadow-[inset_0_0_0_1px_rgba(0,0,0,0.15)] disabled:opacity-60 disabled:cursor-not-allowed',
                               on ? 'ring-emerald-500' : 'ring-transparent hover:ring-zinc-300',

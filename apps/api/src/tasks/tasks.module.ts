@@ -1,3 +1,4 @@
+/** Wires the task board; imports OfficeModule to broadcast live task events. */
 import { Module } from '@nestjs/common';
 import { OfficeModule } from '../office/office.module';
 import { TasksController } from './tasks.controller';
