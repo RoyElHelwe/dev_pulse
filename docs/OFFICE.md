@@ -1,7 +1,8 @@
 # Office, onboarding and invitations
 
-**Owners:** Roy (office, onboarding, editor, zones) · Roy (invitations, members)
-**Code:** `apps/api/src/{office,workspace,invitations,games}`, `apps/web/game`, `apps/web/features/{office,onboarding,team,workspace,games}`
+**Internals:** see [docs/code/README.md](code/README.md)  
+**Owners:** Roy (office, onboarding, editor) · Zakaria (games, tasks, wings, testing) · Roy (invitations, members)  
+**Code:** `apps/api/src/{office,workspace,invitations,games,tasks,voice,meetings,chat,settings,dev}`, `apps/web/game`, `apps/web/features/{office,onboarding,team,workspace,games,tasks,voice,meetings,chat,settings,dev}`, `e2e`
 
 Same idea as the first version on `main`, without AI: the organiser picks a ready-made office
 that fits the team size and arranges it by hand in a live editor.
@@ -40,7 +41,7 @@ sign up ──► /onboarding                     (email) "Roy invited you to De
 | Edit the office (furniture, room names), assign desks | ✔ | ✔ | |
 | Invite admins, change roles, remove people | ✔ | | |
 | Rename the office | ✔ | ✔ | |
-| Move the office to another template, delete it | ✔ | | |
+| Move the office to another template, delete it | ✔ | ✔ | |
 | Expand the office with wings (Loft desks, any template for Chill room) | ✔ | ✔ | |
 | Move to another desk | ✔ | ✔ | ✔ |
 | Leave the office | (delete it instead) | ✔ | ✔ |
@@ -62,7 +63,7 @@ leave the office at once with a message.
 ## 4. The office
 
 The layout is JSON on the workspace (`OfficeLayout`: rooms, walls, furniture, spawn).
-Five templates in `apps/api/src/office/templates`:
+Five templates in `apps/api/src/office/templates/`:
 
 | Template | Desks | Size (tiles) | For |
 | --- | --- | --- | --- |
@@ -93,55 +94,33 @@ furniture when the office is edited.
 
 ### Expanding the office (wings)
 
-Loft only. When a team outgrows the initial 8 desks, owners and admins can expand the office by adding generated wings (`POST /api/workspace/wings`).
+When a team outgrows the initial 8 desks, owners and admins can expand the office by adding generated wings (`POST /api/workspace/wings`).
 
 - **Rules**: Caller must be `OWNER` or `ADMIN`. The side must be `LEFT`, `RIGHT`, or `BOTTOM`.
-- **Generation**: The new wing attaches to the current outer edge of the office, adding ~8 desks plus a generated meeting room or lounge from a seed. A door is automatically cut in the shared wall.
-- **Transformations**:
-  - `LEFT`: Translates existing office content and furniture so IDs stay; previously recorded wing x/y coordinates shift accordingly.
-  - `BOTTOM`: Moves spawn/entrance to the new outer wall.
-- **Validation & State**: The resulting layout is validated (`validateLayout`). Bumps `layoutVersion` and emits live `office:layout` and `office:desks` socket events.
-- **Storage**: Recorded in the `OfficeWing` table (`workspaceId`, `side`, `seed`, `x`, `y`, `w`, `h`, `deskCount`). Switching template deletes wings.
-- **Chill room wing** (`POST /api/workspace/wings/chill`): Any office template can add a dedicated chill room wing (`side: 'LEFT' | 'RIGHT' | 'BOTTOM'`). Unlike regular wings, it adds a dedicated games room with 0 desks. Allowed once per office (refused with `CHILL_EXISTS` if a chill room already exists). `GET /api/workspace` returns `canAddChill: true` when caller is OWNER/ADMIN and the office has no chill room yet. Team page shows a persistent "Chill room added" status (data-testid `chill-added`) after adding a chill room.
-- **Code**: Lives in `apps/api/src/office/layout/wings.ts`. Web mirrors nothing, layout is data.
+- **Standard wings (Loft only)**: Attaches to the outer edge of the office, adding ~8 desks plus a generated meeting room or lounge from a seed. A door is automatically cut in the shared wall while protecting functional furniture. Recorded in the `OfficeWing` table (`workspaceId`, `side`, `seed`, `x`, `y`, `w`, `h`, `deskCount`); switching templates resets wings.
+- **Chill room wing** (`POST /api/workspace/wings/chill`): Any office template can add a dedicated chill room wing (`side: 'LEFT' | 'RIGHT' | 'BOTTOM'`). Adds a dedicated recreation room with 0 desks. Allowed once per office (refused with `CHILL_EXISTS` if a chill room already exists). `GET /api/workspace` returns `canAddChill: true` when caller is OWNER/ADMIN and the office has no chill room yet. The Team page displays a persistent "Chill room added" badge (`data-testid="chill-added"`).
+- **Architecture & pipeline**: Procedural wing generation (`planWing`), door scanning, shared wall slicing, coordinate shift translation, and golden snapshot tests are detailed in [docs/code/layout.md](code/layout.md). Code lives in `apps/api/src/office/layout/wings.ts`.
 
 ### Live presence without lag
 
-- The `/office` socket joins your office on connect (cookie auth, live session and
-  membership checked) and sends who is there.
-- While walking, positions go out ~20 times a second as tiny arrays `[x, y, dir, moving]`,
-  sent **volatile** (a late position is dropped, never queued) and never back to your own
-  tabs. The server clamps positions to the office, drops floods (> 40/s) and ignores jumps
-  faster than walking (1.6 × walking speed + 1 tile of slack; the first position after a
-  connect and the entrance, within 3 tiles of the spawn, are always accepted). Walls aren't
-  checked by the server: its positions are the client's, speed-limited so nobody can jump
-  into a room; booked rooms are protected by the attendee check.
-- Other people are drawn 100 ms in the past and interpolated between positions, so they
-  move smoothly even when packets arrive unevenly; a big jump (reconnect) teleports.
-- The move packet is `[x, y, dir, moving, seated]` (the 4-item form is still accepted); the
-  server relays `office:moved` as `[id, x, y, dir, moving, seated]`. `seated` is just relayed.
-- Depth: furniture, people and desk plates are y-sorted together by their bottom edge/feet
-  (`DEPTH.sorted` in `OfficeScene`), so people hide behind what they stand behind. Seated
-  people draw just above their chair.
-- Sitting: stand on a free chair/stool (or against an armchair) for ~0.5 s and you snap to the
-  seat, facing the way the chair faces (stool: keep facing); hold a movement key ~0.5 s to
-  stand up and step off. A seat with someone seated on it is not free. `controller.snapshot()`
-  gives `dir` and `seated` for you and for everyone else.
-- Locally ~1 ms per move through the server.
-- Sockets connect straight over WebSocket (no HTTP long-polling first). If the connection
-  drops, a "Reconnecting…" banner shows and everything resyncs when it's back.
+- The `/office` socket joins the office room on connect (cookie auth, live session, and membership verified) and sends current occupant presence (`office:state`).
+- While walking, positions go out ~20 times a second as compact arrays `[x, y, dir, moving, seated]`, transmitted as **volatile** packets (dropped on network congestion, never queued) and broadcast via `office:moved`. The server clamps coordinates to office boundaries and enforces walking speed limits to prevent jumping into closed rooms.
+- Other people are rendered 100 ms in the past and smoothly interpolated between positions via the `NetSync` system (`apps/web/game/systems/NetSync.ts`).
+- **Depth sorting**: Furniture, people, and desk plates are y-sorted dynamically by their bottom edge/feet via the `Depth` system (`apps/web/game/systems/Depth.ts`, `DEPTH.sorted`), so people hide behind what they stand behind. Seated people draw just above their chair.
+- **Sitting**: Stand on a free chair, stool, or armchair for ~0.5 s to snap into place via `Seating` (`apps/web/game/systems/Seating.ts`), facing the chair's orientation. Hold a movement key for ~0.5 s to stand up and step off.
+- Sockets connect directly over WebSocket without HTTP polling fallback. If the connection drops, a "Reconnecting…" banner shows and state resyncs automatically on reconnect.
+- Wire event contracts and telemetry details: see [docs/code/office-protocol.md](code/office-protocol.md) and [docs/code/office-engine.md](code/office-engine.md).
 
 ### One office tab at a time
 
 The `/office` handshake sends auth `{ tabId, takeover }` (`tabId` is random per page load).
-The server (`OfficeGateway` + `claimOffice` in `office/office.rules.ts`) refuses a connection while
+The server (`OfficeGateway` + `claimOffice` in `apps/api/src/office/office.rules.ts`) refuses a connection while
 the same user has another tab's socket live with `connect_error` `ALREADY_OPEN` (also `office:busy`
 event if two race). `takeover: true` (set only by the "Use here" button) emits `office:replaced`
 to the old tabs and disconnects them without the avatar leaving; same tabId reconnecting
 (network loss) silently replaces its stale socket. A replaced tab doesn't auto-reconnect;
 takeover flag is reset after each connect so a tab that was offline can't steal the office back.
-Web: `features/office/connection.ts`, `tabLockStore.ts` (store), `tabLockStore.tsx` (overlay rendered in
-`OfficeView`). Works across browsers/devices of the same account.
+Web: `apps/web/features/office/connection.ts`, `apps/web/features/office/tabLockStore.ts` (store), and `apps/web/features/office/TabLock.tsx` (overlay rendered in `apps/web/features/office/OfficeView.tsx`). Works across browsers/devices of the same account.
 
 ## 5. Life in the office
 
@@ -150,7 +129,7 @@ Web: `features/office/connection.ts`, `tabLockStore.ts` (store), `tabLockStore.t
 | **Nearby** | Another person within 3 tiles **in the same room** (walls, even glass, separate people) → `player:near`, then `player:distance` up to 5×/s, `player:far` past 3.5 tiles. The people list tags them "Nearby". | `game/systems/Proximity.ts` |
 | **Your desk** | Each member gets a free desk on joining (joining order), with their name on it (yours in green). Desks follow the office: after an edit people keep their desk if it still exists. Owners and admins move people from the Team page (swaps with whoever sat there). | `workspace/desks.service.ts`, `game/objects/DeskPlates.ts` |
 | **Moving desks** | Any member can move to another free desk (`PUT /api/workspace/me/desk`). Desk art follows the owner. Refused if taken (`DESK_TAKEN`). Emits `office:desks`. | `workspace/desks.service.ts` |
-| **E to use** | At a desk, screen, task board, or games piece (Baby foot, card table, Lego wall), a hint appears ("Your desk", "Play Baby foot", "Play Uno", "Build with Lego"); **E** (or tapping the hint) emits `object:interact`. | `game/systems/Interactions.ts` |
+| **E to use** | At a desk, screen, task board, or games piece (Baby foot table, Uno card table, Lego wall), a hint appears ("Your desk", "Play Baby foot", "Play Uno", "Build with Lego"); **E** (or tapping the hint) emits `object:interact`. | `game/systems/Interactions.ts` |
 | **Who is where** | The game reports its zone; the server shares it (`office:zone`), for display only (access uses positions). The people list shows "Atlas · Meeting room", "At Roy’s desk"; meeting rooms with people inside show "In use · 2". | `office.gateway.ts`, `game/objects/RoomBadges.ts` |
 | **Status** | A short status in a bubble over the avatar ("Focusing", "On break ☕" or your own text), set from the user menu (top right → Status), stored on the membership. | `UserMenu.tsx`, `StatusSection.tsx` |
 | **Map** | Floor plan in the corner with everyone, and the part of the office on screen. | `Minimap.tsx` |
@@ -187,9 +166,9 @@ Any member can move to an unoccupied desk (`PUT /api/workspace/me/desk` body `{ 
   not, your own too) calls `controller.showChat(userId, text)` → `Avatar.say()`: a `SpeechBubble` (wrapped, max
   80 chars) above the status bubble, shown 4.5 s + 40 ms per character, then fades. A newer message replaces it.
   It is an Avatar child, so it follows the person and is cleaned up with it.
-- **Paper stacks**: `OfficeView` feeds `useOpenTaskCounts()` to `controller.setTaskCounts(Map<userId, n>)`; the
+- **Paper stacks**: `apps/web/features/office/OfficeView.tsx` feeds `useOpenTaskCounts()` to `controller.setTaskCounts(Map<userId, n>)`; the
   scene maps it to desk ids (`setDeskPapers`) and redraws changed desks (`drawDesk` option `papers`: one sheet per
-  task up to 8, a clip beyond; none at 0). The texture key includes the count (capped at 9).
+  task up to 8, a clip beyond; none at 0 in `apps/web/game/art/desk.ts`). The texture key includes the count (capped at 9).
 
 ### Characters and desks are generated (`apps/web/game/art/`)
 
@@ -200,10 +179,10 @@ holds one of the 8 named presets (`maya`, `sam`…) or the recipe as a 19-charac
 characters ("New faces"); the API checks codes with `IsCharacter()`
 (`apps/api/src/workspace/characters.ts`, keep `DNA_SIZES` in sync with `recipe.ts`).
 
-**Character studio** (`features/workspace/CharacterStudio.tsx`, controlled: `value` / `onChange(code)`):
+**Character studio** (`apps/web/features/workspace/CharacterStudio.tsx`, controlled: `value` / `onChange(code)`):
 4-direction preview, desk preview, Random / "Change a little", the 8 presets, and part pickers
 (Body, Hair & face, Outfit, Extras). It saves the 19-character code and is used in onboarding,
-the invitation page and the office "You" chip (Edit → Customise character, a dialog with Save).
+the invitation page, and the user menu in the office (top right → Character, opening `CharacterModal.tsx`).
 Onboarding has no headcount question: Loft is preselected ("grows with your team"); the generated
 office offers Small (~8) / Medium (~24) / Large (~48).
 
@@ -214,7 +193,7 @@ office offers Small (~8) / Medium (~24) / Large (~48).
 | `character.ts` | Draws a character in layers, 4 directions, moods, headset, mug |
 | `desk.ts` | A desk decorated for its owner: anchor slots, props by vibe, their colours; free desks stay bare |
 | `pen.ts` | One drawing interface for Phaser, canvas and SVG (the React previews use the same code) |
-| `lab/` | The art lab page: a simulated day at the office, a character studio, a lineup |
+| `tools/art-lab/` | Standalone art lab: simulated day at the office, character studio, lineup; see [tools/art-lab/README.md](../tools/art-lab/README.md) |
 
 - The status sets the face: "Focusing" → focused, "On break ☕" → smiling with a mug.
 - `Avatar.setInCall(inCall, talking)` puts the headset on (Z3/Z4: call it when a call starts and ends).
@@ -225,7 +204,7 @@ office offers Small (~8) / Medium (~24) / Large (~48).
 
 **Code:** `apps/api/src/chat`, `apps/web/features/chat`
 
-A chat button bottom left (above your chip) with an unread count opens the panel. Two tabs:
+A chat button bottom left with an unread count opens the panel. Two tabs:
 **Office** (everyone in the office) and, while you stand in a meeting room or lounge, that
 room (only the people in it right now). Leaving the room closes its tab; entering one loads
 its history again. Enter sends, Shift+Enter is a new line, Esc gives the keys back to the
@@ -251,34 +230,50 @@ game (walking keys are ignored while you type).
   booking running in the room when sent (`bookingId`); a room shows only those of the
   booking running now (or of no booking when it's free).
 
-### Task board and the Esc key (`features/tasks/`, `lib/escape.ts`)
-- **Board**: Jira-style global Kanban (columns To do / In progress / In review / Done, cards with key, type,
-  priority, assignee face, due date). Filters: search, assignee avatars (multi-select, "Unassigned"), "Only my
-  issues". Cards drag between/within columns (native HTML5 DnD, rank = midpoint of the neighbours, optimistic
-  with rollback; no touch drag: change the status in the card dialog). Click a card = edit dialog (delete only
-  for the reporter or OWNER/ADMIN, same rule as the API). Live through `task:*` on `/office`.
-- **Opening**: E at a wall `board` (furniture kind, `Interactions` target type `kanban`), E at *your* desk
-  (opens filtered to you), or the HUD "Board" button (offices without a wall board). It is a normal-flow block
-  at the top of `OfficeView` (flex column): it drops down and the office + HUD sit below it (the canvas resizes).
-  While focus is inside an element with `data-captures-keys`, `isTyping()` is true so the game ignores keys.
-- **Store**: `features/tasks/store.ts`: `useTaskSync(socket)` (mounted once in OfficeView), `useTasks()`,
-  `useOpenTaskCounts()` / `countOpenTasks(tasks)` (open = status != DONE, per assignee) and `taskActions`.
-- **Esc**: `useEscape(active, handler)` (`lib/escape.ts`) keeps a stack of open layers; Escape closes only the
-  top-most one (dialog over board, popover over panel); with none open the key is untouched. Chat, Rooms,
-  user menu (+ its character and keybinds modals), people list, board and task dialogs register. New menus must register too.
+### Task board and the Esc key
 
-### User menu and keybinds (`features/auth/UserMenu.tsx`, `features/settings/keybinds.ts`)
-- **User menu** (top right) is portaled to `document.body` (z-60, modals z-70) so it sits above the HUD, board and
-  panels. It is the one place for **Character** (modal with the full `CharacterStudio`), **Status** (presets, custom
-  text, clear) and **Keybinds**; Character/Status only appear inside the office (they need the office profile).
-  The old bottom-left "You" chip is gone. Shared `components/ui/Modal.tsx` (portal, Esc layer, `data-captures-keys`).
-- **Keybinds**: actions interact E, mute M, deafen H, push-to-talk V, chat C, board B, rooms T, people P. Stored per
-  user in `UserSettings.keybinds` (Json, only non-default entries; `pushToTalkKey` stays the column for PTT and is
-  overlaid as `keybinds.pushToTalk`). `GET/PATCH /api/settings` return/accept `keybinds`; the API refuses unknown
-  actions, bad codes, reserved keys (WASD, arrows, Esc, Enter, Tab) and duplicates (`settings/keybinds.ts`).
-  Web: one store (`useKeybinds`, `getKeybinds`, `useKeybind(action, fn, enabled)`, `rebind`, `resetKeybinds`); every
-  listener reads it (VoiceControls, OfficeScene E, chat/board/rooms/people toggles). /settings/voice rebinds PTT
-  through the same store. New shortcuts: add the action in both `keybinds.ts` files (legacy Baby foot actions `foosKick` and `foosSwitch` were removed; stored values are ignored and `PATCH /settings` silently drops them).
+**Code:** `apps/web/features/tasks/`, `apps/api/src/tasks/` · **Internals:** [docs/code/tasks.md](code/tasks.md), [docs/code/frontend.md](code/frontend.md)
+
+- **Right-side board drawer**: The global Kanban board is hosted in a slide-out drawer on the right side of the screen (`apps/web/features/tasks/BoardDrawer.tsx`). Opening the drawer pushes the office layer (canvas and HUD) smoothly to the left, while the camera shifts (`setViewShift` in `apps/web/features/office/useOfficeBoard.ts`) so the avatar remains visible in the active on-screen portion of the office. Once the drawer settles, Phaser rendering is throttled to conserve client resources.
+- **Drawer handle & gestures**: An edge handle button (`apps/web/features/tasks/BoardDrawerHandle.tsx`) allows toggling or dragging the drawer. The drawer supports touch and pointer drag/flick gestures with velocity thresholds (0.5 px/ms flick, 0.35 snap ratio). Responsive layout: full width minus padding on mobile screens (< 768px), and up to 70% viewport width (maximum 960px) on desktop.
+- **Opening the board**:
+  - Pressing the **B** key (configurable shortcut via `useKeybind('board', ...)`).
+  - Clicking the HUD "Board" button.
+  - Pressing **E** at a wall-mounted whiteboard (`board` furniture kind, interaction target `kanban`).
+  - Pressing **E** at your own desk (`desk` interaction with `ownerId === me.id`), which opens the drawer pre-filtered to your assigned issues.
+- **Kanban columns & filtering**: 4 columns (To do, In progress, In review, Done) with status counters and drop placeholders. Header filters (`apps/web/features/tasks/BoardFilters.tsx`) support text query search, quick filter buttons, and an assignee avatar cluster (`apps/web/features/tasks/BoardFilterFaces.tsx`: multi-select, "Unassigned", "Only my issues").
+- **Cards & Drag and Drop**: Cards (`apps/web/features/tasks/TaskCard.tsx`) display Jira-style ticket keys (e.g. `DP-42`), type icon (`TASK`, `BUG`, `STORY`), priority badge (`HIGHEST` through `LOWEST`), title, assignee avatar, and due date. Drag-and-drop (`apps/web/features/tasks/useBoardDrag.ts`) uses HTML5 DnD with fractional midpoint ranking (`rankBetween`) within and between columns, applying optimistic local state with rollback on API errors.
+- **Task dialogs**: Clicking a card opens `apps/web/features/tasks/EditTaskDialog.tsx` for editing markdown descriptions, assignees, dates, and metadata (task deletion is restricted to the ticket reporter or workspace `OWNER`/`ADMIN`). New tasks are created via `apps/web/features/tasks/CreateTaskDialog.tsx`.
+- **Store & synchronization**: Reactive state is managed by `apps/web/features/tasks/taskStore.ts` (`useSyncExternalStore`), mounted via `useTaskSync(socket)` in `OfficeView.tsx`. Subscribes to live WebSocket events on `/office` (`task:created`, `task:updated`, `task:deleted`). Exports `useTasks()`, `useOpenTaskCounts()`, and `taskActions`.
+- **Esc key handling**: `useEscape(active, handler)` (`apps/web/lib/escape.ts`) manages a stack of open layers; Escape closes only the topmost layer (dialogs over the board drawer, drawer over the office). While focus is inside input elements with `data-captures-keys`, walking keys are ignored.
+
+### User menu and keybinds
+
+**Code:** `apps/web/features/auth/UserMenu.tsx`, `apps/web/features/settings/`, `apps/api/src/settings/keybinds.ts`
+
+- **User menu** (top right): Triggered by clicking the user avatar in the top right of the screen. Portaled to `document.body` (`z-[60]`, modals at `z-[70]`), the dropdown provides access to:
+  - User identity header (display name, email, active status badge).
+  - Office profile items (available inside the office):
+    - **Character**: opens `apps/web/features/office/CharacterModal.tsx` hosting the full `CharacterStudio`.
+    - **Status**: expandable `apps/web/features/office/StatusSection.tsx` offering preset status chips ("Focusing", "On break ☕", etc.), custom text input, and status clearing.
+  - **Keybinds**: opens `apps/web/features/settings/KeybindsModal.tsx` to customize keyboard shortcuts.
+  - **Team**: direct link to `/team` workspace member management.
+  - **Security settings**: direct link to `/settings/security` (password, 2FA, active sessions).
+  - **Switch user (dev)**: quick test persona switcher (visible only when dev login is enabled).
+  - **Sign out**: signs out of the active account.
+- **Keybind actions & defaults**: 8 bindable actions defined in `apps/web/features/settings/keybinds.ts` and `apps/api/src/settings/keybinds.ts`:
+  - `interact` (default `KeyE`): Use / interact (sit, access desk, trigger games)
+  - `mute` (default `KeyM`): Mute microphone in voice
+  - `deafen` (default `KeyH`): Deafen voice audio
+  - `pushToTalk` (default `KeyV`): Push-to-talk voice activation
+  - `chat` (default `KeyC`): Toggle text chat panel
+  - `board` (default `KeyB`): Toggle task board drawer
+  - `rooms` (default `KeyT`): Toggle meeting rooms timetable
+  - `people` (default `KeyP`): Toggle office occupant roster
+- **Reserved keys**: Navigation and walking keys can never be rebound (`KeyW`, `KeyA`, `KeyS`, `KeyD`, `ArrowUp`, `ArrowDown`, `ArrowLeft`, `ArrowRight`, `Escape`, `Enter`, `Tab`).
+- **Storage & validation**: Stored per user in PostgreSQL in `UserSettings.keybinds` (JSON object holding only non-default overrides; `pushToTalkKey` column remains in sync for PTT). Managed through `GET /api/settings` and `PATCH /api/settings`, which validate key code patterns (`/^[A-Za-z0-9]{1,24}$/`), reject reserved keys, and prevent duplicate collisions.
+- **Frontend architecture**: Split into pure definitions/validation (`apps/web/features/settings/keybinds.ts`) and reactive state management (`apps/web/features/settings/keybindStore.ts`). All listeners (`VoiceControls`, `Interactions` system, HUD toggles) read through `keybindStore`.
+- Minigames use direct pointer controls (Baby foot is mouse-only; legacy keyboard actions `foosKick` and `foosSwitch` were removed).
 
 ## 6. The office editor
 
@@ -305,7 +300,7 @@ you see is exactly what everyone gets.
 1. **While editing** (same rules as the server, `game/editor/rules.ts`): a piece can't leave
    the building, stand on a wall or in a doorway, or overlap another one. A bad drop snaps
    back with a message.
-2. **On save** the API checks everything again (`office/layout/validate.ts`) and also walks
+2. **On save** the API checks everything again (`apps/api/src/office/layout/validate.ts`) and also walks
    the office with the real player size: the entrance must be free, and **every desk and
    every room must still be reachable**. Otherwise nothing is saved and the editor
    highlights the pieces in the way.
@@ -365,34 +360,20 @@ server emits `game:state`, `game:event`, `game:left`, `game:ended`, `game:error`
 
 ## 8. Tests
 
-- `cd apps/api && pnpm test`: every template is valid (inside, no overlaps, everything
-  reachable, enough desks), and the validator refuses each kind of broken layout.
-- **Browser tests** in `e2e/` (Playwright), run by CI on every push: one story with an
-  organiser, a teammate and a phone: create an office, invite, pick a character, "Nearby",
-  status, walk to your desk and press E, meeting room presence, desk swap, editor (overlap
-  refused, multi-select, save reaches the others), concurrent saves, template switch,
-  joystick, removal, and a clean console throughout. The players really walk: a path is
-  planned on the layout and followed with the arrow keys (specs that only need to *be*
-  somewhere use `jumpTo`, an instant teleport).
+**Code:** `e2e/`, `apps/api/` · **Internals:** [docs/code/testing.md](code/testing.md)
 
-**Why the suite takes about 1 minute (it took 42):**
+- `cd apps/api && pnpm test`: pure rules unit tests run instantaneously via Vitest (`*.rules.spec.ts`), validating template geometry, rank math, and collision boundaries without database dependencies.
+- **Browser tests** in `e2e/` (Playwright), run by CI on every push: 7 spec files:
+  - 1 independent test suite (`office.spec.ts`) utilizing the isolated two-user `team` fixture (`e2e/tests/support/fixtures.ts`).
+  - 6 serial story suites (`board.spec.ts`, `chill.spec.ts`, `foosball.spec.ts`, `lego.spec.ts`, `office-live.spec.ts`, `uno.spec.ts`).
+  - The suite runs across **3 parallel workers** (`E2E_WORKERS`, default 3; config in `e2e/playwright.config.ts`) and completes in **~1 minute** (down from 42).
 
-- **Setup through the API**: with `DEV_LOGIN=true` specs create users and offices with
-  `devOwner` / `devUser` (`e2e/tests/helpers.ts`, `POST /api/auth/dev/users` + `POST
-  /api/workspace`); only the specs that test sign-up, onboarding and invitations use the forms.
-- **Teleport**: `jumpTo(page, tx, ty)` (`e2e/tests/nav.ts`) uses `window.__devpulse.teleport`,
-  which sends the socket event `dev:teleport`. The API honours it only when dev login is
-  effective (never in production; unit-tested in `office.gateway.spec.ts`). Walking tests
-  (proximity, joystick, desk move) still walk for real.
-- **3 parallel workers** (`E2E_WORKERS`, default 3; more gains nothing with 7 spec files).
-  Spec files run in parallel, tests inside a file stay in order; every file creates its own
-  users and office and closes its browser contexts.
-- **Cheap browsers**: no WebGL (Phaser uses its canvas renderer, ~10x cheaper than software
-  WebGL; `E2E_WEBGL=1` brings it back), office capped at 15 fps (`E2E_FPS`), no
-  `backdrop-filter`, half-resolution baby foot canvas. The office render loop also pauses
-  while a game is open.
-- A global set-up (`e2e/global-setup.ts`) visits every route once so Next compiles before the
-  tests; traces are kept on the first retry only (`retries: 1`).
+**Performance & verification design:**
+
+- **Setup through API**: with `DEV_LOGIN=true`, specs provision test accounts in milliseconds via `devOwner` and `devUser` (`e2e/tests/support/users.ts`, `POST /api/auth/dev/users` + `POST /api/workspace`); only specs explicitly testing onboarding and sign-up use UI registration forms (`register`).
+- **Teleportation**: `jumpTo(page, tx, ty)` (`e2e/tests/support/walker.ts`) calls `window.__devpulse.teleport` (installed by `apps/web/features/dev/devHooks.ts`), which dispatches `dev:teleport` to `apps/api/src/dev/dev.gateway.ts`. The API honours it only when dev login is enabled (never in production). Movement specs (`walkTo`) exercise real A* pathfinding and arrow keys.
+- **Headless rendering optimizations**: Headless Chromium disables GPU/3D APIs, forcing Phaser to its canvas 2D fallback (~10x faster than software WebGL; `E2E_WEBGL=1` tests WebGL); canvas frame rate is capped at 15 fps (`window.__devpulseFps`); foosball canvas renders at half resolution (`window.__devpulseLowRes`); `e2e/tests/support/browser.ts` injects styles removing `backdrop-filter` blur overhead; global setup (`e2e/global-setup.ts`) pre-warms routes to prime Next.js compilation caches.
+- **CI reverse proxy**: `e2e/serve.mjs` runs a same-origin proxy on `:8080` routing `/api` and `/socket.io` to `:4100` and web routes to `:3000`.
 
 ```bash
 # fast default (3 workers):    pnpm test        (E2E_WORKERS=1 pnpm test for one at a time)
@@ -400,16 +381,16 @@ server emits `game:state`, `game:event`, `game:left`, `game:ended`, `game:error`
 ```
 
 ```bash
-# with the API on :4100 and the web app on :3000 (any way you like)
+# with the API on :4100 and the web app on :3000
 cd e2e && pnpm install && pnpm exec playwright install chromium
-pnpm serve &        # same-origin proxy on :8080, like nginx
+node e2e/serve.mjs &        # same-origin proxy on :8080, like nginx
 pnpm test
 # or against Docker: E2E_BASE_URL=https://localhost:8443 pnpm test (after `make`)
 ```
 
 ## 9. Meeting rooms
 
-**Code:** `apps/api/src/meetings`, `apps/web/features/meetings`
+**Code:** `apps/api/src/meetings`, `apps/web/features/meetings` · **Internals:** [docs/code/voice.md](code/voice.md)
 
 **Rooms** (top right) opens a day timetable: one column per meeting room, 08:00–20:00 in
 30-minute rows, today with previous / next day, in your own time zone. Bookings show their
@@ -426,17 +407,15 @@ details; its creator, or an owner / admin, can cancel it.
 
 **During a meeting only its people get in.**
 
-- The game makes the room solid for everyone else (a collider over the whole room closes
-  its doors). Someone already inside when it starts is sent back to the entrance with
-  "Atlas is booked until 15:00". The badge over the door says "Booked · until 15:00".
+- The game makes the room solid for everyone else: `RoomLocks` (`apps/web/game/systems/RoomLocks.ts`) closes room colliders. Someone already inside when it starts is sent back to the entrance with "Atlas is booked until 15:00". The badge over the door says "Booked · until 15:00".
 - The server can't move people, so audio and chat check too: they ask
   `MeetingsService.activeBooking(workspaceId, roomId)` (cached a few seconds per room, cleared
   when a booking is made or cancelled) and refuse non-attendees.
 - Once two people are connected, audio is peer to peer: the server only gates who may start
   a call (`rtc:signal` reaches only the tab that joined voice), and each client hangs up when
   the other leaves range or a booking excludes them.
-- **Spatial sound** (`features/voice/spatial.ts`, applied by `VoiceManager.tick` every 150 ms; the
-  server's `talk-rule` is unchanged: meeting room = whole room, elsewhere earshot). Each call has
+- **Spatial sound** (`apps/web/features/voice/spatial.ts`, applied by `VoiceManager.tick` every 150 ms; the
+  server voice rules in `apps/api/src/voice/voice.rules.ts` use `withinEarshot`: meeting room = whole room, elsewhere earshot). Each call has
   a `PannerNode` (HRTF, direction only) and a `GainNode` (loudness, smoothed over ~80 ms):
   - Open space: full volume within 1 tile, cosine fall to silence at 4 tiles (calls start under 3,
     so someone at the start radius is already faint, ~25 %).
@@ -457,210 +436,99 @@ details; its creator, or an owner / admin, can cancel it.
 
 Every change sends `office:bookings` on the `/office` socket; clients reload the list, and
 re-check every minute which rooms are closed to them (`controller.setLockedRooms`).
-Rules and their tests: `meetings/meetings.rules.ts`.
+Rules and their tests: `apps/api/src/meetings/meetings.rules.ts`.
 
 ## 10. Chill room and games
 
-**Code:** `apps/api/src/games`, `apps/web/features/games`
+**Code:** `apps/api/src/games`, `apps/web/features/games` · **Internals:** [docs/code/games.md](code/games.md), [docs/code/office-protocol.md](code/office-protocol.md), [docs/code/frontend.md](code/frontend.md)
 
-Interactive games and break room framework for casual multiplayer activities.
+Interactive break room framework and multiplayer arcade activities embedded in the virtual office.
 
 ### Room kind and furniture
 
-- **Room kind `chill`**: Defined in `RoomKind` (`'open' | 'meeting' | 'lounge' | 'chill'`). Voice talk-rule (`withinEarshot`) treats `chill` rooms like lounges (earshot radius, not whole room).
+- **Room kind `chill`**: Defined in `RoomKind` (`'open' | 'meeting' | 'lounge' | 'chill'`). Voice rules (`withinEarshot` in `apps/api/src/voice/voice.rules.ts`) treat `chill` rooms like lounges (earshot radius, not whole room).
 - **Furniture**:
   - `foosball`: Baby foot table (3 × 1.6 tiles, solid obstacle).
   - `cardTable`: Round card table for Uno (2.2 × 2.2 tiles, solid obstacle). Surrounded by 6 sittable chairs.
   - `legoBoard`: Wall-mounted Lego building surface (3 × 0.5 tiles, solid obstacle). Wall-mounted on a tall wall face like `board` (validated with `NOT_ON_WALL`).
-- **Loft chill room**: Loft template includes a default 11 × 12 chill room (`id: 'chill'`, name "Chill room", terrazzo floor) equipped with 1 Baby foot table, 1 cardTable surrounded by 6 chairs, 1 legoBoard on the north wall (flush on its south face, off to the right beside the room name), rug, and plant.
+- **Loft chill room**: Loft template includes a default 11 × 12 chill room (`id: 'chill'`, name "Chill room", terrazzo floor) equipped with 1 Baby foot table, 1 cardTable surrounded by 6 chairs, 1 legoBoard on the north wall, rug, and plant.
 - **Chill room wing** (`POST /api/workspace/wings/chill`):
-  - Owner or admin can add a chill room wing (`side: 'LEFT' | 'RIGHT' | 'BOTTOM'`) to **any** template (unlike regular desk wings which are Loft only).
-  - Reuses wings machinery (shared wall door cut, layout validation), adding a chill room with `deskCount: 0`.
+  - Owner or admin can add a chill room wing (`side: 'LEFT' | 'RIGHT' | 'BOTTOM'`) to **any** template.
+  - Adds a dedicated recreation room with `deskCount: 0`.
   - Maximum one chill room per office: rejected with error `CHILL_EXISTS` if any room already has kind `chill`.
   - `GET /api/workspace` returns `canAddChill: true` when caller is OWNER/ADMIN and the office has no chill room yet.
-  - Team page shows a persistent "Chill room added" status (data-testid `chill-added`) after adding a chill room.
+  - Team page shows a persistent "Chill room added" status (`data-testid="chill-added"`).
 
-### Interaction types and flow
+### Interaction and full-screen overlay
 
 1. **Approach**: Walking near a games piece displays a contextual interaction hint:
-   - Baby foot: "Play Baby foot" (default dialog name "Baby foot table")
+   - Baby foot: "Play Baby foot"
    - Card table: "Play Uno"
    - Lego wall: "Build with Lego"
-2. **Interact (E)**: Pressing **E** (or tapping hint) causes `Interactions.ts` to emit `object:interact` on `officeEvents`:
-   - Payload: `{ type: 'foosball' | 'uno' | 'lego', id: string, name: string }` (where `id` is the furniture ID).
-3. **GameHost full-screen overlay**:
-   - Games open FULL SCREEN, not a centered modal: `GameHost` (mounted in `OfficeView.tsx`) catches the event and opens a fixed `inset-0 z-[70]` opaque overlay (`role="dialog"`, `aria-label` = game name, `data-captures-keys=""`, `onKeyDown`/`onKeyUp` `stopPropagation` so walking keys do not move the avatar).
-   - Slim top bar: game name, "N playing"/"N watching" pills fed by `useGameChromeInfo({players, spectators})` from `features/games/GameChrome.tsx` (panels call it every render), a Leaderboard toggle (floating card, `data-testid="game-leaderboard-toggle"`), a Leave button (`data-testid="game-leave"`) and the X (`aria-label="Close game"`).
-   - Both Leave and X emit `game:leave` and close; Esc closes through `useEscape`. No backdrop click-to-close.
-   - On open it requests the browser Fullscreen API (`document.documentElement.requestFullscreen`, ignored if refused; exits on close); the in-page full-viewport layout works without it.
-   - Panels fill `h-full w-full min-h-0` of the content area inside a `<Suspense>` boundary; Baby foot letterboxes the 7:4 table, Uno cards and the Lego grid scale with the area.
-   - Office HUD is covered underneath, the office keeps running (voice continues).
-   - *Note for tests*: browser fullscreen blocks `page.setViewportSize`, call `document.exitFullscreen()` first.
-4. **Close**: Clicking Leave (`data-testid="game-leave"`), close X (`aria-label="Close game"`), pressing Escape, or calling `onClose` emits `game:leave { id }`, exits fullscreen, and unmounts the overlay. No backdrop click-to-close.
+2. **Interact (E)**: Pressing **E** (or tapping hint) triggers `Interactions` (`apps/web/game/systems/Interactions.ts`) to emit `object:interact` on `officeEvents` (`{ type: 'foosball' | 'uno' | 'lego', id, name }`).
+3. **GameHost overlay**:
+   - Games open in a fixed full-screen overlay (`apps/web/features/games/GameHost.tsx`, `inset-0 z-[70]`), capturing keyboard focus so walking keys do not move the avatar.
+   - Header bar (`apps/web/features/games/GameChrome.tsx`) displays game title, live player/spectator counts, Leaderboard toggle (`data-testid="game-leaderboard-toggle"`), Leave button (`data-testid="game-leave"`), and close button (`aria-label="Close game"`).
+   - Requests browser Fullscreen API on open (exits on close).
+   - Both Leave and Close buttons emit `game:leave` and unmount the overlay; Esc closes through `useEscape`.
+   - The office HUD is hidden underneath while office background simulation and proximity voice continue running.
 
-### API framework
+### Minigames
 
-- **Modules** (`apps/api/src/games`):
-  - `GamesCoreModule` (`games-core.module.ts`): provides and exports `GamesRegistry` and `GameResultsService`. Imports `PrismaModule`.
-  - Game modules: `FoosballModule`, `UnoModule`, `LegoModule`. Each imports `GamesCoreModule` and in `onModuleInit()` registers its `GameDefinition` in `GamesRegistry`.
-  - `GamesModule` (`games.module.ts`): imports `GamesCoreModule`, `FoosballModule`, `UnoModule`, `LegoModule`, and `OfficeModule`. Provides `GamesGateway` and `GamesSessionManager`. Controller: `GamesController`. Imported into `AppModule`.
-- **Core signatures** (`game.types.ts`):
-  ```ts
-  export type GameKind = 'foosball' | 'uno' | 'lego';
-  export interface GamePlayerRef { userId: string; name: string; character: string; }
+#### Baby foot (Foosball)
 
-  export interface GameContext {
-    readonly workspaceId: string;
-    readonly objectId: string;
-    readonly kind: GameKind;
-    participants(): GamePlayerRef[];
-    emitState(): void;
-    emitEvent(event: string, data?: unknown, only?: string[]): void;
-    record(r: { winners: string[]; losers: string[] }): Promise<void>;
-    close(): void;
-  }
+**Code:** `apps/api/src/games/foosball/`, `apps/web/features/games/foosball/`
 
-  export interface GameInstance {
-    onJoin(p: GamePlayerRef, intent: unknown): void;
-    onLeave(userId: string, reason: 'left' | 'far' | 'disconnected'): void;
-    onAction(userId: string, action: unknown): void;
-    view(userId: string): unknown;
-    dispose(): void;
-  }
+- **Rules**: Server-authoritative 1v1 or 2v2 table soccer. First to 5 goals wins. Phases: `lobby` → `countdown` → `playing` ↔ `goal` → `ended`. Requires equal team counts to start. If an entire team disconnects or walks away during an active match, a 10-second grace timer triggers a forfeit loss.
+- **Controls (MOUSE ONLY)**:
+  - Cursor `y` over the table aims the active rod vertically.
+  - Clicking on the canvas requests pointer lock and triggers a kick swing (or switches to a rod if clicked near another of your team's rods; rod chips under the table also select).
+  - Rapid vertical mouse flick executes a high-velocity flick kick with power derived from cursor speed. Clicking without flicking kicks with standard power. Kick cooldown is 0.35 s.
+  - Aim packets are throttled to 33 ms intervals.
+  - There are no keyboard controls for Baby foot (legacy actions `foosKick` and `foosSwitch` were removed).
+- **Physics**: Pure deterministic 2D simulation running at 30 Hz with 4 substeps per tick (`apps/api/src/games/foosball/foosball.physics.ts`). Field is 120 × 64 units; table letterboxes to 7:4 aspect ratio.
 
-  export interface GameDefinition {
-    kind: GameKind;
-    furnitureKind: FurnitureKind;
-    create(ctx: GameContext): GameInstance;
-  }
+#### Uno
 
-  export class GameError extends Error {
-    constructor(public readonly code: string, message: string) { super(message); }
-  }
-  ```
-- **Session lifecycle**:
-  - `GamesSessionManager` maintains sessions in memory keyed by `${workspaceId}:${objectId}`, lazily creating on first join and disposing when empty or when `ctx.close()` is called.
-  - Participants join socket room `game:${workspaceId}:${objectId}`.
-  - **One active game per user**: joining another game automatically leaves the previous session (`reason: 'left'`).
-  - **Disconnect**: socket disconnect calls `sessionManager.handleDisconnect(userId)` (`reason: 'disconnected'`).
-  - **Rate limiting**: `Budget(60)` per socket (~60 msgs/s); excess messages receive `game:error` with code `RATE_LIMIT`.
-  - **Proximity rules** (`apps/api/src/games/proximity.ts`):
-    - On `game:join`: player must be within 4 tiles (`JOIN_PROXIMITY_TILES = 4`) of furniture center via `OfficeGateway.locate`. Error `NOT_NEAR` if too far.
-    - Periodic sweep: `GamesSessionManager.sweepProximity()` runs every 1 second (`setInterval`). If participant's distance exceeds 7 tiles (`LEAVE_PROXIMITY_TILES = 7`) or player left office, auto-evicts with `leave(..., 'far')` and emits `game:left { id, reason: 'far' }`.
-- **Game results and leaderboard**:
-  - `GameResultsService.record({ workspaceId, game, winners, losers })`: inserts a record into Prisma `GameResult` table (`id`, `workspaceId`, `game`, `winners: String[]`, `losers: String[]`, `createdAt`, cascade delete with Workspace, indexed by `[workspaceId, game, createdAt]`).
-  - Aggregation (`aggregateLeaderboard`): pure function aggregating match rows over a `days` window. 1 win & 1 game per unique winner, 1 loss & 1 game per unique loser. Sorted by `wins desc`, `losses asc`, `games desc`. Top 10 entries returned.
-  - Endpoint `GET /api/workspace/games/leaderboard?game=foosball|uno|lego&days=7`: member-only, query parameters `game` and `days` (integer 1–90, default 7). Returns `{ game, days, entries: [{ userId, name, character, wins, losses, games }] }`.
+**Code:** `apps/api/src/games/uno/`, `apps/web/features/games/uno/`
 
-### Socket protocol (`/office` namespace)
+- **Rules**: 2 to 6 players. Standard 108-card deck. Players match top card color or number/action. Wild cards open a color picker. Penalty card draw stacking is supported (+2 on +2, wild4 on wild4). 2-player reverse acts as a skip.
+- **UNO! & Catch!**: Players with 2 or fewer cards must call "UNO!" before playing down to 1 card. If a player fails to call, opponents can hit "Catch!" to impose a 2-card draw penalty.
+- **Controls**: Interactive card selection, draw pile clicking, and action buttons (`Pass`, `UNO!`, `Catch!`).
 
-| Event | Direction | Payload | Description |
-| --- | --- | --- | --- |
-| `game:join` | Client → Server | `{ game: GameKind, id: string, intent?: unknown }` | Joins session. Validates object existence, matching furniture kind, budget, and proximity (≤ 4 tiles). Auto-joins socket room. |
-| `game:leave` | Client → Server | `{ id: string }` | Leaves session (`reason: 'left'`). Leaves socket room. |
-| `game:action` | Client → Server | `{ id: string, action: unknown }` | Sends game action. Rate-limited. Game validates and executes; throws `GameError` on bad move. |
-| `game:state` | Server → Client | `{ id: string, game: GameKind, state: unknown }` | Viewer-specific state (`instance.view(userId)`). Sent on join and whenever `ctx.emitState()` is called. |
-| `game:event` | Server → Client | `{ id: string, event: string, data?: unknown }` | Transient game event (e.g. goal scored, cards dealt). Sent to all session participants or specified `only` user IDs. |
-| `game:left` | Server → Client | `{ id: string, reason: 'left' \| 'far' \| 'closed' }` | Emitted to leaving user (or all participants on close). |
-| `game:ended` | Server → Client | `{ id: string, result?: unknown }` | Sent when match concludes or session closes (`{ reason: 'closed' }`). Triggers leaderboard refresh in client. |
-| `game:error` | Server → Client | `{ id?: string, code: string, message: string }` | Emitted to sender on failure. Error codes: `BAD_REQUEST`, `NOT_FOUND`, `WRONG_GAME`, `NOT_NEAR`, `RATE_LIMIT`, `INTERNAL_ERROR`, or custom `GameError` code. |
+#### Lego wall
 
-### Web framework (`apps/web/features/games`)
+**Code:** `apps/api/src/games/lego/`, `apps/web/features/games/lego/`, `apps/web/game/render/legoArt.ts`
 
-- **Types & Props** (`types.ts`):
-  ```ts
-  export interface GamePanelProps {
-    objectId: string;
-    name: string;
-    socket: Socket;
-    me: { id: string; name: string; character: string };
-    onClose: () => void;
-  }
-  ```
-- **`useGameSession` API** (`useGameSession.ts`):
-  ```ts
-  const { state, status, error, send, join, leave, onEvent } = useGameSession<GameState>(
-    socket,
-    gameKind,
-    objectId,
-    intent?,
-  );
-  ```
-  - `status`: `'joining' | 'joined' | 'left' | 'error'`.
-  - `error`: `{ code: string; message: string } | null`.
-  - Automatically emits `game:join` on mount and `game:leave` on unmount.
-  - Exposes `send(action)` for player actions and `onEvent((event, data) => void)` for transient events (e.g. sounds, goals).
-- **Registry** (`registry.ts`):
-  - `GAME_PANELS: Record<GameKind, ComponentType<GamePanelProps>>` uses `next/dynamic` to lazily load `./foosball/FoosballPanel`, `./uno/UnoPanel`, and `./lego/LegoPanel`.
-- **`GameHost`** (`GameHost.tsx`):
-  - Mounted once in `OfficeView.tsx`.
-  - Manages active game full-screen overlay: fixed `inset-0 z-[70]` opaque overlay (`role="dialog"`, `aria-label` = game name, `data-captures-keys=""`, `onKeyDown`/`onKeyUp` `stopPropagation`).
-  - Top bar with game name, "N playing"/"N watching" pills (`useGameChromeInfo`), Leaderboard toggle (`data-testid="game-leaderboard-toggle"`), Leave button (`data-testid="game-leave"`), and close X (`aria-label="Close game"`).
-  - Requests browser Fullscreen API on open (`requestFullscreen`), exits on close. Esc layer handled via `useEscape`. Panels fill `h-full w-full min-h-0`.
-- **`Leaderboard`** (`Leaderboard.tsx`):
-  - Floating card toggled from top bar (`data-testid="game-leaderboard-toggle"`), rendering top players this week with rank, `CharacterFace`, player name, and `W / L` statistics (e.g. Baby foot leaderboard).
-  - Automatically re-fetches leaderboard on `game:ended` socket event.
+- **Rules**: Persistent, collaborative 48 × 32 stud building surface. 16 palette colors and 8 standard brick footprints (`1×1`, `1×2`, `2×1`, `2×2`, `1×4`, `4×1`, `2×4`, `4×2`). Bricks never overlap and stay within board bounds. Board clearing is restricted to workspace `OWNER` or `ADMIN`.
+- **Controls**: Click baseplate to place, right-click (or Shift + click) to erase, **R** key to toggle brick rotation, toolbar palette to pick shapes and colors.
+- **Live miniature**: Miniature preview rendered directly on the physical office wall face above the board. Updates broadcast live to all workspace occupants via `lego:art` socket events and fetched via `GET /api/workspace/lego`.
 
-### Keybind actions for games
+### Leaderboards and match results
 
-Rebindable key actions for games must be declared on both sides (Baby foot no longer has any key actions as its controls are mouse-only; legacy actions `foosKick` and `foosSwitch` were removed, stored values are ignored, and `PATCH /settings` silently drops them):
-- **Web** (`apps/web/features/settings/keybinds.ts`): add action to `KEYBIND_ACTIONS`, default key to `DEFAULT_KEYBINDS`, and description to `KEYBIND_LABELS`. Access in components via `useKeybind('<action>')` or `matchesKey(e, '<action>')`.
-- **API** (`apps/api/src/settings/keybinds.ts`): add action to `ACTIONS`, default key to `DEFAULT_KEYBINDS`, and label to `ACTION_LABELS`.
-- Reserved keys (`WASD`, arrow keys, `Escape`, `Enter`, `Tab`) cannot be rebound.
+- Completed competitive matches (Foosball, Uno) persist match results to the `GameResult` table via `GameResultsService`. Lego is freeplay and does not record match results.
+- **Weekly leaderboard**: `GET /api/workspace/games/leaderboard?game=foosball|uno|lego&days=7` returns top 10 members sorted by wins descending and losses ascending.
+- The floating leaderboard drawer in `GameHost` displays ranks and W/L statistics, auto-refreshing on `game:ended` events.
 
-### How to add a game (checklist for steps 12–14: Baby foot, Uno, Lego)
+### Framework and wire protocol
 
-1. **Replace API stub module** (`apps/api/src/games/<game>/<game>.module.ts`):
-   - Implement game state, turn flow, timers (`setInterval`), and rules inside a class or factory returning `GameInstance`.
-   - Clean up any timers/listeners in `dispose()`.
-   - Register the definition in `onModuleInit()`: `this.registry.register({ kind, furnitureKind, create: (ctx) => ... })`.
-2. **Replace Web panel stub** (`apps/web/features/games/<game>/<Game>Panel.tsx`):
-   - Replace stub component with interactive game UI (keep default export for dynamic import).
-   - Use `useGameSession<State>(socket, '<game>', objectId)` to sync state and dispatch moves via `send(action)`.
-3. **Record match results**:
-   - On game completion, invoke `await ctx.record({ winners: [userId, ...], losers: [userId, ...] })`.
-   - Broadcast completion with `ctx.emitEvent('ended', result)` or close session with `ctx.close()`.
-4. **Write unit tests**:
-   - Add tests in `apps/api/src/games/<game>/<game>.spec.ts` testing player join/leave, turns, action validation (`GameError`), forfeit handling, and results recording.
-   - Run tests: `docker exec dev_pulse-api-1 pnpm vitest run src/games/<game>`.
-
-### Lego wall (persistent art board, step 14)
-
-**Code:** `apps/api/src/games/lego`, `apps/web/features/games/lego`, `apps/web/game/render/legoArt.ts`
-
-Unlike Baby foot/Uno the Lego wall is not a match: no GameResult, nothing is recorded or ended. It reuses the games framework only for join/leave, proximity and per-viewer game:state; the art itself outlives sessions.
-
-- **Board**: 48 × 32 studs per legoBoard furniture id. A brick is a tuple [x, y, w, h, c] (top-left stud, footprint after rotation, palette index 0–15). Footprints: 1×1, 1×2, 2×1, 2×2, 1×4, 4×1, 2×4, 4×2. Bricks never overlap and stay inside the board.
-- **Storage**: table LegoBoard { workspaceId, objectId, bricks Json, updatedAt }, unique on (workspaceId, objectId), cascade with the workspace. One JSON row per board (not a row per brick): a board has at most 1536 bricks (~25 KB), is always read and written whole, and is never queried per brick, so one read on first use and one debounced (400 ms) upsert per burst of edits beats thousands of tiny rows. parseBricks drops anything invalid/overlapping when loading. LegoService keeps the loaded boards in memory (single API process) and flushes on shutdown.
-- **Actions** (game:action): {type:'place',x,y,w,h,c}, {type:'remove',x,y} (removes the brick covering that stud), {type:'clear'} (OWNER/ADMIN only, else FORBIDDEN). Errors: INVALID_BRICK, LOADING, RATE_LIMIT (15 actions/s per user, on top of the gateway budget), BAD_REQUEST. View: { ready, w, h, bricks, canClear, players, version }.
-- **Live miniature**: /office broadcast lego:art { id, bricks } to the whole workspace (throttled, trailing 300 ms). GET /api/workspace/lego (member) returns { boards: [{ id, bricks }] } for the initial load; LegoSync (mounted in OfficeView) fetches it on connect and applies lego:art to the legoArt store. The wall object's texture key includes the art version, so OfficeScene swaps the texture on change (the footprint is 3 × 0.5 tiles, with the 48 × 32 art drawn on the 3:2 panel on the wall face above it). Until the first fetch lands the old decorative placeholder is shown.
-
-### Baby foot (step 12)
-
-**Code:** `apps/api/src/games/foosball/{foosball.physics,foosball.game}.ts`, `apps/web/features/games/foosball/*`.
-
-- Server-authoritative, 30 Hz tick (4 physics substeps), field 120 x 64 units, 4 rods per side (goalkeeper, defense, midfield, attack). First to 5 wins. Table letterboxes to 7:4 aspect ratio.
-- Phases: `lobby` -> `countdown` -> `playing` <-> `goal` -> `ended` (rematch back to lobby). Join as spectator, then `sit`/`stand`; start needs equal teams (1v1 or 2v2).
-- Rods: 1v1 owner controls all 4, 2v2 each controls 2. A teammate's absence hands their rods to the partner.
-- Leaving/disconnect during a match: if a side is fully absent for 10 s (`GRACE_MS`) it forfeits; result recorded once via `ctx.record`.
-- **Controls (MOUSE only)**:
-  - The canvas is the pointer surface. Cursor `y` over the table maps to the active rod's position (top edge = rod fully up, bottom edge = fully down, scaled to that rod's travel limit).
-  - Pointer lock is requested on the first click while playing (virtual cursor from relative movement), falling back to the plain in-table cursor position when lock is unavailable.
-  - Rod selection: clicking within 6 field units of another of your rods selects it (rod chips under the table also select).
-  - Kicking: a **FLICK** (vertical cursor speed ≥ 3.5 table-heights/s over ~50 ms) kicks with strength from speed (0.35..1). A **CLICK** that does not select a rod kicks with strength `max(0.6, speed strength)`. Kick cooldown is 0.35 s.
-  - Client sends `aim` at most every 33 ms.
-  - Keyboard actions `foosKick` and `foosSwitch` were REMOVED from both keybind lists (stored values are ignored; `PATCH /settings` silently drops those legacy names).
-- **Server protocol**:
-  - Action `{ type: 'aim', rod, y }`: target pattern offset in field units. Server clamps to the rod's travel limit, ignores outside the playing phase; rod follows at ≤ `ROD_AIM_SPEED = 140` units/s. Validated with `NOT_YOUR_ROD` / `BAD_ACTION` like `move`.
-  - Action `{ type: 'kick', rod, strength? }`: strength 0..1 (default 1, clamped to ≥ 0.25; ball speed = `KICK_BALL_SPEED * (0.4 + 0.6 * strength)`).
-  - `move { rod, dir }` still exists and cancels an aim target.
-  - Rate limiting is the gateway's 60 msgs/s budget plus the capped rod speed.
-- Tests: `foosball.physics.spec.ts`, `foosball.game.spec.ts`.
+Multiplayer minigames share the unified `/office` WebSocket namespace (`game:join`, `game:leave`, `game:action`, `game:state`, `game:event`, `game:left`, `game:ended`, `game:error`). Proximity checks enforce distance limits (join within 4 tiles, auto-evict past 7 tiles). For implementation contracts, per-viewer state projection, and adding new games, see [docs/code/games.md](code/games.md), [docs/code/office-protocol.md](code/office-protocol.md), and [docs/code/frontend.md](code/frontend.md).
 
 ## 11. 2.5D view and wall-mounted items
 
-- **Walls**: Solid thickness 10px, glass 6px; collider = footprint only (`apps/web/game/render/walls.ts` `wallCollider`, `apps/api/src/office/layout/geometry.ts` `wallRect`). Visible face is 80px (2.5 tiles) rising above the wall's base line (`y * 32 + thickness / 2`) with a dark cap on top; `face: false` on a horizontal wall makes it a low wall (cap only, used for the building's south wall). Vertical walls: long cap lifted by 80px + the south end face.
-- **Rendering**: `game/render/wallFaces.ts` bakes each wall into textures at scene start (8-tile pieces), one depth-sorted image per piece (`depth = DEPTH.sorted + base / 100000`), so people walk in front/behind. Tall solid faces are cut into 1-tile columns; a column fades to 0.35 alpha (soft, ~1.8 tiles wide, eased ~110ms) when a person stands behind it (feet between the face top and the base line); columns that hide furniture right behind them stay at 0.5. Glass faces are translucent and never fade. No per-frame redraws, only alpha changes. Room names hang on the wall face above their room (beside any hung board/tv), floor fallback near the room's top when no wall fits.
-- **Camera**: Bounds extend 140px above and 40px below the office (`VIEW_MARGIN_TOP` / `VIEW_MARGIN_BOTTOM` in `OfficeScene`) so the top rooms' faces, names, bubbles are fully visible; min zoom accounts for it.
-- **Wall-mounted kinds `tv`, `board`, `legoBoard`**: (`game/layout/mount.ts` == `api office/layout/mount.ts`): Flush against the south face of a solid horizontal wall with a face, rotation 0, inside one wall segment (not across a door gap); data box is a thin strip in front of the wall (top edge = base line, canonical `y = wall.y + 5/32 + h/2`; tolerance: top edge within 0.5 tile below the base line), art drawn on the face (`legoBoard` 3:2 panel max 64px tall, `board` `w * 32` × ≤60, `tv` 16:9 ≤60px tall; art bottom 8px above the base line; fades with the face behind it). API validation code `NOT_ON_WALL` (and `OVERLAP` between two wall-mounted items). Editor: snaps to the nearest face within 4 tiles, refuses elsewhere ("Hang it flush on a tall wall."), no rotating. Defaults: `legoBoard` 3 × 0.5, `board` 3 × 0.5, `tv` 3 × 0.3.
-- **Saved layouts**: Migrated once at API startup (`apps/api/src/workspace/layout-migration.service.ts` using `office/layout/migrate.ts`): each wall-mounted item that isn't valid is snapped to the nearest face wall within 8 tiles (same id, so Lego/board state survives) or dropped; persisted with `layoutVersion + 1`, idempotent.
+**Code:** `apps/web/game/render/`, `apps/api/src/office/layout/` · **Internals:** [docs/code/office-engine.md](code/office-engine.md), [docs/code/layout.md](code/layout.md)
+
+- **Walls & Perspective**: Solid thickness 10px, glass 6px (`apps/web/game/render/walls.ts`, `apps/api/src/office/layout/geometry.ts`). Visible wall faces rise 80px (2.5 tiles) above the wall base line with a dark cap. Low walls (`face: false`) are used for southern exterior boundaries. Tall solid walls are divided into 1-tile columns that fade to 0.35 alpha when an avatar walks behind them.
+- **Rendering & Depth**: Walls are baked into textures at scene start (`apps/web/game/render/scenery.ts`, `apps/web/game/render/wallFaces.ts`) and depth-sorted dynamically (`apps/web/game/systems/Depth.ts`). Room names hang directly on wall faces above each room.
+- **Camera Bounds**: Bounds extend 140px above and 40px below the office canvas (`VIEW_MARGIN_TOP_PX` and `VIEW_MARGIN_BOTTOM_PX` in `apps/web/game/constants.ts`, managed by `apps/web/game/systems/ViewControl.ts`) so upper room faces and badges remain fully visible.
+- **Wall-Mounted Items (`tv`, `board`, `legoBoard`)**: Hang flush against the south face of solid horizontal walls (`apps/api/src/office/layout/mount.ts`, `apps/web/game/layout/mount.ts`), validated with `NOT_ON_WALL`. Existing layouts are automatically migrated on API startup (`apps/api/src/workspace/layout-migration.service.ts`).
+
+## 12. Development switcher (dev only)
+
+**Code:** `apps/web/features/dev/`, `apps/api/src/dev/` · **Internals:** [docs/code/testing.md](code/testing.md), [docs/code/auth.md](code/auth.md)
+
+The development switcher provides rapid 1-click test identity switching and test persona creation on `/login` and `/register` (`apps/web/features/dev/DevSwitcher.tsx`). It allows developers and automated test suites to mint sessions, switch between workspace members, or join offices without manual credential entry or 2FA verification.
+
+- **Production gating**: The dev switcher is strictly disabled in production. Enabled only when `isDevLoginEnabled` is true (`DEV_LOGIN === 'true'` and `NODE_ENV !== 'production'` in `apps/api/src/config/app-config.ts`). In production, `DevModule` is never imported—endpoints under `/api/auth/dev/*` and the `apps/api/src/dev/dev.gateway.ts` socket gateway do not exist. `GET /auth/dev` returns `{ enabled: false }`.
+- **UI integration**: `DevSwitcherGate` wraps auth pages and renders the switcher only when dev mode is active (with a "Use the real sign-in" link to test standard forms). Inside the office, `UserMenu` provides a "Switch user (dev)" option.
+- **Test hooks**: `useDevHooks` (`apps/web/features/dev/devHooks.ts`) installs `window.__devpulse` test utilities (instant teleportation via `dev:teleport` socket event in `apps/api/src/dev/dev.gateway.ts`, player coordinates) and applies performance caps for headless testing (`__devpulseFps`, `__devpulseLowRes`). In production, `window.__devpulse` is undefined.
