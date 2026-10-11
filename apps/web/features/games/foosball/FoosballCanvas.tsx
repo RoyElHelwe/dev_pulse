@@ -40,6 +40,7 @@ interface Snapshot {
   receivedAt: number;
 }
 
+/** Canvas refs, match state snapshot, player rod assignments, and pointer handlers for table control. */
 export interface FoosballCanvasProps {
   stageRef?: React.RefObject<HTMLDivElement | null>;
   canvasRef?: React.RefObject<HTMLCanvasElement | null>;

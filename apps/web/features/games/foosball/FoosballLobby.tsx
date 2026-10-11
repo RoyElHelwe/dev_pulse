@@ -114,6 +114,7 @@ function TeamBox({
   );
 }
 
+/** Player roster per side, current user seat assignment, match phase, and lobby action callbacks. */
 export interface FoosballLobbyProps {
   phase: FoosballPhase;
   seatsA: FoosballPlayer[];

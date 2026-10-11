@@ -51,26 +51,44 @@ export const MOUSE_BUTTON_PRIMARY = 0;
 export const MOUSE_BUTTON_SECONDARY = 2;
 
 // Canvas render proportions and styling constants
+/** Vertical drop shadow offset ratio relative to stud cell size for baseplate grid dots. */
 export const BASEPLATE_STUD_SHADOW_OFFSET_RATIO = 0.03;
+/** Drop shadow circle radius ratio relative to stud cell size for baseplate grid dots. */
 export const BASEPLATE_STUD_SHADOW_RADIUS_RATIO = 0.16;
+/** Stud dot radius ratio relative to stud cell size for unpopulated baseplate grid cells. */
 export const BASEPLATE_STUD_RADIUS_RATIO = 0.14;
 
+/** Vertical drop shadow offset ratio relative to stud cell size for placed brick studs. */
 export const BRICK_STUD_SHADOW_OFFSET_RATIO = 0.05;
+/** Drop shadow radius ratio relative to stud cell size for placed brick studs. */
 export const BRICK_STUD_SHADOW_RADIUS_RATIO = 0.25;
+/** Cylindrical stud radius ratio relative to stud cell size for placed brick studs. */
 export const BRICK_STUD_RADIUS_RATIO = 0.24;
+/** Minimum stroke width in pixels for brick stud boundary outlines. */
 export const BRICK_STUD_MIN_STROKE_WIDTH_PX = 0.5;
+/** Stroke width ratio relative to stud cell size for brick stud outlines. */
 export const BRICK_STUD_STROKE_WIDTH_RATIO = 0.05;
+/** Highlight reflection diagonal offset ratio relative to stud cell size for brick studs. */
 export const BRICK_STUD_HIGHLIGHT_OFFSET_RATIO = 0.06;
+/** Highlight reflection spot radius ratio relative to stud cell size for brick studs. */
 export const BRICK_STUD_HIGHLIGHT_RADIUS_RATIO = 0.09;
 
+/** Preview stud circle radius ratio relative to stud cell size for valid placement locations. */
 export const GHOST_VALID_STUD_RADIUS_RATIO = 0.22;
+/** Preview stud circle radius ratio relative to stud cell size for invalid placement locations. */
 export const GHOST_INVALID_STUD_RADIUS_RATIO = 0.19;
+/** Canvas fill opacity on a 0 to 1 scale for valid brick placement previews. */
 export const GHOST_VALID_FILL_ALPHA = 0.65;
+/** Canvas fill opacity on a 0 to 1 scale for invalid brick placement previews. */
 export const GHOST_INVALID_FILL_ALPHA = 0.45;
+/** Outline stroke width in pixels for valid placement preview ghosts. */
 export const GHOST_VALID_LINE_WIDTH_PX = 1.5;
+/** Outline stroke width in pixels for invalid placement warning ghosts. */
 export const GHOST_INVALID_LINE_WIDTH_PX = 2;
 
+/** Highlight outline width in pixels around a targeted brick queued for deletion. */
 export const ERASE_TARGET_LINE_WIDTH_PX = 2;
+/** Stroke width in pixels for the boundary box drawn over hovered cells in erase mode. */
 export const ERASE_CELL_LINE_WIDTH_PX = 1.5;
 
 /** State synchronization payload received from the game server. */

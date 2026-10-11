@@ -17,6 +17,7 @@ import {
   MOUSE_BUTTON_SECONDARY,
 } from './legoConstants';
 
+/** Container ref, grid cell sizing in pixels, placed bricks, selected brush properties, and placement callbacks. */
 export interface LegoBoardCanvasProps {
   containerRef: React.RefObject<HTMLDivElement | null>;
   cellSize: number;

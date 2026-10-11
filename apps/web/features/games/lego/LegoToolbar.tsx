@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/Button';
 import { Kbd } from '@/components/ui/Kbd';
 import { LEGO_BASE_SHAPES } from '@/game/render/legoArt';
 
+/** Current shape selection, erase mode state, clear permission flag, and tool manipulation callbacks. */
 export interface LegoToolbarProps {
   selectedShapeIndex: number;
   isErasing: boolean;
