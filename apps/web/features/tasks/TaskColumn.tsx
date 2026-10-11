@@ -17,6 +17,7 @@ function InsertionLine() {
   return <div className="h-0.5 w-full shrink-0 rounded-full bg-emerald-500 transition-all" />;
 }
 
+/** Column status, visible task cards, member map, drop targets, and drag handlers for a workflow lane. */
 export interface TaskColumnProps {
   status: TaskStatus;
   cards: TaskView[];

@@ -23,6 +23,7 @@ import type { BoardFilter, BoardMember } from './types';
 
 export { EMPTY_FILTER, isFiltered, matchesFilter, compareMembers };
 
+/** Filter criteria, member options, result counts, and change handler for controlling board search and filtering. */
 export interface BoardFiltersProps {
   members: BoardMember[];
   filter: BoardFilter;

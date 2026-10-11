@@ -9,6 +9,7 @@ import { type Ref } from 'react';
 
 const MAX_TITLE_LENGTH = 200;
 
+/** Input element ID, ref, text value, change callback, and disabled flag for editing the task title. */
 export interface TaskTitleFieldProps {
   id: string;
   inputRef?: Ref<HTMLInputElement>;

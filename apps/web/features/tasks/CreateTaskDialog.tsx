@@ -17,6 +17,7 @@ import { taskActions } from './taskStore';
 import type { Draft } from './taskDialogUtils';
 import type { BoardMember, TaskStatus } from './types';
 
+/** Field defaults, member choices, accessibility title ID, and close handler for the task creation form. */
 export interface CreateTaskDialogProps {
   mode: { kind: 'create'; status?: TaskStatus; assigneeId?: string | null };
   members: BoardMember[];

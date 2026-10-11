@@ -5,10 +5,12 @@
 
 import type { TaskPatch, TaskPriority, TaskStatus, TaskType, TaskView } from './types';
 
+/** Discriminated union indicating whether the task dialog creates a new task or edits an existing one. */
 export type TaskDialogMode =
   | { kind: 'create'; status?: TaskStatus; assigneeId?: string | null }
   | { kind: 'edit'; taskId: string };
 
+/** In-progress field state held in component memory while creating or editing a task. */
 export interface Draft {
   title: string;
   type: TaskType;

@@ -13,6 +13,7 @@ import type { BoardMember } from './types';
 
 const INTERSECTION_ROOT_MARGIN = '100px 0px';
 
+/** Discriminated union representing either an unassigned filter bucket or an individual workspace member. */
 export type PickerItem =
   | { kind: 'unassigned'; id: 'none'; label: string; count: number }
   | { kind: 'member'; id: string; label: string; member: BoardMember; count: number };
@@ -72,6 +73,7 @@ function LazyFace({
   return <AssigneeAvatar member={member} className="size-7" />;
 }
 
+/** Item model, selection and focus flags, lazy container ref, and interaction callbacks for a picker row. */
 export interface PeoplePickerOptionProps {
   id: string;
   item: PickerItem;

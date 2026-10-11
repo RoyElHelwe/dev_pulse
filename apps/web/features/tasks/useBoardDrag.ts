@@ -54,6 +54,7 @@ function computeInsertionIndex(
   return insertionIndexAt(measureColumn(container, currentDragId), clientY);
 }
 
+/** Board tasks, status lane groups, filter state, and error callback for drag-and-drop state management. */
 export interface UseBoardDragOptions {
   tasks: TaskView[];
   tasksByStatus: Record<TaskStatus, TaskView[]>;

@@ -8,6 +8,7 @@
 const MAX_DESCRIPTION_LENGTH = 5000;
 const DESCRIPTION_ROWS = 6;
 
+/** Form control ID, text value, change callback, and disabled flag for editing task details. */
 export interface TaskDescriptionFieldProps {
   id: string;
   value: string;

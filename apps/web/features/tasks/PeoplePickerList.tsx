@@ -7,6 +7,7 @@
 
 import { PeoplePickerOption, type PickerItem } from './PeoplePickerOption';
 
+/** Filter items, keyboard focus state, DOM refs, and selection callbacks for the people listbox container. */
 export interface PeoplePickerListProps {
   items: PickerItem[];
   filterAssignees: string[];

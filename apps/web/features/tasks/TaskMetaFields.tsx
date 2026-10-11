@@ -13,6 +13,7 @@ import { TaskTypeSelect } from './TaskTypeSelect';
 import type { Draft } from './taskDialogUtils';
 import type { BoardMember } from './types';
 
+/** Draft state, updater callback, workspace members list, and accessibility ID for task metadata inputs. */
 export interface TaskMetaFieldsProps {
   draft: Draft;
   onDraftChange: (updater: (prev: Draft) => Draft) => void;

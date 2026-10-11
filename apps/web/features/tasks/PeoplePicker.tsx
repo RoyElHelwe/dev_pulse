@@ -18,6 +18,7 @@ const FOCUS_DELAY_MS = 50;
 const SEARCH_DEBOUNCE_MS = 150;
 const LAZY_FACE_THRESHOLD = 50;
 
+/** Modal visibility, workspace member options, open task counts, and filter callbacks for assignee selection. */
 export interface PeoplePickerProps {
   open: boolean;
   onClose(): void;

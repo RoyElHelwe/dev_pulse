@@ -11,6 +11,7 @@ import { IconButton } from '@/components/ui/IconButton';
 import { BoardFilters } from './BoardFilters';
 import type { BoardFilter, BoardMember } from './types';
 
+/** Issue key prefix, members list, filter state, and dialog/drawer callbacks for board toolbar controls. */
 export interface BoardHeaderProps {
   prefix: string;
   members: BoardMember[];

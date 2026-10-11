@@ -9,6 +9,7 @@ import { Select } from '@/components/ui/Select';
 import type { TaskType } from './types';
 import { TYPE_LABEL, TYPES } from './types';
 
+/** Selected issue category, change callback, and disabled state for categorizing the task. */
 export interface TaskTypeSelectProps {
   value: TaskType;
   onChange(value: TaskType): void;
