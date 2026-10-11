@@ -21,13 +21,13 @@ export const BOARD_HEIGHT_STUDS = 32; // Mirror of apps/api/src/games/lego/lego.
  * Total supported colors in the brick palette.
  * Mirror of apps/api/src/games/lego/lego.rules.ts: keep in sync
  */
-export const PALETTE_COLOR_COUNT = 16; // Mirror of apps/api/src/games/lego/lego.rules.ts: keep in sync
+const PALETTE_COLOR_COUNT = 16; // Mirror of apps/api/src/games/lego/lego.rules.ts: keep in sync
 
 /**
  * Interval for throttling live artwork broadcasts to the office space.
  * Mirror of apps/api/src/games/lego/lego.service.ts: keep in sync
  */
-export const ART_BROADCAST_THROTTLE_MS = 300; // Mirror of apps/api/src/games/lego/lego.service.ts: keep in sync
+const ART_BROADCAST_THROTTLE_MS = 300; // Mirror of apps/api/src/games/lego/lego.service.ts: keep in sync
 
 /** Default square stud size in CSS pixels on board mount. */
 export const DEFAULT_CELL_SIZE_PX = 16;

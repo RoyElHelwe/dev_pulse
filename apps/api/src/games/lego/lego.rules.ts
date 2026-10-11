@@ -7,21 +7,15 @@ import { Budget } from '../../office/office.rules';
 
 /** Total board width in studs. */
 export const BOARD_W = 48;
-export const BOARD_W_STUDS = BOARD_W;
 
 /** Total board height in studs. */
 export const BOARD_H = 32;
-export const BOARD_H_STUDS = BOARD_H;
 
 /** Total allowed palette colors (0-15). */
-export const PALETTE_SIZE = 16;
-export const PALETTE_COLOR_COUNT = PALETTE_SIZE;
-
-/** Maximum possible 1x1 bricks on a board (48 * 32). */
-export const MAX_BOARD_BRICKS = BOARD_W * BOARD_H;
+const PALETTE_SIZE = 16;
 
 /** Allowed player rate limit: at most 15 actions per second. */
-export const ACTION_RATE_LIMIT_PER_SEC = 15;
+const ACTION_RATE_LIMIT_PER_SEC = 15;
 
 /** Brick tuple representation: [x, y, width, height, colorIndex]. */
 export type Brick = [x: number, y: number, w: number, h: number, c: number];

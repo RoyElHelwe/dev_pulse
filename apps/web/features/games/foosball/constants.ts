@@ -17,7 +17,7 @@ export const FIELD_L = 120;
 export const FIELD_W = 64;
 
 /** Goal mouth width in logical units. */
-export const GOAL_W = 24;
+const GOAL_W = 24;
 
 /** Ball radius in logical units. */
 export const BALL_R = 2;

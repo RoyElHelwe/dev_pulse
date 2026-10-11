@@ -53,14 +53,14 @@ const LOCKED_CURSOR_RADIUS_PX = 6;
 const LOCKED_CURSOR_OUTER_WIDTH_PX = 3;
 const LOCKED_CURSOR_INNER_WIDTH_PX = 1.5;
 
-export interface StaticRodConfig {
+interface StaticRodConfig {
   side: FoosballSide;
   idx: number;
   x: number;
 }
 
 /** Precomputed rod draw order sorted by x coordinate to guarantee correct layer overlap. */
-export const STATIC_RODS_ORDER: readonly StaticRodConfig[] = [
+const STATIC_RODS_ORDER: readonly StaticRodConfig[] = [
   ...ROD_X_A.map((x, idx) => ({ side: 'A' as const, idx, x })),
   ...ROD_X_B.map((x, idx) => ({ side: 'B' as const, idx, x })),
 ].sort((a, b) => a.x - b.x);
@@ -77,7 +77,7 @@ export interface DrawFoosballSceneParams {
 }
 
 /** Clears the canvas and paints the rounded outer border and green pitch surface. */
-export function drawPitchFrame(ctx: CanvasRenderingContext2D): void {
+function drawPitchFrame(ctx: CanvasRenderingContext2D): void {
   ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
   ctx.fillStyle = '#18181b';
   ctx.beginPath();
@@ -93,7 +93,7 @@ export function drawPitchFrame(ctx: CanvasRenderingContext2D): void {
 }
 
 /** Paints the boundary lines, halfway line, center circle, and center spot. */
-export function drawFieldMarkings(ctx: CanvasRenderingContext2D): void {
+function drawFieldMarkings(ctx: CanvasRenderingContext2D): void {
   const pw = FIELD_L * SCALE;
   const ph = FIELD_W * SCALE;
   ctx.strokeStyle = 'rgba(255, 255, 255, 0.45)';
@@ -118,7 +118,7 @@ export function drawFieldMarkings(ctx: CanvasRenderingContext2D): void {
 }
 
 /** Paints the left and right goal mouths with white borders. */
-export function drawGoals(ctx: CanvasRenderingContext2D): void {
+function drawGoals(ctx: CanvasRenderingContext2D): void {
   const pw = FIELD_L * SCALE;
   const goalY = OFFSET_Y + GOAL_Y_START_UNITS * SCALE;
   const goalH = GOAL_HEIGHT_UNITS * SCALE;
@@ -131,14 +131,14 @@ export function drawGoals(ctx: CanvasRenderingContext2D): void {
 }
 
 /** Combines frame, markings, and goal layers into the pitch background. */
-export function drawField(ctx: CanvasRenderingContext2D): void {
+function drawField(ctx: CanvasRenderingContext2D): void {
   drawPitchFrame(ctx);
   drawFieldMarkings(ctx);
   drawGoals(ctx);
 }
 
 /** Draws a single rod bar with metal texture, active glow, and team handle grip. */
-export function drawRodBar(
+function drawRodBar(
   ctx: CanvasRenderingContext2D,
   rx: number,
   ph: number,
@@ -166,7 +166,7 @@ export function drawRodBar(
 }
 
 /** Draws an individual foosball player figurine on a rod. */
-export function drawMan(
+function drawMan(
   ctx: CanvasRenderingContext2D,
   mx: number,
   cy: number,
@@ -207,7 +207,7 @@ export function drawMan(
 }
 
 /** Draws all 8 rods and their figurines in order of left-to-right table coordinates. */
-export function drawRods(
+function drawRods(
   ctx: CanvasRenderingContext2D,
   rodsA: readonly RodView[],
   rodsB: readonly RodView[],
@@ -231,7 +231,7 @@ export function drawRods(
 }
 
 /** Draws the ball with drop shadow, border, and central pentagon dot. */
-export function drawBall(ctx: CanvasRenderingContext2D, ballX: number, ballY: number): void {
+function drawBall(ctx: CanvasRenderingContext2D, ballX: number, ballY: number): void {
   const bx = OFFSET_X + ballX * SCALE;
   const by = OFFSET_Y + ballY * SCALE;
   const radius = BALL_R * SCALE;
@@ -256,7 +256,7 @@ export function drawBall(ctx: CanvasRenderingContext2D, ballX: number, ballY: nu
 }
 
 /** Draws the target ring cursor when pointer lock is engaged. */
-export function drawHud(
+function drawHud(
   ctx: CanvasRenderingContext2D,
   isLocked: boolean,
   cursor: { x: number; y: number } | null,

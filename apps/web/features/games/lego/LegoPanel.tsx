@@ -11,8 +11,6 @@ import { LegoPalette } from './LegoPalette';
 import { LegoToolbar } from './LegoToolbar';
 import { useLegoBoard } from './useLegoBoard';
 
-export type { LegoState } from './legoConstants';
-
 /**
  * Lego builder workspace panel mounted inside GameHost dialogs.
  */

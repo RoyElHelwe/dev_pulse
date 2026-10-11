@@ -15,15 +15,15 @@ export const CATCH_PENALTY_CARDS_COUNT = 2;
 export const UNO_CALL_HAND_SIZE = 2;
 export const UNO_VULNERABLE_HAND_SIZE = 1;
 export const MAX_LOG_ENTRIES = 8;
-export const WIN_SCORE = 500;
+const WIN_SCORE = 500;
 export const SCORE_ACTION_CARD = 20;
 export const SCORE_WILD_CARD = 50;
-export const TOTAL_DECK_SIZE = 108;
-export const NUM_WILD_CARDS = 4;
-export const NUM_WILD4_CARDS = 4;
-export const NUM_NON_ZERO_RUNS = 2;
-export const NUM_ACTION_RUNS = 2;
-export const MAX_NUMBER_CARD_VALUE = 9;
+const TOTAL_DECK_SIZE = 108;
+const NUM_WILD_CARDS = 4;
+const NUM_WILD4_CARDS = 4;
+const NUM_NON_ZERO_RUNS = 2;
+const NUM_ACTION_RUNS = 2;
+const MAX_NUMBER_CARD_VALUE = 9;
 
 export type Color = 'red' | 'yellow' | 'green' | 'blue';
 
@@ -38,9 +38,9 @@ export interface Card {
 }
 
 export interface InternalUnoPlayer { ref: GamePlayerRef; hand: Card[]; saidUno: boolean; }
-export interface InternalUnoSpectator { ref: GamePlayerRef; }
-export interface UnoPlayer { id: string; name: string; character: string; cards: number; saidUno: boolean; }
-export interface UnoSpectator { id: string; name: string; }
+interface InternalUnoSpectator { ref: GamePlayerRef; }
+interface UnoPlayer { id: string; name: string; character: string; cards: number; saidUno: boolean; }
+interface UnoSpectator { id: string; name: string; }
 
 export interface UnoView {
   phase: 'lobby' | 'playing' | 'ended';
@@ -80,7 +80,7 @@ export interface UnoGameState {
   log: string[];
 }
 
-export const COLORS: Color[] = ['red', 'yellow', 'green', 'blue'];
+const COLORS: Color[] = ['red', 'yellow', 'green', 'blue'];
 
 /** Builds the standard 108-card Uno deck. */
 export function buildDeck(): Card[] {

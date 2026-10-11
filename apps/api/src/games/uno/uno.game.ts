@@ -8,8 +8,6 @@ import { GameError } from '../game.types';
 import {
   type Card,
   type Color,
-  type InternalUnoPlayer,
-  type InternalUnoSpectator,
   type UnoGameState,
   type UnoView,
   CATCH_PENALTY_CARDS_COUNT,
@@ -32,8 +30,6 @@ import {
   shuffle,
   stackDrawPenalty,
 } from './uno.rules';
-
-export type { InternalUnoPlayer, InternalUnoSpectator };
 
 export interface UnoTestHooks {
   initialDeck?: Card[];

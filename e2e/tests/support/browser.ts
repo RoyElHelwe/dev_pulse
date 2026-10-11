@@ -23,7 +23,7 @@ export function shotPath(name: string): string {
  * Registry of active browser contexts opened during test execution.
  * Kept so closeContexts can cleanly dispose of all open pages between test suites.
  */
-export const openContexts: BrowserContext[] = [];
+const openContexts: BrowserContext[] = [];
 
 /**
  * Closes every browser context opened with openPage.

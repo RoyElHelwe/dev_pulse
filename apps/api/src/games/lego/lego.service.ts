@@ -14,13 +14,11 @@ import {
   validatePlace,
 } from './lego.rules';
 
-export { LegoGameInstance } from './lego.game';
-
 /** Debounce delay before persisting in-memory board modifications to PostgreSQL. */
-export const SAVE_DEBOUNCE_MS = 400;
+const SAVE_DEBOUNCE_MS = 400;
 
 /** Throttle duration between broadcasting board state changes to the office. */
-export const BROADCAST_THROTTLE_MS = 300;
+const BROADCAST_THROTTLE_MS = 300;
 
 /**
  * In-memory representation of an active Lego board.

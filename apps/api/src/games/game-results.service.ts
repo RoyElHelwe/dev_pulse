@@ -8,13 +8,13 @@ import { PrismaService } from '../prisma/prisma.service';
 import type { GameKind } from './game.types';
 
 /** Default number of top players returned on leaderboards. */
-export const DEFAULT_LEADERBOARD_LIMIT = 10;
+const DEFAULT_LEADERBOARD_LIMIT = 10;
 
 /** Default query window in days for leaderboard aggregation. */
-export const DEFAULT_LEADERBOARD_DAYS = 7;
+const DEFAULT_LEADERBOARD_DAYS = 7;
 
 /** Number of milliseconds in a standard 24-hour day. */
-export const MS_PER_DAY = 24 * 60 * 60 * 1000;
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 /**
  * Aggregated score statistics for a single player.
@@ -29,7 +29,7 @@ export interface LeaderboardAggregationEntry {
 /**
  * Leaderboard entry enriched with member display name and sprite character.
  */
-export interface LeaderboardEntry extends LeaderboardAggregationEntry {
+interface LeaderboardEntry extends LeaderboardAggregationEntry {
   name: string;
   character: string;
 }

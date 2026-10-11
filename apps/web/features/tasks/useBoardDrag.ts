@@ -19,7 +19,7 @@ interface ColumnMids {
  * Computes a midpoint rank between two tasks for fractional ordering
  * without needing to rewrite rankings across the entire column.
  */
-export function rankBetween(before: number | null, after: number | null): number {
+function rankBetween(before: number | null, after: number | null): number {
   if (before === null && after === null) return 1;
   if (before === null) return after! - 1;
   if (after === null) return before + 1;

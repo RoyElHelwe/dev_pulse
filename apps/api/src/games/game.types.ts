@@ -6,7 +6,7 @@
 import type { FurnitureKind as OfficeFurnitureKind } from '../office/layout/types';
 
 /** Furniture types eligible for hosting interactive minigames in the office layout. */
-export type FurnitureKind = OfficeFurnitureKind | 'foosball' | 'cardTable' | 'legoBoard';
+type FurnitureKind = OfficeFurnitureKind | 'foosball' | 'cardTable' | 'legoBoard';
 
 /** Supported minigame kinds recognized by the server. */
 export type GameKind = 'foosball' | 'uno' | 'lego';

@@ -43,7 +43,7 @@ export async function userId(page: Page): Promise<string> {
 /**
  * Creates the office of a signed-in user through the API (same body as the onboarding form).
  */
-export async function createOffice(page: Page, name: string, templateId = 'loft', character = 'maya') {
+async function createOffice(page: Page, name: string, templateId = 'loft', character = 'maya') {
   const res = await page.context().request.post('/api/workspace', { data: { name, templateId, character } });
   expect(res.ok(), `create office failed: ${res.status()}`).toBeTruthy();
 }
@@ -59,7 +59,7 @@ export async function devOwner(page: Page, name: string, officeName = 'Acme HQ',
 /**
  * Converts an absolute link constructed with APP_URL into a same-origin URL matching the test page's host.
  */
-export const local = (page: Page, link: string) => new URL(new URL(link).pathname, page.url()).toString();
+const local = (page: Page, link: string) => new URL(new URL(link).pathname, page.url()).toString();
 
 /**
  * Issues an invitation for an email address via POST /api/workspace/invitations and returns a same-origin accept link.

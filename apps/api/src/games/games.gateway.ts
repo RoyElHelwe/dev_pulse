@@ -23,10 +23,10 @@ import { gameRoom, GamesSessionManager } from './games.session';
 import { isWithinProximity, JOIN_PROXIMITY_TILES } from './proximity';
 
 /** Flood protection rate limit: at most 60 game events per second per socket. */
-export const GATEWAY_ACTION_BUDGET_PER_SEC = 60;
+const GATEWAY_ACTION_BUDGET_PER_SEC = 60;
 
 /** Socket data payload attached by auth and gateway middleware. */
-export interface SocketData {
+interface SocketData {
   userId: string;
   sessionId: string;
   workspaceId: string;
@@ -34,19 +34,19 @@ export interface SocketData {
 }
 
 /** DTO for incoming 'game:join' WebSocket messages. */
-export interface GameJoinDto {
+interface GameJoinDto {
   game: GameKind;
   id: string;
   intent?: unknown;
 }
 
 /** DTO for incoming 'game:leave' WebSocket messages. */
-export interface GameLeaveDto {
+interface GameLeaveDto {
   id: string;
 }
 
 /** DTO for incoming 'game:action' WebSocket messages. */
-export interface GameActionDto {
+interface GameActionDto {
   id: string;
   action: unknown;
 }

@@ -7,13 +7,13 @@ import { IsIn, IsInt, IsOptional, Max, Min } from 'class-validator';
 import type { GameKind } from './game.types';
 
 /** Default query interval in days for leaderboard rankings. */
-export const DEFAULT_LEADERBOARD_DAYS = 7;
+const DEFAULT_LEADERBOARD_DAYS = 7;
 
 /** Minimum allowed leaderboard lookback window in days. */
-export const MIN_LEADERBOARD_DAYS = 1;
+const MIN_LEADERBOARD_DAYS = 1;
 
 /** Maximum allowed leaderboard lookback window in days. */
-export const MAX_LEADERBOARD_DAYS = 90;
+const MAX_LEADERBOARD_DAYS = 90;
 
 /**
  * Query parameter schema for GET /workspace/games/leaderboard.

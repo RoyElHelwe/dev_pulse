@@ -14,13 +14,13 @@ import { createInitialWorld, type PhysicsWorld } from './foosball.physics';
 export const MAX_PLAYERS_PER_SIDE_COUNT = 2;
 
 /** Team size for solo play (1v1). */
-export const SOLO_TEAM_SIZE_COUNT = 1;
+const SOLO_TEAM_SIZE_COUNT = 1;
 
 /** Defense player seat index on team roster. */
-export const DEFENSE_SEAT_INDEX = 0;
+const DEFENSE_SEAT_INDEX = 0;
 
 /** Attack player seat index on team roster. */
-export const ATTACK_SEAT_INDEX = 1;
+const ATTACK_SEAT_INDEX = 1;
 
 /** Minimum valid rod index (0: goalkeeper). */
 export const MIN_ROD_INDEX = 0;
@@ -38,16 +38,16 @@ export const MIN_COUNTDOWN_SECONDS = 0;
 export const MIN_GRACE_SECONDS = 0;
 
 /** Empty count constant for zero items. */
-export const EMPTY_COUNT = 0;
+const EMPTY_COUNT = 0;
 
 /** Rod indices assigned when a player controls all team rods (1v1 or solo partner). */
-export const ALL_ROD_INDICES = [0, 1, 2, 3] as const;
+const ALL_ROD_INDICES = [0, 1, 2, 3] as const;
 
 /** Rod indices assigned to the defensive seat (player index 0 in 2v2). */
-export const DEFENSE_ROD_INDICES = [0, 1] as const;
+const DEFENSE_ROD_INDICES = [0, 1] as const;
 
 /** Rod indices assigned to the offensive seat (player index 1 in 2v2). */
-export const ATTACK_ROD_INDICES = [2, 3] as const;
+const ATTACK_ROD_INDICES = [2, 3] as const;
 
 // ============================================================================
 // Types and Interfaces
@@ -122,7 +122,7 @@ export interface FoosballState {
 // ============================================================================
 
 /** Creates empty roster seats for teams A and B. */
-export function createInitialSeats(): FoosballSeats {
+function createInitialSeats(): FoosballSeats {
   return { A: [], B: [] };
 }
 
@@ -187,7 +187,7 @@ export function hasPresentPlayer(seats: FoosballSeats, side: FoosballSide): bool
 }
 
 /** Returns true if any seated player across either side is currently present. */
-export function isAnySeatedPlayerPresent(seats: FoosballSeats): boolean {
+function isAnySeatedPlayerPresent(seats: FoosballSeats): boolean {
   return [...seats.A, ...seats.B].some((p) => !p.away);
 }
 

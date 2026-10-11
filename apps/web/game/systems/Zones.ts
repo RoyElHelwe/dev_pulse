@@ -9,7 +9,7 @@ import { deriveZones } from '../layout/derive';
 import type { OfficeLayout, Zone } from '../layout/types';
 
 /** Converts an internal Zone layout representation into an office event payload. */
-export function toZoneEvent(zone: Zone): ZoneEvent {
+function toZoneEvent(zone: Zone): ZoneEvent {
   return { type: zone.type, id: zone.id, name: zone.name };
 }
 
