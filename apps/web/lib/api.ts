@@ -45,11 +45,21 @@ export async function api<T = void>(path: string, options: { method?: Method; bo
       credentials: 'same-origin',
     });
 
+  /** Reads the error code of a 401 and tells the app when this device was signed out. */
+  const codeOf401 = async (r: Response): Promise<string | undefined> => {
+    const body = await r.clone().json().catch(() => ({}));
+    if (ENDED.has(body.code)) sessionEndedListener?.();
+    return body.code;
+  };
+
   let res = await send();
   if (res.status === 401) {
-    const body = await res.clone().json().catch(() => ({}));
-    if (ENDED.has(body.code)) sessionEndedListener?.();
-    else if (EXPIRED.has(body.code) && (await refreshTokens())) res = await send();
+    const code = await codeOf401(res);
+    if (EXPIRED.has(code ?? '') && (await refreshTokens())) {
+      res = await send();
+      // The session can end between the refresh and the retry (e.g. signed in on another device).
+      if (res.status === 401) await codeOf401(res);
+    }
   }
   if (!res.ok) throw await toApiError(res);
   if (res.status === 204) return undefined as T;
