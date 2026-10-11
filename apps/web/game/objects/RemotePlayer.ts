@@ -1,3 +1,8 @@
+/**
+ * Remote network player entity.
+ * Buffers received network positions and smoothly interpolates avatar coordinates in render ticks.
+ */
+
 import type * as Phaser from 'phaser';
 import { TILE } from '../constants';
 import { Avatar, type Direction } from './Avatar';
@@ -16,6 +21,10 @@ interface Snapshot {
 const INTERPOLATION_DELAY_MS = 100;
 /** Bigger jumps than this are teleports (spawn, layout change): no sliding. */
 const TELEPORT_DISTANCE = 6 * TILE;
+/** Maximum retained historical snapshots in the interpolation ring buffer. */
+const MAX_SNAPSHOT_HISTORY = 30;
+/** Movement threshold in pixels to consider the avatar actively walking between frames. */
+const WALK_DETECTION_THRESHOLD_PX = 0.3;
 
 /**
  * Another person in the office. Positions arrive ~20 times a second, at
@@ -40,14 +49,16 @@ export class RemotePlayer {
     this.snapshots.push({ t: performance.now(), x, y, dir: 'down', moving: false, seated: false });
   }
 
+  /** Ingests a new networked transform snapshot into the interpolation buffer. */
   push(x: number, y: number, dir: Direction, moving: boolean, seated = false) {
     const now = performance.now();
     const last = this.snapshots[this.snapshots.length - 1];
     if (Math.hypot(x - last.x, y - last.y) > TELEPORT_DISTANCE) this.snapshots = [];
     this.snapshots.push({ t: now, x, y, dir, moving, seated });
-    if (this.snapshots.length > 30) this.snapshots.splice(0, this.snapshots.length - 30);
+    if (this.snapshots.length > MAX_SNAPSHOT_HISTORY) this.snapshots.splice(0, this.snapshots.length - MAX_SNAPSHOT_HISTORY);
   }
 
+  /** Advances interpolation clock, lerps position between historical snapshots, and updates animations. */
   update(deltaMs: number) {
     const renderAt = performance.now() - INTERPOLATION_DELAY_MS;
     const s = this.snapshots;
@@ -70,7 +81,7 @@ export class RemotePlayer {
       y = a.y + (b.y - a.y) * k;
       current = b;
     }
-    const moved = Math.abs(x - this.avatar.x) + Math.abs(y - this.avatar.y) > 0.3;
+    const moved = Math.abs(x - this.avatar.x) + Math.abs(y - this.avatar.y) > WALK_DETECTION_THRESHOLD_PX;
     if (x !== this.avatar.x || y !== this.avatar.y) {
       this.avatar.setPosition(x, y);
     }
@@ -82,6 +93,7 @@ export class RemotePlayer {
     this.avatar.animateAs(current.dir, !current.seated && (current.moving || moved), deltaMs);
   }
 
+  /** Cleans up the remote player avatar and its display elements. */
   destroy() {
     this.avatar.destroy();
   }

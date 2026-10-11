@@ -1,4 +1,7 @@
-// Headless state container and history manager for office layout modifications.
+/**
+ * Headless state container and history manager for office layout modifications.
+ * Coordinates selection, dragging, snapping, placement rules, and undo/redo stacks.
+ */
 
 import { itemBounds } from '../layout/geometry';
 import { isWallMounted, snapToWall } from '../layout/mount';
@@ -9,6 +12,21 @@ import { placementProblem, type PlacementProblem } from './rules';
 /** Positions snap to a quarter of a tile. */
 const SNAP = 0.25;
 const snap = (v: number) => Math.round(v / SNAP) * SNAP;
+
+/** Maximum wall search distance in tiles for auto-snapping wall-mounted furniture. */
+const WALL_SNAP_DISTANCE_TILES = 4;
+/** Maximum retained edit operations in undo history. */
+const MAX_UNDO_DEPTH = 100;
+/** Extra tile spacing margin added when duplicating furniture beside selected group. */
+const DUPLICATE_OFFSET_MARGIN_TILES = 0.5;
+
+const ROTATION_STEP_CW_DEG = 90;
+const ROTATION_STEP_CCW_DEG = 270;
+const FULL_ROTATION_DEG = 360;
+
+const RANDOM_ID_RADIX = 36;
+const RANDOM_ID_START_INDEX = 2;
+const RANDOM_ID_END_INDEX = 8;
 
 interface Snapshot {
   furniture: Furniture[];
@@ -64,10 +82,12 @@ export class LayoutEditor {
 
   // ---- queries -------------------------------------------------------------------
 
+  /** Finds a furniture item by id, or undefined if not in layout. */
   item(id: string) {
     return this.furniture.find((f) => f.id === id);
   }
 
+  /** Returns placement conflict/error for an item, or null if position is valid. */
   problemOf(item: Furniture): PlacementProblem | null {
     return placementProblem(item, this.layout, this.furniture);
   }
@@ -94,10 +114,12 @@ export class LayoutEditor {
     this.publish();
   }
 
+  /** Returns true if the furniture id is currently in the active selection set. */
   isSelected(id: string) {
     return this.selection.includes(id);
   }
 
+  /** Sets an item from catalog to be actively placed following the cursor. */
   startPlacing(kind: FurnitureKind, w?: number, h?: number) {
     const entry = catalogEntry(kind)!;
     this.placing = { kind, w: w ?? entry.w, h: h ?? entry.h, color: entry.colors?.[0] };
@@ -105,6 +127,7 @@ export class LayoutEditor {
     this.publish();
   }
 
+  /** Cancels active furniture placement mode without creating an item. */
   cancelPlacing() {
     this.placing = null;
     this.publish();
@@ -118,7 +141,7 @@ export class LayoutEditor {
     const { kind, w, h, color } = this.placing;
     let item: Furniture = { id: newId(kind), kind, x: snap(x), y: snap(y), w, h, ...(color !== undefined && { color }) };
     if (isWallMounted(item.kind)) {
-      const snapped = snapToWall(item, this.layout.walls, 4);
+      const snapped = snapToWall(item, this.layout.walls, WALL_SNAP_DISTANCE_TILES);
       if (snapped) item = snapped;
     }
     const problem = this.problemOf(item);
@@ -147,7 +170,7 @@ export class LayoutEditor {
       if (item) {
         let next: Furniture = { ...item, x: start.x + sx, y: start.y + sy };
         if (isWallMounted(next.kind)) {
-          const snapped = snapToWall(next, this.layout.walls, 4);
+          const snapped = snapToWall(next, this.layout.walls, WALL_SNAP_DISTANCE_TILES);
           if (snapped) next = snapped;
         }
         Object.assign(item, { x: next.x, y: next.y, rotation: next.rotation });
@@ -160,7 +183,7 @@ export class LayoutEditor {
   endDrag(): PlacementProblem | null {
     for (const item of this.selected()) {
       if (isWallMounted(item.kind)) {
-        const snapped = snapToWall(item, this.layout.walls, 4);
+        const snapped = snapToWall(item, this.layout.walls, WALL_SNAP_DISTANCE_TILES);
         if (snapped) {
           item.x = snapped.x;
           item.y = snapped.y;
@@ -185,11 +208,12 @@ export class LayoutEditor {
     return this.dragStart ? this.firstProblem(this.selected()) : null;
   }
 
+  /** Shifts all selected items by delta tiles if no placement rules are violated. */
   nudge(dx: number, dy: number): PlacementProblem | null {
     return this.changeSelected((f) => {
       let next: Furniture = { ...f, x: snap(f.x + dx), y: snap(f.y + dy) };
       if (isWallMounted(next.kind)) {
-        const snapped = snapToWall(next, this.layout.walls, 4);
+        const snapped = snapToWall(next, this.layout.walls, WALL_SNAP_DISTANCE_TILES);
         if (snapped) next = snapped;
       }
       return { x: next.x, y: next.y, rotation: next.rotation };
@@ -201,10 +225,13 @@ export class LayoutEditor {
     if (this.selected().every((f) => isWallMounted(f.kind))) return null;
     return this.changeSelected((f) => {
       if (isWallMounted(f.kind)) return {};
-      return { rotation: (((f.rotation ?? 0) + (clockwise ? 90 : 270)) % 360) as Furniture['rotation'] };
+      return {
+        rotation: (((f.rotation ?? 0) + (clockwise ? ROTATION_STEP_CW_DEG : ROTATION_STEP_CCW_DEG)) % FULL_ROTATION_DEG) as Furniture['rotation'],
+      };
     });
   }
 
+  /** Updates custom color tint of the specified furniture item. */
   setColor(id: string, color: number) {
     const item = this.item(id);
     if (!item) return;
@@ -219,8 +246,8 @@ export class LayoutEditor {
     if (group.length === 0) return null;
     const box = bounds(group);
     for (const [dx, dy] of [[1, 0], [0, 1], [-1, 0], [0, -1]]) {
-      const ox = snap(dx * (box.w + 0.5));
-      const oy = snap(dy * (box.h + 0.5));
+      const ox = snap(dx * (box.w + DUPLICATE_OFFSET_MARGIN_TILES));
+      const oy = snap(dy * (box.h + DUPLICATE_OFFSET_MARGIN_TILES));
       const copies = group.map((f) => ({ ...f, id: newId(f.kind), x: f.x + ox, y: f.y + oy }));
       const others = [...this.furniture, ...copies];
       if (copies.every((c) => !placementProblem(c, this.layout, others))) {
@@ -234,6 +261,7 @@ export class LayoutEditor {
     return 'overlap';
   }
 
+  /** Deletes all currently selected furniture items and records undo step. */
   remove() {
     if (this.selection.length === 0) return;
     this.record();
@@ -252,6 +280,7 @@ export class LayoutEditor {
     this.publish();
   }
 
+  /** Updates display name of a room boundary in the layout. */
   renameRoom(id: string, name: string) {
     if (this.roomNames[id] === name) return;
     this.record();
@@ -259,6 +288,7 @@ export class LayoutEditor {
     this.publish();
   }
 
+  /** Reverts the last layout edit from history. */
   undo() {
     const previous = this.past.pop();
     if (!previous) return;
@@ -266,6 +296,7 @@ export class LayoutEditor {
     this.restore(previous);
   }
 
+  /** Reapplies the most recently reverted layout edit. */
   redo() {
     const next = this.future.pop();
     if (!next) return;
@@ -326,7 +357,7 @@ export class LayoutEditor {
 
   private record() {
     this.past.push(this.snapshot());
-    if (this.past.length > 100) this.past.shift();
+    if (this.past.length > MAX_UNDO_DEPTH) this.past.shift();
     this.future = [];
     this.flagged = [];
   }
@@ -362,5 +393,5 @@ function bounds(items: Furniture[]) {
 }
 
 function newId(kind: string) {
-  return `${kind}-${Math.random().toString(36).slice(2, 8)}`;
+  return `${kind}-${Math.random().toString(RANDOM_ID_RADIX).slice(RANDOM_ID_START_INDEX, RANDOM_ID_END_INDEX)}`;
 }

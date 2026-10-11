@@ -1,5 +1,16 @@
+/**
+ * Unified drawing abstraction (Pen) for procedural characters, desks, and props.
+ * Decouples drawing recipes from render backends:
+ * - Phaser Graphics backend (`phaserPen`) for live in-game rendering.
+ * - HTML5 Canvas 2D backend (`canvasPen`) for off-screen textures and art lab rendering.
+ * Also provides an SVG string builder (`svgPen`) for static React UI previews.
+ */
+
 import type * as Phaser from 'phaser';
 import { css, type Hex } from './color';
+
+const MIN_CORNER_RADIUS_PX = 0.5;
+const ELLIPSE_SEGMENTS = 24;
 
 /**
  * The few drawing calls the art needs. Characters and desks draw with a Pen,
@@ -37,7 +48,7 @@ export function phaserPen(g: Phaser.GameObjects.Graphics): Pen {
       if (w <= 0 || h <= 0) return;
       g.fillStyle(color, alpha);
       const rr = radius(r, w, h);
-      if (rr < 0.5) g.fillRect(x, y, w, h);
+      if (rr < MIN_CORNER_RADIUS_PX) g.fillRect(x, y, w, h);
       else g.fillRoundedRect(x, y, w, h, rr);
     },
     circle(x, y, r, color, alpha = 1) {
@@ -46,7 +57,7 @@ export function phaserPen(g: Phaser.GameObjects.Graphics): Pen {
     },
     ellipse(x, y, w, h, color, alpha = 1) {
       g.fillStyle(color, alpha);
-      g.fillEllipse(x, y, w, h, 24);
+      g.fillEllipse(x, y, w, h, ELLIPSE_SEGMENTS);
     },
     poly(points, color, alpha = 1) {
       g.fillStyle(color, alpha);
@@ -76,7 +87,7 @@ export function phaserPen(g: Phaser.GameObjects.Graphics): Pen {
     frame(x, y, w, h, r, width, color, alpha = 1) {
       g.lineStyle(width, color, alpha);
       const rr = radius(r, w, h);
-      if (rr < 0.5) g.strokeRect(x, y, w, h);
+      if (rr < MIN_CORNER_RADIUS_PX) g.strokeRect(x, y, w, h);
       else g.strokeRoundedRect(x, y, w, h, rr);
     },
     push(x, y, angle = 0, scaleX = 1, scaleY = 1) {
@@ -91,42 +102,33 @@ export function phaserPen(g: Phaser.GameObjects.Graphics): Pen {
   };
 }
 
-/** Draws into a 2D canvas. */
-export function canvasPen(ctx: CanvasRenderingContext2D): Pen {
+/** Helper for filled path drawing operations on a 2D canvas context. */
+function canvasFillOps(ctx: CanvasRenderingContext2D) {
   const fill = (color: Hex, alpha: number) => {
     ctx.globalAlpha = alpha;
     ctx.fillStyle = css(color);
   };
-  const stroke = (color: Hex, width: number, alpha: number) => {
-    ctx.globalAlpha = alpha;
-    ctx.strokeStyle = css(color);
-    ctx.lineWidth = width;
-    ctx.lineCap = 'round';
-  };
-  const roundRect = (x: number, y: number, w: number, h: number, r: number) => {
-    ctx.beginPath();
-    ctx.roundRect(x, y, w, h, radius(r, w, h));
-  };
   return {
-    rect(x, y, w, h, r, color, alpha = 1) {
+    rect(x: number, y: number, w: number, h: number, r: number, color: Hex, alpha = 1) {
       if (w <= 0 || h <= 0) return;
       fill(color, alpha);
-      roundRect(x, y, w, h, r);
+      ctx.beginPath();
+      ctx.roundRect(x, y, w, h, radius(r, w, h));
       ctx.fill();
     },
-    circle(x, y, r, color, alpha = 1) {
+    circle(x: number, y: number, r: number, color: Hex, alpha = 1) {
       fill(color, alpha);
       ctx.beginPath();
       ctx.arc(x, y, Math.max(0, r), 0, Math.PI * 2);
       ctx.fill();
     },
-    ellipse(x, y, w, h, color, alpha = 1) {
+    ellipse(x: number, y: number, w: number, h: number, color: Hex, alpha = 1) {
       fill(color, alpha);
       ctx.beginPath();
       ctx.ellipse(x, y, Math.max(0, w / 2), Math.max(0, h / 2), 0, 0, Math.PI * 2);
       ctx.fill();
     },
-    poly(points, color, alpha = 1) {
+    poly(points: number[], color: Hex, alpha = 1) {
       fill(color, alpha);
       ctx.beginPath();
       ctx.moveTo(points[0], points[1]);
@@ -134,7 +136,7 @@ export function canvasPen(ctx: CanvasRenderingContext2D): Pen {
       ctx.closePath();
       ctx.fill();
     },
-    pie(x, y, r, start, end, color, alpha = 1) {
+    pie(x: number, y: number, r: number, start: number, end: number, color: Hex, alpha = 1) {
       fill(color, alpha);
       ctx.beginPath();
       ctx.moveTo(x, y);
@@ -142,30 +144,51 @@ export function canvasPen(ctx: CanvasRenderingContext2D): Pen {
       ctx.closePath();
       ctx.fill();
     },
-    ring(x, y, r, width, color, alpha = 1) {
+  };
+}
+
+/** Helper for stroked path drawing operations on a 2D canvas context. */
+function canvasStrokeOps(ctx: CanvasRenderingContext2D) {
+  const stroke = (color: Hex, width: number, alpha: number) => {
+    ctx.globalAlpha = alpha;
+    ctx.strokeStyle = css(color);
+    ctx.lineWidth = width;
+    ctx.lineCap = 'round';
+  };
+  return {
+    ring(x: number, y: number, r: number, width: number, color: Hex, alpha = 1) {
       stroke(color, width, alpha);
       ctx.beginPath();
       ctx.arc(x, y, r, 0, Math.PI * 2);
       ctx.stroke();
     },
-    arc(x, y, r, start, end, width, color, alpha = 1) {
+    arc(x: number, y: number, r: number, start: number, end: number, width: number, color: Hex, alpha = 1) {
       stroke(color, width, alpha);
       ctx.beginPath();
       ctx.arc(x, y, r, start, end);
       ctx.stroke();
     },
-    line(x1, y1, x2, y2, width, color, alpha = 1) {
+    line(x1: number, y1: number, x2: number, y2: number, width: number, color: Hex, alpha = 1) {
       stroke(color, width, alpha);
       ctx.beginPath();
       ctx.moveTo(x1, y1);
       ctx.lineTo(x2, y2);
       ctx.stroke();
     },
-    frame(x, y, w, h, r, width, color, alpha = 1) {
+    frame(x: number, y: number, w: number, h: number, r: number, width: number, color: Hex, alpha = 1) {
       stroke(color, width, alpha);
-      roundRect(x, y, w, h, r);
+      ctx.beginPath();
+      ctx.roundRect(x, y, w, h, radius(r, w, h));
       ctx.stroke();
     },
+  };
+}
+
+/** Draws into a 2D canvas. */
+export function canvasPen(ctx: CanvasRenderingContext2D): Pen {
+  return {
+    ...canvasFillOps(ctx),
+    ...canvasStrokeOps(ctx),
     push(x, y, angle = 0, scaleX = 1, scaleY = 1) {
       ctx.save();
       ctx.translate(x, y);

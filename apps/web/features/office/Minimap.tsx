@@ -1,3 +1,8 @@
+/**
+ * Corner minimap overlay displaying real-time floor plan layout, player positions,
+ * and camera viewport frustum.
+ */
+
 'use client';
 
 import { Map as MapIcon, Minus } from 'lucide-react';
@@ -10,7 +15,7 @@ import type { OfficeLayout } from '@/game/layout/types';
 
 const STORAGE_KEY = 'devpulse:minimap';
 
-/** Floor plan in a corner with everyone's position and what the screen shows. */
+/** Floor plan in a corner displaying everyone's position and the current camera viewport. */
 export function Minimap({ controller, layout }: { controller: OfficeController | null; layout: OfficeLayout }) {
   const [open, setOpen] = useState(true);
 
@@ -53,7 +58,7 @@ export function Minimap({ controller, layout }: { controller: OfficeController |
   );
 }
 
-/** Quarter-tile steps: finer movement is invisible on a 224 px map. */
+// WHY: Quarter-tile steps (0.25) quantize positions so minor sub-pixel movements don't trigger React re-renders on a 224 px map.
 const q = (n: number) => Math.round(n * 4) / 4;
 
 function quantize(s: OfficeSnapshot): OfficeSnapshot {
@@ -80,6 +85,7 @@ function MinimapMarks({ controller, layout }: { controller: OfficeController | n
 
   useEffect(() => {
     if (!controller) return;
+    // WHY: 150 ms polling (~6.6 Hz) balances snappy minimap updates with minimal CPU usage.
     const timer = setInterval(() => {
       const raw = controller.snapshot();
       if (!raw) return;
@@ -91,6 +97,7 @@ function MinimapMarks({ controller, layout }: { controller: OfficeController | n
 
   if (!snap) return null;
   return (
+    // WHY: -0.5 offset and +1 dimension expand SVG viewBox to provide half-tile border margin around the office boundary.
     <svg viewBox={`-0.5 -0.5 ${layout.width + 1} ${layout.height + 1}`} className="absolute inset-0 h-full w-full" aria-hidden="true">
       <rect
         x={snap.view.x}
@@ -102,6 +109,7 @@ function MinimapMarks({ controller, layout }: { controller: OfficeController | n
         strokeWidth={0.25}
         rx={0.6}
       />
+      {/* WHY: Offset cy by -0.4 tiles so the dot aligns with the avatar torso rather than feet. */}
       {snap.others.map((p) => (
         <circle key={p.id} cx={p.x} cy={p.y - 0.4} r={0.75} fill="#3f3f46" stroke="#fff" strokeWidth={0.3} />
       ))}

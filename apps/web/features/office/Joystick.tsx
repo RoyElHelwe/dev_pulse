@@ -1,8 +1,14 @@
+/**
+ * On-screen virtual joystick component for mobile/touch devices.
+ * Converts drag offset into normalized directional vectors for avatar movement.
+ */
+
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
 import type { OfficeController } from '@/game/createGame';
 
+// WHY: 52px matches the physical travel radius of thumb motion within the 128px (size-32) container.
 const RADIUS = 52;
 
 /** On touch screens: drag the knob to walk (keyboards keep working too). */
@@ -26,7 +32,7 @@ export function Joystick({ controller }: { controller: OfficeController | null }
       y = (y / length) * RADIUS;
     }
     setKnob({ x, y });
-    // A small dead zone so a resting thumb doesn't walk.
+    // WHY: A small dead zone (8px) so a resting thumb doesn't cause unintended player walking.
     const k = Math.hypot(x, y) < 8 ? 0 : 1 / RADIUS;
     controller.setJoystick(x * k, y * k);
   };
@@ -44,6 +50,7 @@ export function Joystick({ controller }: { controller: OfficeController | null }
       className="absolute right-6 bottom-8 size-32 touch-none rounded-full border border-white/70 bg-white/45 shadow-lg backdrop-blur-md select-none"
       onPointerDown={(e) => {
         pointer.current = e.pointerId;
+        // WHY: Pointer capture ensures continuous drag tracking even if the thumb slides outside the joystick element.
         e.currentTarget.setPointerCapture(e.pointerId);
         move(e);
       }}

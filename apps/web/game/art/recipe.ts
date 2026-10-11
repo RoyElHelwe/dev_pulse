@@ -1,9 +1,19 @@
+/**
+ * Character recipe data model and compact DNA encoding.
+ *
+ * A Recipe defines procedural character attributes (build, hair, clothing, vibe) chosen from discrete menus.
+ * A DNA code is a compact, versioned base-36 string ("1" prefix followed by one base-36 digit per field in FIELDS)
+ * stored in WorkspaceMember.character, interoperable with legacy named character presets (maya, sam, etc.).
+ */
+
 import { pick, type Random, weighted } from '../render/draw';
 import { BOTTOM, CLOTH, DYED_FROM, HAIR, SHOES, SKIN } from './palette';
 
-// A character is a recipe: a handful of choices from fixed menus. It's stored
-// as a short code ("DNA") in WorkspaceMember.character, next to the 8 named
-// presets that existed before, so old members keep their look.
+const MAX_HAIR_COLOR_TRIES = 12;
+const SKIN_LIGHTNESS_THRESHOLD = 0.6;
+const FRECKLES_CHANCE = 0.15;
+const HAT_CONTRAST_MIN = 0.1;
+const BREED_MUTATION_CHANCE = 0.35;
 
 const BUILDS = ['slim', 'regular', 'broad'] as const;
 const HAIR_STYLES = ['short', 'buzz', 'sidepart', 'long', 'bob', 'bun', 'ponytail', 'curly', 'afro', 'mohawk', 'braids', 'bald'] as const;
@@ -24,8 +34,11 @@ type Top = (typeof TOPS)[number];
 type Pattern = (typeof PATTERNS)[number];
 type Bottom = (typeof BOTTOMS)[number];
 type Hat = (typeof HATS)[number];
+
+/** Visual desk organization and aesthetic personality vibe of a character. */
 export type Vibe = (typeof VIBES)[number];
 
+/** Complete configuration recipe defining a character's visual features and palette indices. */
 export interface Recipe {
   build: Build;
   /** 0 short, 1 average, 2 tall. */
@@ -134,6 +147,7 @@ export const PRESETS: Record<string, Recipe> = {
   ivan: { ...base, skin: 0, hair: 'curly', hairColor: 5, top: 'shirt', topColor: 3, trimColor: 15, bottomColor: 2, vibe: 'scholar', glasses: 'round', freckles: true },
 };
 
+/** List of keys for predefined character presets. */
 export const PRESET_KEYS = Object.keys(PRESETS);
 
 /** What `character` holds (preset name or DNA) → recipe. Unknown → the first preset. */
@@ -162,11 +176,11 @@ export const HAT_FREE_HAIR: HairStyle[] = ['afro', 'mohawk', 'bun'];
 
 function hairColorFor(random: Random, skin: number): number {
   const options: [number, number][] = HAIR.map((_, i) => [i, i >= DYED_FROM ? 3 : [18, 16, 12, 6, 5, 7, 7, 3, 4][i]]);
-  for (let tries = 0; tries < 12; tries++) {
+  for (let tries = 0; tries < MAX_HAIR_COLOR_TRIES; tries++) {
     const pickIndex = weighted(random, options);
     if (Math.abs(HAIR[pickIndex].l - SKIN[skin].l) >= RULES.hairVsSkin) return pickIndex;
   }
-  return SKIN[skin].l > 0.6 ? 0 : 6;
+  return SKIN[skin].l > SKIN_LIGHTNESS_THRESHOLD ? 0 : 6;
 }
 
 function contrasting(random: Random, from: { l: number }[], against: number, min: number, avoid?: number) {
@@ -174,6 +188,7 @@ function contrasting(random: Random, from: { l: number }[], against: number, min
   return pick(random, ok.length ? ok : indexes(from.length));
 }
 
+/** Generates a randomized, visually harmonious character recipe using the provided RNG. */
 export function randomRecipe(random: Random): Recipe {
   const skin = Math.floor(random() * SKIN.length);
   const hair = weighted<HairStyle>(random, [
@@ -190,7 +205,7 @@ export function randomRecipe(random: Random): Recipe {
     hairColor: hairColorFor(random, skin),
     beard: weighted<Beard>(random, [['none', 70], ['stubble', 13], ['full', 10], ['moustache', 7]]),
     glasses: weighted<Glasses>(random, [['none', 68], ['round', 13], ['square', 13], ['shades', 6]]),
-    freckles: random() < 0.15,
+    freckles: random() < FRECKLES_CHANCE,
     top: weighted<Top>(random, [['tee', 30], ['hoodie', 22], ['shirt', 18], ['sweater', 18], ['blazer', 12]]),
     topColor,
     trimColor: contrasting(random, CLOTH, CLOTH[topColor].l, RULES.trimVsTop, topColor),
@@ -199,7 +214,7 @@ export function randomRecipe(random: Random): Recipe {
     bottomColor: contrasting(random, BOTTOM, CLOTH[topColor].l, RULES.topVsBottom),
     shoes: weighted(random, [[0, 30], [1, 30], [2, 15], [3, 8], [4, 10], [5, 7]]),
     hat,
-    hatColor: contrasting(random, CLOTH, CLOTH[topColor].l, 0.1, topColor),
+    hatColor: contrasting(random, CLOTH, CLOTH[topColor].l, HAT_CONTRAST_MIN, topColor),
     vibe: pick(random, VIBES),
   };
 }
@@ -225,5 +240,5 @@ export function breed(a: Recipe, b: Recipe, random: Random): Recipe {
   const out: Record<string, unknown> = {};
   for (const { key } of FIELDS) out[key] = (random() < 0.5 ? a : b)[key];
   const child = tidy(out as unknown as Recipe);
-  return random() < 0.35 ? mutate(child, random, 1) : child;
+  return random() < BREED_MUTATION_CHANCE ? mutate(child, random, 1) : child;
 }

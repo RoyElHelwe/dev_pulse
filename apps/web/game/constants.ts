@@ -1,4 +1,10 @@
+/**
+ * Shared game engine constants and configuration parameters.
+ * Defines dimensions, physics body bounds, camera zooms, networking rates, seating, and depth bands.
+ */
+
 // ---- Tiles & movement ------------------------------------------------------
+// World tile metrics and avatar locomotion speeds in the 2D office space.
 /** Size of one map tile in pixels. Layouts are written in tiles (1 tile ≈ 50 cm). */
 export const TILE = 32;
 
@@ -6,6 +12,7 @@ export const TILE = 32;
 export const WALK_SPEED = 170;
 
 // ---- Player body -----------------------------------------------------------
+// Collision hull dimensions and feet anchor offsets for avatar physics bodies.
 /** Local player physics body width in pixels. */
 export const PLAYER_BODY_WIDTH_PX = 18;
 
@@ -19,6 +26,7 @@ export const PLAYER_BODY_OFFSET_X_PX = -9;
 export const PLAYER_BODY_OFFSET_Y_PX = -10;
 
 // ---- Camera & zoom ---------------------------------------------------------
+// Viewport magnification limits, tween timings, margins, and follow speeds.
 /** Minimum allowable zoom level. */
 export const ZOOM_MIN = 0.6;
 
@@ -56,6 +64,7 @@ export const CAMERA_LERP = 0.12;
 export const CAMERA_BG_COLOR = '#e4e0da';
 
 // ---- Scenery baking --------------------------------------------------------
+// Chunk dimensions, scaling constraints, and memory limits for static scenery bake.
 /** Pixel size of chunked static scenery render textures. */
 export const CHUNK_PX = 512;
 
@@ -72,6 +81,7 @@ export const MAX_SCENERY_SCALE = 3;
 export const DPR_SCENERY_FACTOR = 1.5;
 
 // ---- Networking -------------------------------------------------------------
+// Network broadcast cadences and proximity distance polling intervals.
 /** Send the local position at most every 50 ms (20 per second) while walking. */
 export const SEND_INTERVAL_MS = 50;
 
@@ -79,6 +89,7 @@ export const SEND_INTERVAL_MS = 50;
 export const PROXIMITY_TICK_MS = 100;
 
 // ---- Seating ----------------------------------------------------------------
+// Dwell thresholds, occupancy radii, and geometric offsets for sitting mechanics.
 /** Milliseconds the player must dwell near a seat before sitting down. */
 export const SIT_DWELL_MS = 500;
 
@@ -101,6 +112,7 @@ export const ARMCHAIR_MARGIN_PX = 8;
 export const SEAT_ZONE_TILES = 0.45;
 
 // ---- Depth & layer sorting --------------------------------------------------
+// Depth sort divisors and relative z-offsets for sorting sprites and furniture.
 /** Divisor for converting Y pixel coordinates to depth fractions. */
 export const DEPTH_SORT_DIVISOR = 100_000;
 

@@ -1,3 +1,7 @@
+/**
+ * Furniture texture caching, wall-mounted art sizing, and contact shadow generation.
+ * Procedural furniture items are rasterized once into reusable dynamic textures.
+ */
 import type * as Phaser from 'phaser';
 import { drawDesk } from '../art/desk';
 import { phaserPen } from '../art/pen';
@@ -23,6 +27,31 @@ const VARIES = new Set(['desk', 'plant', 'bookshelf', 'meetingTable']);
 const DESK_WEAR = 0.35;
 const OWNERS = 'deskOwners';
 const PAPERS = 'deskPapers';
+
+/** Maximum texture scale clamp to avoid allocating oversized textures on high-DPI displays. */
+const MAX_TEXTURE_SCALE = 3;
+const DPR_SCALE_FACTOR = 1.5;
+
+// Wall art sizing constants
+const LEGO_BOARD_MAX_HEIGHT_PX = 64;
+const LEGO_BOARD_ASPECT_RATIO = 1.5;
+const BOARD_MAX_HEIGHT_PX = 60;
+const BOARD_HEIGHT_RATIO = 0.6;
+const TV_MAX_HEIGHT_PX = 60;
+const TV_ASPECT_W = 16;
+const TV_ASPECT_H = 9;
+const WALL_MOUNT_OFFSET_Y_PX = 8;
+const MAX_DESK_PAPERS = 9;
+
+// Shadow rendering constants
+const SHADOW_COLOR = 0x000000;
+const SHADOW_EXTRA_WIDTH_PX = 2;
+const SHADOW_ROUND_ALPHA = 0.12;
+const SHADOW_ROUND_W_RATIO = 0.8;
+const SHADOW_ROUND_H_RATIO = 0.75;
+const SHADOW_ROUND_SEGMENTS = 24;
+const SHADOW_BOX_RADIUS_PX = 8;
+const SHADOW_BOX_ALPHA = 0.1;
 
 /**
  * Who sits at each desk (desk id → their character): desks decorate
@@ -56,40 +85,43 @@ function furnitureTextureKey(item: Furniture, owner?: string, papers = 0) {
 
 /** Texture pixels per world pixel: sharp at the default zoom on retina screens. */
 export function textureScale(dpr: number) {
-  return Math.min(3, dpr * 1.5);
+  return Math.min(MAX_TEXTURE_SCALE, dpr * DPR_SCALE_FACTOR);
 }
 
+/** Computes pixel dimensions [w, h] for wall-mounted art and screens based on tile size. */
 export function wallArtSize(item: Furniture): { w: number; h: number } {
   if (item.kind === 'legoBoard') {
-    const h = Math.min(64, (item.w * 32 * 2) / 3);
-    return { w: h * 1.5, h };
+    const h = Math.min(LEGO_BOARD_MAX_HEIGHT_PX, (item.w * TILE * 2) / 3);
+    return { w: h * LEGO_BOARD_ASPECT_RATIO, h };
   }
   if (item.kind === 'board') {
-    const w = item.w * 32;
-    return { w, h: Math.min(60, w * 0.6) };
+    const w = item.w * TILE;
+    return { w, h: Math.min(BOARD_MAX_HEIGHT_PX, w * BOARD_HEIGHT_RATIO) };
   }
   if (item.kind === 'tv') {
-    const w0 = item.w * 32;
-    const h = Math.min(60, (w0 * 9) / 16);
-    return { w: Math.min(w0, (h * 16) / 9), h };
+    const w0 = item.w * TILE;
+    const h = Math.min(TV_MAX_HEIGHT_PX, (w0 * TV_ASPECT_H) / TV_ASPECT_W);
+    return { w: Math.min(w0, (h * TV_ASPECT_W) / TV_ASPECT_H), h };
   }
-  return { w: item.w * 32, h: item.h * 32 };
+  return { w: item.w * TILE, h: item.h * TILE };
 }
 
+/** Computes pixel world center coordinates for placed furniture or wall art. */
 export function furnitureCenter(item: Furniture): { x: number; y: number } {
   if (isWallMounted(item.kind)) {
     const art = wallArtSize(item);
     return {
-      x: item.x * 32,
-      y: (item.y - item.h / 2) * 32 - 8 - art.h / 2,
+      x: item.x * TILE,
+      y: (item.y - item.h / 2) * TILE - WALL_MOUNT_OFFSET_Y_PX - art.h / 2,
     };
   }
-  return { x: item.x * 32, y: item.y * 32 };
+  return { x: item.x * TILE, y: item.y * TILE };
 }
 
+/** Generates or reuses a cached dynamic texture for a piece of furniture. */
 export function ensureFurnitureTexture(scene: Phaser.Scene, item: Furniture, scale: number) {
   const owner = deskOwner(scene, item);
-  const papers = owner ? Math.min(9, deskPapers(scene, item)) : 0;
+  const papers = owner ? Math.min(MAX_DESK_PAPERS, deskPapers(scene, item)) : 0;
   const key = furnitureTextureKey(item, owner, papers);
   if (scene.textures.exists(key)) return key;
   const { w, h } = isWallMounted(item.kind) ? wallArtSize(item) : { w: item.w * TILE, h: item.h * TILE };
@@ -111,14 +143,14 @@ export function ensureShadowTexture(scene: Phaser.Scene, item: Furniture, scale:
   const round = FURNITURE[item.kind].round;
   const key = `shadow:${round ? 'round' : 'box'}:${b.w}:${b.h}`;
   if (scene.textures.exists(key)) return key;
-  const w = b.w * TILE + 2;
+  const w = b.w * TILE + SHADOW_EXTRA_WIDTH_PX;
   const h = b.h * TILE;
   const g = scene.make.graphics({}, false);
   if (round) {
-    g.fillStyle(0x000000, 0.12);
-    g.fillEllipse(w / 2, h / 2, w * 0.8, h * 0.75, 24);
+    g.fillStyle(SHADOW_COLOR, SHADOW_ROUND_ALPHA);
+    g.fillEllipse(w / 2, h / 2, w * SHADOW_ROUND_W_RATIO, h * SHADOW_ROUND_H_RATIO, SHADOW_ROUND_SEGMENTS);
   } else {
-    rr(g, 0, 0, w, h, 8, 0x000000, 0.1);
+    rr(g, 0, 0, w, h, SHADOW_BOX_RADIUS_PX, SHADOW_COLOR, SHADOW_BOX_ALPHA);
   }
   const texture = scene.textures.addDynamicTexture(key, Math.ceil(w * scale), Math.ceil(h * scale))!;
   g.setScale(scale);
