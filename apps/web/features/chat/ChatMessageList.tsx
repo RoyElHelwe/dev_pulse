@@ -9,6 +9,7 @@ import { type ChatMessage, ChatMessageItem } from './ChatMessageItem';
 const SCROLL_STICKY_THRESHOLD_PX = 40;
 const MESSAGE_GROUP_TIME_GAP_MS = 5 * 60_000;
 
+/** Asynchronous fetch state for conversation history, distinguishing pending requests, ready data, and load errors. */
 export type LoadState = { state: 'loading'; token: number } | { state: 'ready' } | { state: 'error'; message: string };
 
 interface ChatMessageListProps {

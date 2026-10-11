@@ -11,6 +11,7 @@ import { Modal } from '@/components/ui/Modal';
 import { CharacterStudio } from '@/features/workspace/CharacterStudio';
 import { api } from '@/lib/api';
 
+/** Display visibility, dismiss handler, and active character sprite identifier for the customization dialog. */
 export interface CharacterModalProps {
   open: boolean;
   onClose: () => void;

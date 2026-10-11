@@ -18,6 +18,7 @@ const GENERATED_SIZES = [
   { label: 'Large', hint: '~48 people', size: 48 },
 ] as const;
 
+/** Metadata and floor-plan layout specification for selectable office templates in the onboarding wizard. */
 export interface OfficeTemplateOption {
   id: string;
   name: string;

@@ -7,6 +7,7 @@ import { createPortal } from 'react-dom';
 import { cn } from '@/lib/cn';
 import { useEscape } from '@/lib/escape';
 
+/** Display state, header title, dismiss callback, and body content for the portal modal dialog. */
 export interface ModalProps {
   open: boolean;
   onClose: () => void;

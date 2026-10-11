@@ -3,6 +3,7 @@
 import type { Metadata } from 'next';
 import { SecuritySettings } from '@/features/settings/SecuritySettings';
 
+/** Sets the browser tab title for the account security and session settings page. */
 export const metadata: Metadata = { title: 'Security · Dev Pulse' };
 
 /** Security settings page rendering authentication and session controls. */

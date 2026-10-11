@@ -33,6 +33,7 @@ function isModifier(e: KeyboardEvent) {
   return MODIFIER_CODES.has(e.code) || ['Shift', 'Control', 'Alt', 'Meta'].includes(e.key);
 }
 
+/** Visibility state and dismiss callback for the keyboard shortcut customization dialog. */
 export interface KeybindsModalProps {
   open: boolean;
   onClose: () => void;

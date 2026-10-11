@@ -18,6 +18,7 @@ const MASTER_GAIN_RAMP_SMOOTH_SEC = 0.02;
 
 type Spot = OfficeSnapshot['me'];
 
+/** Immutable snapshot of current voice session flags, mute status, transmit activity, and active peer IDs. */
 export interface VoiceSnapshot {
   joined: boolean;
   muted: boolean;

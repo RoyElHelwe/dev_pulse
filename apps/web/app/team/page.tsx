@@ -5,6 +5,7 @@ import { AppHeader } from '@/components/AppHeader';
 import { SiteFooter } from '@/components/SiteFooter';
 import { TeamPage } from '@/features/team/TeamPage';
 
+/** Sets the browser tab title for the team roster and member invitation page. */
 export const metadata: Metadata = { title: 'Team · Dev Pulse' };
 
 /** Team page displaying office members and team management actions. */

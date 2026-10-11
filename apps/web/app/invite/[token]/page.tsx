@@ -6,6 +6,7 @@ import { SiteFooter } from '@/components/SiteFooter';
 import { Logo } from '@/components/ui/Logo';
 import { InvitationView } from '@/features/onboarding/InvitationView';
 
+/** Sets the browser tab title for the workspace invitation acceptance route. */
 export const metadata: Metadata = { title: 'Invitation · Dev Pulse' };
 
 /** Public invitation page resolving team invite tokens. */

@@ -63,6 +63,7 @@ function loadKeybinds(): Promise<void> {
   return inflight;
 }
 
+/** Outcome of a key binding modification request, indicating success or failure with an error message. */
 export type RebindResult = { ok: true } | { ok: false; error: string };
 
 /**

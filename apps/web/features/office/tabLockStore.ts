@@ -16,6 +16,7 @@ let state: TabLockState = null;
 let useHere: (() => void) | null = null;
 const listeners = new Set<() => void>();
 
+/** Singleton controller updating and distributing browser-tab mutual exclusion status for the office session. */
 export const tabLock = {
   set(next: TabLockState) {
     if (state === next) return;

@@ -5,6 +5,7 @@ import { Suspense } from 'react';
 import { DevSwitcherGate } from '@/features/dev/DevSwitcher';
 import { RegisterForm } from '@/features/auth/RegisterForm';
 
+/** Sets the browser tab title for the new user registration page. */
 export const metadata: Metadata = { title: 'Create your account · Dev Pulse' };
 
 /** Registration page rendering the account sign-up form wrapped in dev switcher detection. */

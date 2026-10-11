@@ -4,6 +4,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { LegalPage } from '@/components/LegalPage';
 
+/** Sets the browser tab title for the public Terms of Service legal page. */
 export const metadata: Metadata = { title: 'Terms of Service · Dev Pulse' };
 
 /** Public Terms of Service legal page. */

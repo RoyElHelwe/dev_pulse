@@ -1,6 +1,7 @@
 // Configuration types, default values, and key display formatters for proximity voice.
 // Fits into the voice feature and settings UI to support open mic and push-to-talk modes.
 
+/** Microphone transmission activation strategy, choosing between continuous open voice and push-to-talk keybind. */
 export type VoiceMode = 'OPEN' | 'PUSH_TO_TALK';
 
 /** GET / PATCH /api/settings voice payload. */
@@ -11,6 +12,7 @@ export interface VoiceSettings {
   keybinds?: Record<string, string>;
 }
 
+/** Fallback audio transmission preferences configuring open-mic activation and KeyV push-to-talk keybind. */
 export const DEFAULT_VOICE_SETTINGS: VoiceSettings = { voiceMode: 'OPEN', pushToTalkKey: 'KeyV' };
 
 const KEY_DISPLAY_NAMES: Record<string, string> = {

@@ -8,6 +8,7 @@ import type { Role } from '@/features/workspace/types';
 /** Milliseconds in a single 24-hour day. */
 const MS_PER_DAY = 86_400_000;
 
+/** Workspace team member record detailing account identity, role permissions, avatar, and assigned desk. */
 export interface Member {
   userId: string;
   displayName: string;
@@ -18,6 +19,7 @@ export interface Member {
   joinedAt: string;
 }
 
+/** Outstanding workspace invitation record indicating invitee email, assigned role, and expiry status. */
 export interface PendingInvitation {
   id: string;
   email: string;
@@ -26,6 +28,7 @@ export interface PendingInvitation {
   expired: boolean;
 }
 
+/** Office layout template preset specifying team capacity limit and initial room arrangement. */
 export interface OfficeTemplate {
   id: string;
   name: string;
@@ -34,6 +37,7 @@ export interface OfficeTemplate {
   layout: OfficeLayout;
 }
 
+/** Directional wing attachment position for expanding workspace office layouts. */
 export type WingSide = 'LEFT' | 'RIGHT' | 'BOTTOM';
 
 /** Calculates full days remaining until an ISO date timestamp. */

@@ -23,6 +23,7 @@ export type SignInResponse =
   /** Signed in correctly, but the account is in use on another device. */
   | { status: 'session-active'; device: ActiveDevice };
 
+/** Device label and last activity timestamp for a conflicting active session held elsewhere. */
 export interface ActiveDevice {
   name: string;
   lastActiveAt: string;

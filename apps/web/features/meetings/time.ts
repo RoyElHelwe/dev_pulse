@@ -13,6 +13,7 @@ export interface Booking {
   attendeeIds: string[];
 }
 
+/** Team member identifier and display name for meeting participant selection and booking rosters. */
 export interface Member {
   userId: string;
   displayName: string;
@@ -24,11 +25,14 @@ const TIMETABLE_LAST_HOUR = 20;
 const MINUTES_PER_HOUR = 60;
 const MS_PER_DAY = 86_400_000;
 
+/** Duration of each row slot in the meeting timetable grid (in minutes). */
 export const ROW_MINUTES = 30;
+/** Total number of timetable row slots displayed between 08:00 and 20:00 (slot count). */
 export const ROWS = ((TIMETABLE_LAST_HOUR - TIMETABLE_FIRST_HOUR) * MINUTES_PER_HOUR) / ROW_MINUTES;
 
 /** Bookings move in 15-minute steps and last 4 hours at most (same rules as the API). */
 export const STEP_MINUTES = 15;
+/** Maximum allowable duration for a single meeting room reservation (in minutes). */
 export const MAX_MINUTES = 4 * MINUTES_PER_HOUR;
 
 /** Truncates a Date to midnight at the start of that local day. */

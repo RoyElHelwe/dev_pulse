@@ -6,6 +6,7 @@ import { GeistSans } from 'geist/font/sans';
 import { AuthProvider } from '@/features/auth/AuthProvider';
 import './globals.css';
 
+/** Default browser tab title and SEO description across all application pages. */
 export const metadata: Metadata = {
   title: 'Dev Pulse',
   description: 'Collaborative workspace inside a 2D virtual office',

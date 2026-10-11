@@ -6,6 +6,7 @@ import { SiteFooter } from '@/components/SiteFooter';
 import { StackStatus } from '@/components/StackStatus';
 import { Logo } from '@/components/ui/Logo';
 
+/** Sets the browser tab title for the public system health and status page. */
 export const metadata: Metadata = { title: 'Status · Dev Pulse' };
 
 /** Public system status page checking API, database, and real-time connectivity. */

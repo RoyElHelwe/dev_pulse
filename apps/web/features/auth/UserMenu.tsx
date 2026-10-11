@@ -20,6 +20,7 @@ import type { User } from './types';
 const MENU_OFFSET_PX = 8;
 const MIN_VIEWPORT_MARGIN_PX = 8;
 
+/** Visual styling, compact trigger mode, and optional character appearance state for the user menu. */
 export interface UserMenuProps {
   className?: string;
   compact?: boolean;

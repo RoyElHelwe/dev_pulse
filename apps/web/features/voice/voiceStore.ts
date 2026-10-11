@@ -3,6 +3,7 @@
 
 import { useSyncExternalStore } from 'react';
 
+/** Audio suppression flags representing whether a participant has muted their microphone or deafened output. */
 export interface VoiceState {
   muted: boolean;
   deafened: boolean;
