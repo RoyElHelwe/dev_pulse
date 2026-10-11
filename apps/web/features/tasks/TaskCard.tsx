@@ -11,6 +11,7 @@ import { cn } from '@/lib/cn';
 import { AssigneeAvatar, PriorityIcon, TypeIcon } from './TaskIcons';
 import type { BoardMember, TaskView } from './types';
 
+/** Task model, assignee details, drag state, and card open handler for an interactive board card. */
 export interface TaskCardProps
   extends Omit<ComponentProps<'div'>, 'onClick' | 'children'> {
   task: TaskView;

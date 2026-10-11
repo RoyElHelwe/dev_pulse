@@ -7,6 +7,7 @@
 
 import { Button } from '@/components/ui/Button';
 
+/** Action capabilities, deletion confirmation state, audit timestamps, and callbacks for edit form actions. */
 export interface EditTaskFooterProps {
   canDelete: boolean;
   confirmDelete: boolean;

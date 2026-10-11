@@ -14,6 +14,7 @@ import { useTasks } from './taskStore';
 import type { TaskDialogMode } from './taskDialogUtils';
 import type { BoardMember } from './types';
 
+/** Dialog mode configuration, workspace members, viewer role permissions, and dismissal callback. */
 export interface TaskDialogProps {
   mode: TaskDialogMode;
   members: BoardMember[];

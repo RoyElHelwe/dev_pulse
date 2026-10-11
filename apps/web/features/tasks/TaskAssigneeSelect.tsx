@@ -8,6 +8,7 @@
 import { Select } from '@/components/ui/Select';
 import type { BoardMember } from './types';
 
+/** Selected assignee user ID, member options, disabled state, and change callback for assigning a task. */
 export interface TaskAssigneeSelectProps {
   value: string;
   onChange(value: string): void;

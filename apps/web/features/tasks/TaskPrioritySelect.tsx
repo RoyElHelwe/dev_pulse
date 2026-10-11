@@ -9,6 +9,7 @@ import { Select } from '@/components/ui/Select';
 import type { TaskPriority } from './types';
 import { PRIORITY_LABEL, PRIORITIES } from './types';
 
+/** Selected priority level, change callback, and disabled state for setting task urgency. */
 export interface TaskPrioritySelectProps {
   value: TaskPriority;
   onChange(value: TaskPriority): void;

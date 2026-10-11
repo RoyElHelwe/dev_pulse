@@ -23,6 +23,7 @@ import {
 } from './taskDialogUtils';
 import type { BoardMember, TaskView } from './types';
 
+/** Task record, workspace members, viewer permissions, and modal handlers for updating or deleting a task. */
 export interface EditTaskDialogProps {
   task: TaskView;
   members: BoardMember[];

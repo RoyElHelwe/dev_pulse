@@ -9,6 +9,7 @@ import { forwardRef, type PointerEvent } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/cn';
 
+/** Pointer event listeners and drawer visibility flag needed to drag or toggle the task board drawer. */
 export interface BoardDrawerHandleProps {
   open: boolean;
   onPointerDown(e: PointerEvent<HTMLButtonElement>): void;

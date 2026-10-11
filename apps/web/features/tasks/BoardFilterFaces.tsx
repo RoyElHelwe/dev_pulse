@@ -10,6 +10,7 @@ import { cn } from '@/lib/cn';
 import { AssigneeAvatar } from './TaskIcons';
 import type { BoardMember } from './types';
 
+/** Visible member avatars, active assignee selections, and overflow trigger state for filtering board tasks. */
 export interface BoardFilterFacesProps {
   shownMembers: BoardMember[];
   selectedAssignees: string[];

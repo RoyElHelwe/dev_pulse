@@ -9,6 +9,7 @@ import { Select } from '@/components/ui/Select';
 import type { TaskStatus } from './types';
 import { STATUS_LABEL, STATUSES } from './types';
 
+/** Selected workflow lane status, change callback, and disabled state for updating task lifecycle. */
 export interface TaskStatusSelectProps {
   value: TaskStatus;
   onChange(value: TaskStatus): void;

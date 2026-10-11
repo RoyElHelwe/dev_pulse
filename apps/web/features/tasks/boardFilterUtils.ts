@@ -5,8 +5,10 @@
 
 import type { BoardFilter, BoardMember, TaskView } from './types';
 
+/** Maximum number of member avatar buttons shown directly in the filter toolbar before overflowing. */
 export const MAX_VISIBLE_MEMBERS = 8;
 
+/** Inactive filter baseline with empty search text, no assignee restrictions, and all tasks shown. */
 export const EMPTY_FILTER: BoardFilter = {
   assignees: [],
   onlyMine: false,
