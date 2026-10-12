@@ -58,8 +58,16 @@ const TICK_INTERVAL_MS = MS_PER_SECOND / TICK_RATE;
 /** Simulation delta time per physics step (seconds). */
 const SECONDS_PER_TICK = 1 / TICK_RATE;
 
-/** Initial ball velocity imparted along X on serve (units/s). */
-const SERVE_BALL_SPEED_UNITS_PER_S = 25;
+/** Serve speed along X, toward the team that receives the ball (units/s). */
+const SERVE_SPEED_X_UNITS_PER_S = 10;
+/** Serve speed along Y, away from the centre line (units/s). */
+const SERVE_SPEED_Y_UNITS_PER_S = 30;
+/**
+ * Serve spot offset from the centre line: the gap between two midfield men (men are FIELD_W / 5
+ * apart). The exact centre sits on both midfield rods' centre men at once (rods 8 units apart,
+ * collision distance 5), which pinned the ball after every goal until the stuck timer freed it.
+ */
+const SERVE_OFFSET_Y = FIELD_W / 10;
 
 /** Stopped ball velocity along coordinate axes (units/s). */
 const BALL_STOPPED_VELOCITY_UNITS_PER_S = 0;
@@ -107,13 +115,33 @@ function clearPhaseTimeouts(state: FoosballState): void {
 // Match Progression Helpers
 // ============================================================================
 
-/** Resets ball to center pitch with initial serve velocity. */
-function serveBall(world: PhysicsWorld): void {
+/**
+ * Serves from the middle of the table into a gap between midfield men, drifting toward
+ * `toward` (the team that conceded, or a random one at kick-off) and away from the centre line.
+ */
+function serveBall(world: PhysicsWorld, toward: FoosballSide): void {
+  const side = Math.random() < 0.5 ? -1 : 1;
   world.ball.x = FIELD_L / FIELD_CENTER_DIVISOR;
-  world.ball.y = FIELD_W / FIELD_CENTER_DIVISOR;
-  world.ball.vx = SERVE_BALL_SPEED_UNITS_PER_S;
-  world.ball.vy = BALL_STOPPED_VELOCITY_UNITS_PER_S;
+  world.ball.y = FIELD_W / FIELD_CENTER_DIVISOR + side * SERVE_OFFSET_Y;
+  // Side A defends the goal at x = 0.
+  world.ball.vx = (toward === 'A' ? -1 : 1) * SERVE_SPEED_X_UNITS_PER_S;
+  world.ball.vy = side * SERVE_SPEED_Y_UNITS_PER_S;
   world.stuckTimer = BALL_RESET_STUCK_TIMER_S;
+}
+
+/** Puts every rod back in the middle, at rest (a rod left over the serve spot would block it). */
+function centreRods(world: PhysicsWorld): void {
+  for (const side of ['A', 'B'] as const) {
+    for (const r of world.rods[side]) {
+      r.y = 0;
+      r.vel = 0;
+      r.dir = ROD_DIR_STOP_VALUE;
+      r.target = null;
+      r.kick = 0;
+      r.kickTimer = 0;
+      r.kickCooldown = 0;
+    }
+  }
 }
 
 /** Records match outcome in PostgreSQL leaderboard if not already recorded. */
@@ -151,14 +179,15 @@ function handleGraceExpiry(state: FoosballState, ctx: GameContext): void {
 }
 
 /** Transitions state into countdown phase and schedules serve transition. */
-function startCountdown(state: FoosballState, ctx: GameContext): void {
+function startCountdown(state: FoosballState, ctx: GameContext, receiver: FoosballSide = Math.random() < 0.5 ? 'A' : 'B'): void {
   state.phase = 'countdown';
+  centreRods(state.world);
   state.countdownEndsAt = state.now() + COUNTDOWN_DURATION_MS;
   clearPhaseTimeouts(state);
   state.countdownTimeout = setTimeout(() => {
     state.countdownTimeout = undefined;
     state.phase = 'playing';
-    serveBall(state.world);
+    serveBall(state.world, receiver);
     ctx.emitState();
   }, COUNTDOWN_DURATION_MS);
   startTickLoop(state, ctx);
@@ -191,17 +220,13 @@ function handleGoalScored(
   state.world.ball.y = FIELD_W / FIELD_CENTER_DIVISOR;
   state.world.ball.vx = BALL_STOPPED_VELOCITY_UNITS_PER_S;
   state.world.ball.vy = BALL_STOPPED_VELOCITY_UNITS_PER_S;
-  for (const side of ['A', 'B'] as const) {
-    for (const r of state.world.rods[side]) {
-      r.dir = ROD_DIR_STOP_VALUE;
-      r.target = null;
-    }
-  }
+  centreRods(state.world);
 
   clearPhaseTimeouts(state);
   state.goalTimeout = setTimeout(() => {
     state.goalTimeout = undefined;
-    startCountdown(state, ctx);
+    // The team that conceded gets the ball.
+    startCountdown(state, ctx, scoringSide === 'A' ? 'B' : 'A');
   }, GOAL_RESET_DELAY_MS);
 
   ctx.emitState();

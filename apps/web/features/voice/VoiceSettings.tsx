@@ -1,6 +1,6 @@
 'use client';
 
-// User settings view for configuring voice transmission mode (Open mic vs Push-to-talk).
+// User settings view for voice: microphone / speaker choice and test, transmission mode (Open mic vs Push-to-talk).
 // Fits into the /settings/voice route to persist microphone preferences to the backend.
 
 import { Keyboard, Mic } from 'lucide-react';
@@ -14,10 +14,11 @@ import { useAuth } from '@/features/auth/AuthProvider';
 import { api, ApiError } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { rebind, useKeybinds } from '@/features/settings/keybindStore';
+import { AudioDevices } from './AudioDevices';
 import { keyName, type VoiceMode, type VoiceSettings as Settings } from './settings';
 
 const MODES: { mode: VoiceMode; title: string; text: string; Icon: typeof Mic }[] = [
-  { mode: 'OPEN', title: 'Open mic', text: 'People nearby hear you whenever you are not muted (M).', Icon: Mic },
+  { mode: 'OPEN', title: 'Open mic', text: 'People nearby hear you whenever you are not muted.', Icon: Mic },
   { mode: 'PUSH_TO_TALK', title: 'Push to talk', text: 'Your mic is only on while you hold a key.', Icon: Keyboard },
 ];
 
@@ -75,6 +76,8 @@ export function VoiceSettings() {
   }
   return (
     <div className="flex flex-col gap-5">
+      <AudioDevices />
+
       <Card title="How your mic works" description="Your choice applies the next time you enter the office.">
         <div role="radiogroup" aria-label="Voice mode" className="grid gap-3 sm:grid-cols-2">
           {MODES.map(({ mode, title, text, Icon }) => {

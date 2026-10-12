@@ -392,8 +392,10 @@ pnpm test
 
 **Code:** `apps/api/src/meetings`, `apps/web/features/meetings` · **Internals:** [docs/code/voice.md](code/voice.md)
 
-**Rooms** (top right) opens a day timetable: one column per meeting room, 08:00–20:00 in
-30-minute rows, today with previous / next day, in your own time zone. Bookings show their
+**Rooms** (top right) opens a day timetable: one column per meeting room, the whole day
+(00:00–24:00) in 30-minute rows, today with previous / next day, in your own time zone. It opens
+scrolled to the current time (today) or to 08:00 (other days); past slots are grey and striped
+and cannot be picked. Bookings show their
 title, time and people (yours in green). Click a free slot, or drag over several, to book:
 title, room, start / end (15-minute steps) and who is invited. Click a booking for its
 details; its creator, or an owner / admin, can cancel it.
@@ -404,6 +406,8 @@ details; its creator, or an owner / admin, can cancel it.
 | Time | start before end, 15-minute steps, 4 hours at most, not in the past (the slot running now is fine), up to 30 days ahead |
 | People | members of the office, 30 at most; the creator is always one of them |
 | No double booking | refused with "Atlas is booked 14:00–15:00 by Roy". Race-free: each booking takes a Postgres advisory lock for its room (`pg_advisory_xact_lock`) inside the transaction that checks and inserts |
+
+**In a meeting room**, a bar under the office name offers **Share screen** (one presenter per room; everyone in the room watches, on any device; presenting needs a desktop browser) and **Whiteboard** (a shared Excalidraw canvas, live for everyone in the room and kept for the next meeting). Details: [docs/code/meeting-room.md](code/meeting-room.md).
 
 **During a meeting only its people get in.**
 

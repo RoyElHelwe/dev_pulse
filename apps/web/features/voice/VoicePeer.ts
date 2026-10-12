@@ -4,7 +4,10 @@
 import { PeerAudio } from './VoiceAudio';
 
 const CONNECTION_TIMEOUT_MS = 12_000;
-const ICE_SERVERS: RTCIceServer[] = [{ urls: 'stun:stun.l.google.com:19302' }];
+/** A connected call that drops to "disconnected" often recovers by itself (Wi-Fi blip): wait this long. */
+const DISCONNECTED_GRACE_MS = 8_000;
+/** STUN only: enough on a LAN and most home networks (see docs/code/voice.md for TURN). */
+export const ICE_SERVERS: RTCIceServer[] = [{ urls: 'stun:stun.l.google.com:19302' }];
 
 /** What travels through the server. `bye`: hung up. */
 export type VoiceSignal = { description?: RTCSessionDescriptionInit; candidate?: RTCIceCandidateInit; bye?: true };
@@ -16,6 +19,8 @@ export class VoicePeer {
   private readonly pc: RTCPeerConnection;
   private readonly audio: PeerAudio;
   private readonly createdAt = performance.now();
+  /** Last time the connection was seen up (null: never connected yet). */
+  private connectedAt: number | null = null;
   private makingOffer = false;
   private ignoreOffer = false;
 
@@ -72,7 +77,19 @@ export class VoicePeer {
   /** Checks whether the peer connection failed or took too long to reach connected state. */
   stuck(now: number): boolean {
     const state = this.pc.connectionState;
-    return state === 'failed' || state === 'closed' || (state !== 'connected' && now - this.createdAt > CONNECTION_TIMEOUT_MS);
+    if (state === 'connected') {
+      this.connectedAt = now;
+      return false;
+    }
+    if (state === 'failed' || state === 'closed') return true;
+    // Never came up, or lost for longer than a short network blip.
+    if (this.connectedAt === null) return now - this.createdAt > CONNECTION_TIMEOUT_MS;
+    return now - this.connectedAt > DISCONNECTED_GRACE_MS;
+  }
+
+  /** Sends another microphone track (the previous one was unplugged), without renegotiating. */
+  replaceMic(track: MediaStreamTrack): void {
+    for (const sender of this.pc.getSenders()) if (sender.track?.kind !== 'video') void sender.replaceTrack(track).catch(() => {});
   }
 
   place(at: { x: number; z: number }, gain: number): void {

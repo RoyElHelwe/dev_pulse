@@ -4,7 +4,7 @@
  */
 
 import * as Phaser from 'phaser';
-import { PROXIMITY_TICK_MS, SEND_INTERVAL_MS, TILE } from '../constants';
+import { MIN_CHANGE_INTERVAL_MS, PROXIMITY_TICK_MS, SEND_INTERVAL_MS, TILE } from '../constants';
 import { recipeOf } from '../art/recipe';
 import { type Avatar, type Direction, DIRECTIONS } from '../objects/Avatar';
 import { RemotePlayer } from '../objects/RemotePlayer';
@@ -218,7 +218,11 @@ export class NetSync {
     const dir = this.player.facing;
     const seated = this.player.seated;
     const changed = moving !== this.lastSent.moving || dir !== this.lastSent.dir || seated !== this.lastSent.seated;
-    if ((moving && time - this.lastSent.at >= SEND_INTERVAL_MS) || changed) {
+    const since = time - this.lastSent.at;
+    // Changes go out quickly but never faster than MIN_CHANGE_INTERVAL_MS: tapping keys used to send a
+    // packet per press, past the server's 40/s budget, which then dropped them (the stop included).
+    // A change not sent yet stays "changed", so it goes out on a following frame.
+    if ((moving && since >= SEND_INTERVAL_MS) || (changed && since >= MIN_CHANGE_INTERVAL_MS)) {
       this.lastSent = { at: time, moving, dir, seated };
       this.sendPosition(moving);
     }

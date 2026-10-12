@@ -529,4 +529,35 @@ describe('Foosball Game', () => {
 
     game.dispose();
   });
+
+  it('the serve stays live: at kick-off and after a goal the ball travels instead of sticking', () => {
+    const game = createFoosballGame(ctx);
+    game.onAction(pA1.userId, { type: 'sit', side: 'A' });
+    game.onAction(pB1.userId, { type: 'sit', side: 'B' });
+    game.onAction(pA1.userId, { type: 'start' });
+    vi.advanceTimersByTime(3000);
+
+    const travels = () => {
+      const served = { ...game._world.ball };
+      vi.advanceTimersByTime(500);
+      const ball = game._world.ball;
+      expect((game.view(pA1.userId) as FoosballView).phase).toBe('playing');
+      expect(Math.hypot(ball.vx, ball.vy)).toBeGreaterThan(3);
+      expect(Math.hypot(ball.x - served.x, ball.y - served.y)).toBeGreaterThan(5);
+    };
+    travels();
+
+    // Goal for A, with B's midfield rod left at the side: rods are centred again for the serve.
+    game._world.rods.B[2].y = 3;
+    game._world.ball = { x: 119.9, y: 32, vx: 50, vy: 0 };
+    vi.advanceTimersByTime(40);
+    expect((game.view(pA1.userId) as FoosballView).phase).toBe('goal');
+    vi.advanceTimersByTime(1500 + 3000);
+    expect(game._world.rods.B[2].y).toBe(0);
+    // B conceded: the ball drifts toward B's half.
+    expect(game._world.ball.vx).toBeGreaterThan(0);
+    travels();
+
+    game.dispose();
+  });
 });

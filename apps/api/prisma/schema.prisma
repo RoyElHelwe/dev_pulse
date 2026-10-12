@@ -63,6 +63,7 @@ model Workspace {
   wings        OfficeWing[]
   gameResults  GameResult[]
   legoBoards   LegoBoard[]
+  whiteboards  Whiteboard[]
 }
 
 /// Workspace permission role determining administrative, invitation, and office editing privileges.
@@ -381,4 +382,19 @@ model LegoBoard {
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@unique([workspaceId, objectId])
+}
+
+/// Shared whiteboard of a meeting room: the Excalidraw scene drawn there.
+model Whiteboard {
+  id          String   @id @default(cuid())
+  workspaceId String
+  /// Meeting room ID in the office layout.
+  roomId      String
+  /// JSON array of Excalidraw elements (deleted ones are not stored).
+  elements    Json
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, roomId])
 }

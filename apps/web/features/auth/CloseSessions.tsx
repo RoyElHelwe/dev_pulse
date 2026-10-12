@@ -4,7 +4,7 @@
 
 import { CircleX, LogOut } from 'lucide-react';
 import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert } from '@/components/ui/Alert';
 import { Button, buttonStyles } from '@/components/ui/Button';
@@ -12,6 +12,7 @@ import { TextField } from '@/components/ui/TextField';
 import { api, ApiError } from '@/lib/api';
 import { AuthShell } from './AuthShell';
 import { useAuth } from './AuthProvider';
+import { navigateAfterAuthChange } from '@/lib/redirect';
 
 type State = 'closing' | 'password' | 'failed';
 
@@ -22,7 +23,6 @@ type State = 'closing' | 'password' | 'failed';
  */
 export function CloseSessions() {
   const token = useSearchParams().get('token');
-  const router = useRouter();
   const { setUser } = useAuth();
   const [state, setState] = useState<State>(token ? 'closing' : 'failed');
   const [message, setMessage] = useState(token ? '' : 'This link is missing its code.');
@@ -35,7 +35,7 @@ export function CloseSessions() {
       try {
         await api('/auth/sessions/close', { body: { token, password } });
         setUser(null);
-        router.replace('/login?notice=sessions_closed');
+        navigateAfterAuthChange('/login?notice=sessions_closed');
       } catch (error) {
         const code = error instanceof ApiError ? error.code : undefined;
         const text = error instanceof ApiError ? error.message : 'Could not reach the server.';
@@ -50,7 +50,7 @@ export function CloseSessions() {
         }
       }
     },
-    [token, router, setUser],
+    [token, setUser],
   );
 
   useEffect(() => {

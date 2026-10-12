@@ -123,6 +123,8 @@ export class OfficeScene extends Phaser.Scene {
   private readonly moveVec = new Phaser.Math.Vector2();
   /** True while a full-screen game covers the office: the scene keeps ticking but ignores the keyboard. */
   private inputBlocked = false;
+  /** Keyboard was taken by a panel or text field last frame. */
+  private wasTyping = false;
 
   constructor() {
     super('office');
@@ -192,6 +194,10 @@ export class OfficeScene extends Phaser.Scene {
   private updatePlayerMovement(delta: number) {
     const body = this.player.body as Phaser.Physics.Arcade.Body;
     const typing = isTyping() || this.inputBlocked;
+    // A panel took the keyboard: forget held keys, or a key released inside it (its keyup never
+    // reaches Phaser) would stay "down" and keep the avatar walking once the panel closes.
+    if (typing && !this.wasTyping) this.input.keyboard?.resetKeys();
+    this.wasTyping = typing;
     const canAct = !typing && !this.editMode;
 
     let ix = 0;

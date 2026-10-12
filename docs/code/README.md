@@ -22,6 +22,7 @@ These technical deep-dives complement the high-level product and team documents 
 | [frontend.md](frontend.md) | Next.js 16 App Router architecture, domain feature folders, and reactive module stores. |
 | [games.md](games.md) | Minigames engine (Foosball, Uno, Lego), authoritative physics, rules, and leaderboards. |
 | [layout.md](layout.md) | Procedural office layout schema, 32px tile grid, furniture catalogs, walls, and wings. |
+| [meeting-room.md](meeting-room.md) | Meeting room tools: WebRTC screen sharing and the live Excalidraw whiteboard. |
 | [office-engine.md](office-engine.md) | Phaser 3 2D canvas, procedural avatar and furniture rendering, depth, and scenery baking. |
 | [office-protocol.md](office-protocol.md) | Real-time WebSocket protocol on `/office` for spatial movement, chat, presence, and locks. |
 | [performance.md](performance.md) | Hybrid WebGL/DOM optimizations, shape texture caching, frame budgeting, and sleep modes. |

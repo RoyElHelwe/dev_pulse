@@ -175,7 +175,12 @@ export function connectOffice(controller: () => OfficeController | null, handler
     players: () => [...known.values()].map((p) => ({ ...p })),
     /** Called by the game ~20 times a second while walking. */
     sendMove(x: number, y: number, dir: number, moving: boolean, seated = false) {
-      if (socket.connected) socket.volatile.emit('move', [x, y, dir, moving ? 1 : 0, seated ? 1 : 0]);
+      if (!socket.connected) return;
+      const move = [x, y, dir, moving ? 1 : 0, seated ? 1 : 0];
+      // Positions while walking may be skipped (volatile); where we stopped must always arrive,
+      // or the others see us walking in place until our next move.
+      if (moving) socket.volatile.emit('move', move);
+      else socket.emit('move', move);
     },
     /** Called by the game when we enter or leave a zone. */
     sendZone(z: string | null) {

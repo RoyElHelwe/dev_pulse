@@ -17,7 +17,7 @@ import { api, ApiError } from '@/lib/api';
 import { useEscape } from '@/lib/escape';
 import { BookingForm } from './BookingForm';
 import { Timetable } from './Timetable';
-import { addDays, type Booking, dayLabel, firstName, hm, type Member, minutesOf, ROW_MINUTES, rowTime, startOfDay } from './time';
+import { addDays, type Booking, dayLabel, firstName, hm, type Member, minutesOf, ROW_MINUTES, rowAt, ROWS, rowTime, startOfDay } from './time';
 
 const MS_PER_MINUTE = 60_000;
 const MEETING_START_ANNOUNCE_WINDOW_MS = 2 * MS_PER_MINUTE;
@@ -36,6 +36,12 @@ export function MeetingsPanel({ socket, controller, workspace, myId, onToast, ed
   const [open, setOpen] = useState(false);
   const [day, setDay] = useState(today);
   const [view, setView] = useState<View>({ kind: 'grid' });
+  // Row of the slot or booking last opened, so "Back" returns the grid to the same place.
+  const [scrollRow, setScrollRow] = useState<number>();
+  const changeDay = (next: Date) => {
+    setDay(next);
+    setScrollRow(undefined);
+  };
   const { bookings, reload } = useBookings(socket, today, day);
   const members = useMembers(open);
   const nameOf = useCallback(
@@ -83,6 +89,7 @@ export function MeetingsPanel({ socket, controller, workspace, myId, onToast, ed
   const close = () => {
     setOpen(false);
     setView({ kind: 'grid' });
+    setScrollRow(undefined);
     buttonRef.current?.focus();
   };
   useKeybind('rooms', () => (open ? close() : setOpen(true)), !editing);
@@ -92,6 +99,7 @@ export function MeetingsPanel({ socket, controller, workspace, myId, onToast, ed
   const pick = useCallback(
     (roomId: string, from: number, to: number) => {
       const start = minutesOf(rowTime(day, from));
+      setScrollRow(from);
       setView({ kind: 'new', roomId, start, end: start + (to - from) * ROW_MINUTES });
     },
     [day],
@@ -103,6 +111,8 @@ export function MeetingsPanel({ socket, controller, workspace, myId, onToast, ed
   const selected = view.kind === 'booking' ? bookings.find((b) => b.id === view.id) : undefined;
   const minDay = addDays(today, MIN_PAST_DAYS_OFFSET);
   const maxDay = addDays(today, MAX_FUTURE_DAYS_OFFSET);
+  // The last slot of the day has ended: nothing on this day can be booked any more.
+  const dayOver = rowTime(day, ROWS).getTime() <= now;
 
   return (
     <>
@@ -131,17 +141,17 @@ export function MeetingsPanel({ socket, controller, workspace, myId, onToast, ed
             <h2 className="mr-auto font-semibold">Meeting rooms</h2>
             {view.kind === 'grid' && (
               <>
-                <IconButton aria-label="Previous day" disabled={day <= minDay} onClick={() => setDay(addDays(day, -1))}>
+                <IconButton aria-label="Previous day" disabled={day <= minDay} onClick={() => changeDay(addDays(day, -1))}>
                   <ChevronLeft className="size-4" />
                 </IconButton>
                 <button
                   type="button"
-                  onClick={() => setDay(today)}
+                  onClick={() => changeDay(today)}
                   className="min-w-32 rounded-full px-2 py-1 text-center text-sm font-medium text-zinc-700 hover:bg-zinc-900/5"
                 >
                   {dayLabel(day, today)}
                 </button>
-                <IconButton aria-label="Next day" disabled={day >= maxDay} onClick={() => setDay(addDays(day, 1))}>
+                <IconButton aria-label="Next day" disabled={day >= maxDay} onClick={() => changeDay(addDays(day, 1))}>
                   <ChevronRight className="size-4" />
                 </IconButton>
               </>
@@ -155,9 +165,12 @@ export function MeetingsPanel({ socket, controller, workspace, myId, onToast, ed
             {view.kind === 'grid' && (
               <>
                 <p className="px-4 pt-3 pb-2 text-xs text-zinc-500">
-                  Click a free slot, or drag over several, to book. During a meeting only its people can enter the room.
+                  {dayOver
+                    ? 'Booking hours for this day are over. Pick a later day with the arrow above to book a room.'
+                    : 'Click a free slot, or drag over several, to book. Grey striped slots have passed. During a meeting only its people can enter the room.'}
                 </p>
                 <Timetable
+                  key={day.getTime()}
                   rooms={rooms}
                   day={day}
                   bookings={dayBookings}
@@ -165,7 +178,11 @@ export function MeetingsPanel({ socket, controller, workspace, myId, onToast, ed
                   myId={myId}
                   nameOf={nameOf}
                   onPick={pick}
-                  onOpen={(b) => setView({ kind: 'booking', id: b.id })}
+                  onOpen={(b) => {
+                    setScrollRow(Math.max(0, Math.floor(rowAt(day, new Date(b.startsAt)))));
+                    setView({ kind: 'booking', id: b.id });
+                  }}
+                  scrollRow={scrollRow}
                 />
               </>
             )}

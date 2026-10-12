@@ -3,14 +3,16 @@
 // Interactive timetable grid displaying room schedules across 30-minute intervals.
 // Fits into MeetingsPanel as the primary schedule view for booking and reviewing meetings.
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { Room } from '@/game/layout/types';
 import { cn } from '@/lib/cn';
-import { type Booking, firstName, hm, ROW_MINUTES, ROWS, rowTime } from './time';
+import { type Booking, clockOf, firstName, hm, minutesOf, ROW_MINUTES, rowAt, ROWS, rowTime } from './time';
 
 const ROW_HEIGHT_PX = 28;
-const MS_PER_MINUTE = 60_000;
 const HOURS_PER_HEADER_LABEL = 2;
+const LABEL_HALF_HEIGHT_PX = 7;
+/** 08:00: where the grid opens on days other than today. */
+const DEFAULT_SCROLL_ROW = (8 * 60) / ROW_MINUTES;
 
 interface TimetableProps {
   rooms: Room[];
@@ -22,10 +24,12 @@ interface TimetableProps {
   /** An empty slot (or a dragged run of slots) was picked: rows [from, to). */
   onPick(roomId: string, from: number, to: number): void;
   onOpen(booking: Booking): void;
+  /** Row to scroll into view when the grid opens; defaults to the current time today, 08:00 on other days. */
+  scrollRow?: number;
 }
 
-/** Timetable grid showing 08:00–20:00 availability per room with drag-to-book and booking details click. */
-export function Timetable({ rooms, day, bookings, now, myId, nameOf, onPick, onOpen }: TimetableProps) {
+/** Timetable grid showing 00:00–24:00 availability per room with drag-to-book and booking details click. */
+export function Timetable({ rooms, day, bookings, now, myId, nameOf, onPick, onOpen, scrollRow }: TimetableProps) {
   // Mouse drag over several slots of one room.
   const [drag, setDrag] = useState<{ roomId: string; from: number; to: number } | null>(null);
   const pointer = useRef('');
@@ -39,19 +43,37 @@ export function Timetable({ rooms, day, bookings, now, myId, nameOf, onPick, onO
     return () => window.removeEventListener('pointerup', up);
   }, [drag, onPick]);
 
-  const top = rowTime(day, 0).getTime();
-  const rowOf = (at: Date) => (at.getTime() - top) / (ROW_MINUTES * MS_PER_MINUTE);
+  const rowOf = (at: Date) => rowAt(day, at);
   const nowRow = rowOf(new Date(now));
 
+  // The full day is tall: open on the asked row, else on "now" today and on the working morning other days.
+  // Read once on mount (MeetingsPanel remounts the grid per day) so the minute tick never moves the view.
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [openRow] = useState(() => scrollRow ?? (nowRow > 0 && nowRow < ROWS ? Math.floor(nowRow) : DEFAULT_SCROLL_ROW));
+  useLayoutEffect(() => {
+    // The panel's scroll area is the grid's parent; leave one row of context above the target.
+    const root = rootRef.current;
+    const scroller = root?.parentElement;
+    if (!root || !scroller) return;
+    const gridTop = root.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop;
+    scroller.scrollTop = gridTop + Math.max(0, openRow - 1) * ROW_HEIGHT_PX;
+  }, [openRow]);
+
   return (
-    <div className="flex min-w-max select-none">
+    <div ref={rootRef} className="flex min-w-max select-none">
       {/* Hours */}
       <div className="sticky left-0 z-20 w-12 shrink-0 bg-white/90">
         <div className="sticky top-0 h-8 bg-white/90" />
         <div className="relative" style={{ height: ROWS * ROW_HEIGHT_PX }}>
-          {Array.from({ length: ROWS / HOURS_PER_HEADER_LABEL }, (_, i) => (
-            <span key={i} style={{ top: i * HOURS_PER_HEADER_LABEL * ROW_HEIGHT_PX - 7 }} className="absolute right-2 text-[11px] text-zinc-400 tabular-nums">
-              {i > 0 && hm(rowTime(day, i * HOURS_PER_HEADER_LABEL))}
+          {/* One label per hour line, 00:00 to 24:00; the first and last are kept inside the column. */}
+          {Array.from({ length: ROWS / HOURS_PER_HEADER_LABEL + 1 }, (_, i) => (
+            <span
+              key={i}
+              style={{ top: Math.min(Math.max(i * HOURS_PER_HEADER_LABEL * ROW_HEIGHT_PX - LABEL_HALF_HEIGHT_PX, 0), ROWS * ROW_HEIGHT_PX - 2 * LABEL_HALF_HEIGHT_PX) }}
+              className="absolute right-2 text-[11px] text-zinc-400 tabular-nums"
+            >
+              {/* From minutes, not a Date, so the last line reads 24:00 rather than the next day's 00:00. */}
+              {clockOf(minutesOf(rowTime(day, 0)) + i * HOURS_PER_HEADER_LABEL * ROW_MINUTES)}
             </span>
           ))}
         </div>
@@ -82,7 +104,10 @@ export function Timetable({ rooms, day, bookings, now, myId, nameOf, onPick, onO
                     className={cn(
                       'absolute inset-x-0 border-t text-[11px] text-transparent transition',
                       row % 2 ? 'border-dashed border-zinc-100' : 'border-zinc-200/70',
-                      past ? 'bg-zinc-50/80' : 'hover:bg-emerald-50 hover:text-emerald-700',
+                      // Past slots look blocked: grey hatching and a "not allowed" cursor.
+                      past
+                        ? 'cursor-not-allowed bg-zinc-100 bg-[image:repeating-linear-gradient(135deg,transparent_0_6px,rgb(0_0_0/0.05)_6px_12px)]'
+                        : 'cursor-pointer hover:bg-emerald-50 hover:text-emerald-700',
                       selected && 'bg-emerald-100',
                     )}
                     onPointerDown={(e) => {

@@ -157,6 +157,8 @@ export class Avatar extends Phaser.GameObjects.Container {
   private face = moodOf(null);
   private inCall = false;
   private talking = false;
+  /** Walk frames were baked up front (local player): keep them baked when the look changes. */
+  private prebaked = false;
   /** Own clock, offset so people don't all blink together. */
   private clock = Math.random() * BLINK_EVERY_MS;
   /** Frame drawn last (see redraw): skip redraws when nothing visible changed. */
@@ -261,7 +263,10 @@ export class Avatar extends Phaser.GameObjects.Container {
 
   /** A short status in a bubble above the name ("On break", current task...). */
   setStatus(text: string | null | undefined) {
-    this.face = moodOf(text || null);
+    const face = moodOf(text || null);
+    const changed = face.mood !== this.face.mood || face.mug !== this.face.mug;
+    this.face = face;
+    if (changed) this.rebake();
     this.redraw();
     if (!text) {
       this.status?.destroy();
@@ -326,6 +331,7 @@ export class Avatar extends Phaser.GameObjects.Container {
     this.recipe = recipe;
     this.code = code;
     this.drawn = -1;
+    this.rebake();
     // Forced: the old look's textures were just freed, the figure must not keep pointing at them.
     this.redraw(true);
   }
@@ -351,7 +357,9 @@ export class Avatar extends Phaser.GameObjects.Container {
 
   /** In a voice call (headset on); `talking` blinks its light. For the voice features (Z3, Z4). */
   setInCall(inCall: boolean, talking = false) {
+    const changed = inCall !== this.inCall;
     this.inCall = inCall;
+    if (changed) this.rebake();
     this.talking = talking;
     this.redraw();
   }
@@ -363,12 +371,22 @@ export class Avatar extends Phaser.GameObjects.Container {
 
   /** Pre-bakes all 8 walking cycle frames across all 4 directions for this recipe to prevent first-walk lag. */
   prebake() {
+    this.prebaked = true;
     for (const dir of DIRECTIONS) {
       for (let step = 0; step <= WALK_FRAME_COUNT; step++) {
         const { frame, pose } = this.frameFor(step, 0, 0, dir);
         frameTexture(this.scene, this.code, this.recipe, frame, pose, this.texScale, true);
       }
     }
+  }
+
+  /**
+   * The walk frames depend on mood, mug and headset: after one of them changes, bake the new
+   * set too (only for avatars baked once, i.e. the local player), or each new direction would
+   * draw its frames lazily within the per-frame budget and the sprite would lag behind.
+   */
+  private rebake() {
+    if (this.prebaked) this.prebake();
   }
 
   private frameFor(step: number, blink: number, talk: number, direction: Direction): { frame: number; pose: Pose } {

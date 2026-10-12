@@ -300,11 +300,11 @@ async function along(
 
     const seated = isNearSeat(layout, at);
 
-    // If seated at an unwanted chair, hold walking key 600ms to stand up (STAND_HOLD_MS = 500)
+    // If seated at an unwanted chair, hold walking key 600ms to stand up (any press stands up after STAND_GRACE_MS = 150)
     if (seated && !isSeatTarget && stuckCount >= 1) {
       const standKey = axis === 'x' ? (d < 0 ? 'ArrowLeft' : 'ArrowRight') : (d < 0 ? 'ArrowUp' : 'ArrowDown');
       await page.keyboard.down(standKey);
-      // Hold key past STAND_HOLD_MS (500 ms) to trigger avatar stand-up animation from seat
+      // Hold key past STAND_GRACE_MS (150 ms) to stand up from the seat
       await page.waitForTimeout(600);
       await page.keyboard.up(standKey);
       await settled(page);
@@ -476,7 +476,7 @@ export async function walkTo(page: Page, layout: Layout, tx: number, ty: number)
         const cur = await position(page);
         if (isNearSeat(layout, cur) && !isSeatTarget) {
           await page.keyboard.down('ArrowDown');
-          // Hold arrow key past STAND_HOLD_MS to stand up from chair after blocking
+          // Hold arrow key past STAND_GRACE_MS to stand up from chair after blocking
           await page.waitForTimeout(600);
           await page.keyboard.up('ArrowDown');
           await settled(page);

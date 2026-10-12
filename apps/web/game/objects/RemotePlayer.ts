@@ -25,6 +25,8 @@ const TELEPORT_DISTANCE = 6 * TILE;
 const MAX_SNAPSHOT_HISTORY = 30;
 /** Movement threshold in pixels to consider the avatar actively walking between frames. */
 const WALK_DETECTION_THRESHOLD_PX = 0.3;
+/** No position for this long while "walking": stop the walk cycle (their stop packet was lost). */
+const STALE_WALK_MS = 400;
 
 /**
  * Another person in the office. Positions arrive ~20 times a second, at
@@ -90,7 +92,8 @@ export class RemotePlayer {
     if (depth !== this.avatar.depth) {
       this.avatar.setDepth(depth);
     }
-    this.avatar.animateAs(current.dir, !current.seated && (current.moving || moved), deltaMs);
+    const stale = renderAt - s[s.length - 1].t > STALE_WALK_MS;
+    this.avatar.animateAs(current.dir, !current.seated && ((current.moving && !stale) || moved), deltaMs);
   }
 
   /** Cleans up the remote player avatar and its display elements. */

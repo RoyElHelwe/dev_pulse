@@ -1,10 +1,12 @@
 // Web Audio spatial graph and voice activity level metering.
 // Owned by VoicePeer and VoiceManager to manage spatial positioning, gain attenuation, and RMS speech detection.
 
+import { type MicProblem, micProblem, openMicrophone, routeOutput } from './devices';
 import { meetingGain, openGain } from './spatial';
 
 const ANALYSER_FFT_SIZE = 512;
-const TALKING_RMS_THRESHOLD = 0.02;
+/** Loudness above which someone counts as talking (shown on the mic test meter too). */
+export const TALKING_RMS_THRESHOLD = 0.02;
 const TALKING_HOLD_DURATION_MS = 300;
 const PANNER_REF_DISTANCE_TILES = 1;
 const PANNER_MAX_DISTANCE_TILES = 10_000;
@@ -24,25 +26,23 @@ export function calculateSpatialGain(distance: number, span: number, edge: numbe
   return span > 0 ? meetingGain(distance, span) : openGain(distance, edge);
 }
 
-/** Initialises an AudioContext and requests user microphone stream with browser audio constraints. */
-export async function setupUserAudio(): Promise<
-  | { ok: true; ctx: AudioContext; mic: MediaStream }
-  | { ok: false; status: 'denied' | 'no-mic' | 'unsupported' }
-> {
+/**
+ * Initialises an AudioContext on the chosen speakers and opens the chosen microphone
+ * (Settings → Voice), falling back to the system defaults.
+ */
+export async function setupUserAudio(): Promise<{ ok: true; ctx: AudioContext; mic: MediaStream } | { ok: false; status: MicProblem }> {
   if (!navigator.mediaDevices?.getUserMedia || typeof RTCPeerConnection === 'undefined') {
     return { ok: false, status: 'unsupported' };
   }
   const ctx = new AudioContext();
   void ctx.resume().catch(() => {});
   try {
-    const mic = await navigator.mediaDevices.getUserMedia({
-      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-    });
+    const mic = await openMicrophone();
+    await routeOutput(ctx);
     return { ok: true, ctx, mic };
   } catch (err) {
     void ctx.close().catch(() => {});
-    const name = err instanceof DOMException ? err.name : '';
-    return { ok: false, status: name === 'NotAllowedError' || name === 'SecurityError' ? 'denied' : 'no-mic' };
+    return { ok: false, status: micProblem(err) };
   }
 }
 
@@ -59,11 +59,16 @@ export class VoiceLevel {
   }
 
   talking(now: number): boolean {
+    if (this.level() > TALKING_RMS_THRESHOLD) this.loudAt = now;
+    return now - this.loudAt < TALKING_HOLD_DURATION_MS;
+  }
+
+  /** Current loudness (RMS of the waveform, 0 silent … ~0.5 very loud), for level meters. */
+  level(): number {
     this.analyser.getFloatTimeDomainData(this.buffer);
     let sum = 0;
     for (const v of this.buffer) sum += v * v;
-    if (Math.sqrt(sum / this.buffer.length) > TALKING_RMS_THRESHOLD) this.loudAt = now;
-    return now - this.loudAt < TALKING_HOLD_DURATION_MS;
+    return Math.sqrt(sum / this.buffer.length);
   }
 
   disconnect(): void {

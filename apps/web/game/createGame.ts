@@ -169,7 +169,9 @@ function buildPhaserConfig(
     audio: { noAudio: true },
     backgroundColor: OFFICE_BACKGROUND_COLOR,
     scale: { mode: Phaser.Scale.NONE, ...size(), zoom: 1 / dpr },
-    physics: { default: 'arcade', arcade: { debug: false } },
+    // Variable step: Arcade's default fixed 60 Hz step moves the body only every 2nd-3rd frame on
+    // 120/144 Hz screens (judder). Movement is velocity based and the delta is capped (MAX_STEP_DELTA_MS).
+    physics: { default: 'arcade', arcade: { debug: false, fixedStep: false } },
     render: { antialias: true },
     // Test browsers render in software: e2e sets `window.__devpulseFps` to cap the frame rate.
     ...(devFpsCap() ? { fps: { limit: devFpsCap() } } : {}),

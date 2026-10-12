@@ -19,15 +19,16 @@ export interface Member {
   displayName: string;
 }
 
-/** The timetable shows 08:00–20:00 in 30-minute rows. */
-const TIMETABLE_FIRST_HOUR = 8;
-const TIMETABLE_LAST_HOUR = 20;
+/** The timetable shows the whole day, 00:00–24:00, in 30-minute rows. */
+const TIMETABLE_FIRST_HOUR = 0;
+const TIMETABLE_LAST_HOUR = 24;
 const MINUTES_PER_HOUR = 60;
 const MS_PER_DAY = 86_400_000;
+const MS_PER_MINUTE = 60_000;
 
 /** Duration of each row slot in the meeting timetable grid (in minutes). */
 export const ROW_MINUTES = 30;
-/** Total number of timetable row slots displayed between 08:00 and 20:00 (slot count). */
+/** Total number of timetable row slots displayed between 00:00 and 24:00 (slot count). */
 export const ROWS = ((TIMETABLE_LAST_HOUR - TIMETABLE_FIRST_HOUR) * MINUTES_PER_HOUR) / ROW_MINUTES;
 
 /** Bookings move in 15-minute steps and last 4 hours at most (same rules as the API). */
@@ -46,6 +47,9 @@ export const atMinutes = (day: Date, minutes: number) => new Date(day.getFullYea
 
 /** Calculates the Date corresponding to the start of a specific timetable row. */
 export const rowTime = (day: Date, row: number) => atMinutes(day, TIMETABLE_FIRST_HOUR * MINUTES_PER_HOUR + row * ROW_MINUTES);
+
+/** Fractional timetable row of a moment on a day (negative before the first row, ROWS or more after the last). */
+export const rowAt = (day: Date, at: Date) => (at.getTime() - rowTime(day, 0).getTime()) / (ROW_MINUTES * MS_PER_MINUTE);
 
 /** Returns the total number of minutes elapsed since midnight for a given Date. */
 export const minutesOf = (d: Date) => d.getHours() * MINUTES_PER_HOUR + d.getMinutes();

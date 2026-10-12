@@ -15,6 +15,7 @@ import { getKeybinds, useKeybinds } from '@/features/settings/keybindStore';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { isTyping } from '@/lib/dom';
+import { MIC_PROBLEM_TEXT } from './devices';
 import { DEFAULT_VOICE_SETTINGS, keyName, type VoiceSettings } from './settings';
 import { type VoiceEntry, voiceStates } from './voiceStore';
 import { type VoiceSnapshot, VoiceManager } from './VoiceManager';
@@ -31,6 +32,8 @@ export function VoiceControls({ socket, controller, workspace, people, myId, onT
   const managerRef = useRef<VoiceManager | null>(null);
   const controllerRef = useRef(controller);
   controllerRef.current = controller;
+  const onToastRef = useRef(onToast);
+  onToastRef.current = onToast;
   const layoutRef = useRef(workspace.layout);
   layoutRef.current = workspace.layout;
 
@@ -57,6 +60,7 @@ export function VoiceControls({ socket, controller, workspace, people, myId, onT
       myId,
       controller: () => controllerRef.current,
       onChange: () => setVoice(manager.snapshot()),
+      onNotice: (text) => onToastRef.current(text),
     });
     manager.setLayout(layoutRef.current);
     managerRef.current = manager;
@@ -125,9 +129,7 @@ export function VoiceControls({ socket, controller, workspace, people, myId, onT
     setJoining(true);
     const result = await manager.join();
     setJoining(false);
-    if (result === 'denied') onToast('Microphone blocked. Allow it in your browser’s site settings to talk.');
-    if (result === 'no-mic') onToast('No microphone found. Plug one in and try again.');
-    if (result === 'unsupported') onToast('Voice isn’t supported in this browser.');
+    if (result !== 'ok') onToast(MIC_PROBLEM_TEXT[result]);
   }
 
   const muteKey = keyName(keybinds.mute);

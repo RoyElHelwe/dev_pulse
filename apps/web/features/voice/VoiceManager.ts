@@ -7,6 +7,7 @@ import type { OfficeLayout, RoomKind } from '@/game/layout/types';
 import { NEAR_RADIUS as NEAR } from '@/game/systems/Proximity';
 import { relativeTo } from './spatial';
 import { voiceStates } from './voiceStore';
+import { type MicProblem, openMicrophone } from './devices';
 import { calculateSpatialGain, setupUserAudio, VoiceLevel } from './VoiceAudio';
 import { type VoiceSignal, VoicePeer } from './VoicePeer';
 
@@ -35,6 +36,8 @@ interface Options {
   myId: string;
   controller(): OfficeController | null;
   onChange(): void;
+  /** Something the user should know (e.g. the microphone was unplugged). */
+  onNotice?(text: string): void;
 }
 
 /** Coordinates proximity voice signalling, peer connections, and room audio updates. */
@@ -78,7 +81,7 @@ export class VoiceManager {
     this.spans = new Map(layout.rooms.map((r) => [r.id, Math.max(r.w, r.h)]));
   }
 
-  async join(): Promise<'ok' | 'denied' | 'no-mic' | 'unsupported'> {
+  async join(): Promise<'ok' | MicProblem> {
     if (this.ctx) return 'ok';
     const res = await setupUserAudio();
     if (!res.ok) return res.status;
@@ -91,10 +94,44 @@ export class VoiceManager {
     this.master = res.ctx.createGain();
     this.master.connect(res.ctx.destination);
     this.micLevel = new VoiceLevel(res.ctx, res.ctx.createMediaStreamSource(res.mic));
+    this.watchMic(res.mic);
+    // Browsers suspend audio (another app took the device, iOS interruptions, long background):
+    // resume right away, or on the next click / key press when a gesture is required.
+    res.ctx.onstatechange = () => {
+      if (res.ctx.state === 'running' || res.ctx.state === 'closed' || this.ctx !== res.ctx) return;
+      void res.ctx.resume().catch(() => {});
+      const wake = () => void res.ctx.resume().catch(() => {});
+      window.addEventListener('pointerdown', wake, { once: true });
+      window.addEventListener('keydown', wake, { once: true });
+    };
     this.applyMic();
     this.timer = setInterval(this.tick, TICK_INTERVAL_MS);
     this.opts.onChange();
     return 'ok';
+  }
+
+  /** The microphone was unplugged (its track ended): switch to another one without hanging up. */
+  private watchMic(mic: MediaStream) {
+    mic.getAudioTracks()[0]?.addEventListener('ended', () => void this.recoverMic(mic));
+  }
+
+  private async recoverMic(lost: MediaStream) {
+    if (this.mic !== lost || !this.ctx) return;
+    try {
+      const mic = await openMicrophone();
+      if (this.mic !== lost || !this.ctx) return void mic.getTracks().forEach((t) => t.stop());
+      this.micLevel?.disconnect();
+      this.mic = mic;
+      this.micLevel = new VoiceLevel(this.ctx, this.ctx.createMediaStreamSource(mic));
+      const track = mic.getAudioTracks()[0];
+      if (track) for (const peer of this.peers.values()) peer.replaceMic(track);
+      this.watchMic(mic);
+      this.applyMic();
+      this.opts.onNotice?.(`Microphone disconnected. Now using ${track?.label || 'another microphone'}.`);
+    } catch {
+      this.leave();
+      this.opts.onNotice?.('Your microphone was disconnected. Plug it back in and join voice again.');
+    }
   }
 
   leave() {

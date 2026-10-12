@@ -4,13 +4,13 @@
 
 import { MailCheck } from 'lucide-react';
 import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { useState } from 'react';
 import { Alert } from '@/components/ui/Alert';
 import { Button } from '@/components/ui/Button';
 import { TextField } from '@/components/ui/TextField';
 import { api, ApiError } from '@/lib/api';
-import { safeRedirect } from '@/lib/redirect';
+import { navigateAfterAuthChange, safeRedirect } from '@/lib/redirect';
 import { AuthShell } from './AuthShell';
 import { useAuth } from './AuthProvider';
 import { OAuthButtons } from './OAuthButtons';
@@ -21,7 +21,6 @@ const MAX_DISPLAY_NAME_LENGTH = 50;
 
 /** Form component for creating a new user account with client-side schema validation. */
 export function RegisterForm() {
-  const router = useRouter();
   const params = useSearchParams();
   const { setUser } = useAuth();
   const redirect = safeRedirect(params.get('redirect'));
@@ -46,7 +45,7 @@ export function RegisterForm() {
         return setSentTo(parsed.data.email);
       }
       if (result.status === 'signed-in') setUser(result.user);
-      router.replace(redirect);
+      navigateAfterAuthChange(redirect);
     } catch (error) {
       setLoading(false);
       if (error instanceof ApiError && error.field) return setErrors({ [error.field]: error.message });

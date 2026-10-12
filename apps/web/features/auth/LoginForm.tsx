@@ -9,7 +9,7 @@ import { Alert } from '@/components/ui/Alert';
 import { Button } from '@/components/ui/Button';
 import { TextField } from '@/components/ui/TextField';
 import { api, ApiError } from '@/lib/api';
-import { safeRedirect } from '@/lib/redirect';
+import { navigateAfterAuthChange, safeRedirect } from '@/lib/redirect';
 import { ActiveSessionNotice } from './ActiveSessionNotice';
 import { AuthShell } from './AuthShell';
 import { useAuth } from './AuthProvider';
@@ -83,7 +83,7 @@ export function LoginForm() {
         return setActiveDevice(result.device);
       }
       setUser(result.user);
-      router.replace(redirect);
+      navigateAfterAuthChange(redirect);
     } catch (error) {
       setLoading(false);
       if (error instanceof ApiError && error.code === 'EMAIL_NOT_VERIFIED')

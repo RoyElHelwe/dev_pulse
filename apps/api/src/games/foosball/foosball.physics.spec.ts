@@ -223,4 +223,21 @@ describe('Foosball Physics', () => {
     expect(world.rods.A[1].target).toBeNull();
     expect(world.rods.A[1].dir).toBe(1);
   });
+
+  it('a ball wedged between the two centred midfield rods gets out', () => {
+    // The old serve spot: 4 units from both midfield centre men (collision distance 5).
+    const world = createInitialWorld();
+    world.ball = { x: FIELD_L / 2, y: FIELD_W / 2, vx: 25, vy: 0 };
+    for (let i = 0; i < 30; i++) step(world, 1 / 30);
+    const fromCentre = Math.hypot(world.ball.x - FIELD_L / 2, world.ball.y - FIELD_W / 2);
+    expect(fromCentre).toBeGreaterThan(BALL_R + MAN_R);
+  });
+
+  it('a head-on hit is deflected sideways instead of bouncing in a straight line', () => {
+    const world = createInitialWorld();
+    const [manY] = manYs(0);
+    world.ball = { x: ROD_X.A[0] + 8, y: manY, vx: -60, vy: 0 };
+    for (let i = 0; i < 10; i++) step(world, 1 / 30);
+    expect(world.ball.vy).not.toBe(0);
+  });
 });

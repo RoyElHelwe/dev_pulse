@@ -30,6 +30,8 @@ For details on the WebSocket wire events exchanged during voice sessions, see **
 | `apps/web/features/voice/voiceStore.ts` | Reactive module store (`useSyncExternalStore`) caching office-wide voice presence, mute, and deafen states. |
 | `apps/web/features/voice/settings.ts` | Voice preference types (`OPEN` vs `PUSH_TO_TALK`), defaults, and keyboard code formatters. |
 | `apps/web/features/voice/VoiceControls.tsx` | Bottom HUD control bar rendering microphone status, mute/deafen buttons, peer indicators, and hotkey listeners. |
+| `apps/web/features/voice/devices.ts` | Microphone / speaker choice per browser (`localStorage`), opening the chosen mic with fallback, output routing (`setSinkId`), and mic error messages. |
+| `apps/web/features/voice/AudioDevices.tsx` | Settings card: device pickers, live mic test with level meter and "hear yourself", speaker test sound. |
 | `apps/web/features/voice/VoiceSettings.tsx` | User preferences view for configuring transmission mode and push-to-talk hotkey rebinding. |
 
 ---
@@ -230,17 +232,14 @@ Configured via `apps/web/features/voice/settings.ts` and persisted via `GET / PA
 - **Deafen**: Disables local microphone tracks AND ramps master output gain to 0 (`master.gain.setTargetAtTime(0, ...)`). Emits `voice:state` (`{ muted: true, deafened: true }`).
 - **Headset Semantics**: Pressing the mute toggle while deafened immediately un-deafens the user rather than leaving them in a silent state, matching standard VoIP headset ergonomics.
 
-### Echo & Noise Suppression Constraints
-Microphone acquisition in `VoiceAudio.ts` enforces hardware acoustic echo cancellation and background filtering:
+### Microphone, speakers, and the mic test (`devices.ts`, `AudioDevices.tsx`)
+**Settings → Voice** has a "Microphone and speakers" card: pick the microphone and (Chrome / Edge, through `AudioContext.setSinkId`) the speakers, run a live mic test with a level meter (the mark is `TALKING_RMS_THRESHOLD`, where others see you talking) and an optional "hear yourself" loopback, and play a test sound on the chosen speakers.
+- Choices are stored in `localStorage` (`devpulse.voiceDevices`), not the API: device ids only mean something in one browser on one computer. A saved device is found again by id, else by name (browsers rotate ids when site data is cleared).
+- `openMicrophone()` opens the chosen microphone with `deviceId: { exact }`, and falls back to the system default when it is unplugged or refuses. Calls and the mic test use the same processing, so the test shows what others hear:
 ```ts
-navigator.mediaDevices.getUserMedia({
-  audio: {
-    echoCancellation: true,
-    noiseSuppression: true,
-    autoGainControl: true,
-  },
-});
+{ echoCancellation: true, noiseSuppression: true, autoGainControl: true, deviceId: { exact: id } }
 ```
+- `setupUserAudio()` routes the call's `AudioContext` to the chosen speakers (`routeOutput`). Firefox and Safari keep the system default (the card says so).
 
 ### Chromium Web Audio Bug Workaround
 In Chromium-based browsers, WebRTC remote `MediaStream` tracks attached to a Web Audio `MediaStreamAudioSourceNode` can remain silent unless bound to an active DOM media element. `PeerAudio.attach()` creates a hidden, muted `HTMLAudioElement`:
@@ -260,9 +259,12 @@ This primes the audio pipeline without generating double-audio echoes.
 | --- | --- | --- |
 | **Microphone Permission Denied** | User blocks permission prompt; `DOMException.name === 'NotAllowedError'` or `'SecurityError'`. | `setupUserAudio()` returns `{ ok: false, status: 'denied' }`. UI surfaces toast: *"Microphone blocked. Allow it in your browser’s site settings to talk."* |
 | **No Microphone Device** | No audio capture hardware detected; `DOMException.name === 'NotFoundError'`. | `setupUserAudio()` returns `{ ok: false, status: 'no-mic' }`. UI surfaces toast: *"No microphone found. Plug one in and try again."* |
+| **Microphone Busy** | The device exists but cannot be opened (another app holds it, OS privacy block); `NotReadableError` / `AbortError`. | `{ ok: false, status: 'busy' }`. Toast: *"Your microphone is in use by another app, or blocked by your system…"* |
+| **Microphone Unplugged Mid-Call** | The mic track fires `ended`. | `VoiceManager.recoverMic()` opens another microphone and swaps it into every call with `RTCRtpSender.replaceTrack` (no renegotiation, no hang-up), with a toast naming the new device. No microphone left: leaves voice with a toast. |
+| **Audio Suspended by the Browser** | `AudioContext` goes `suspended` / `interrupted` (device taken, iOS interruption). | `onstatechange` resumes it at once, or on the next click / key press when the browser wants a gesture. |
 | **Unsupported Browser** | Missing `navigator.mediaDevices.getUserMedia` or `RTCPeerConnection`. | Returns `{ ok: false, status: 'unsupported' }`. UI surfaces toast: *"Voice isn’t supported in this browser."* |
 | **Early ICE Candidates** | Remote ICE candidates arrive over WebSocket before the SDP offer description. | `VoiceManager` buffers candidates in `early` map (`EARLY_CANDIDATES_TTL_MS = 2_000` ms). Flushes buffered candidates immediately after `setRemoteDescription` completes. |
-| **Stuck / Dropped Peer Connection** | Network disconnect, NAT failure, or handshake stall exceeding `CONNECTION_TIMEOUT_MS = 12_000` ms, or `connectionState === 'failed' \| 'closed'`. | `peer.stuck(now)` evaluates to `true`. Manager invokes `hangUp(id)`, schedules retry backoff (`CALL_RETRY_DELAY_MS = 5_000` ms), and recreates the peer on subsequent ticks. |
+| **Stuck / Dropped Peer Connection** | Handshake never completes within `CONNECTION_TIMEOUT_MS = 12_000` ms, a connected call stays `disconnected` longer than `DISCONNECTED_GRACE_MS = 8_000` ms (shorter Wi-Fi blips recover on their own), or `connectionState === 'failed' \| 'closed'`. | `peer.stuck(now)` evaluates to `true`. Manager invokes `hangUp(id)`, schedules retry backoff (`CALL_RETRY_DELAY_MS = 5_000` ms), and recreates the peer on subsequent ticks. |
 | **Signalling Refusal** | Peers walk out of range or meeting room reservation expires during call negotiation. | Gateway emits `rtc:refused`. Client tears down connection and applies a 5-second backoff. |
 | **Call Glare** | Both peers initiate calls concurrently. | W3C Perfect Negotiation resolves collision: polite peer yields and processes incoming offer; impolite peer ignores collision offer. |
 
@@ -291,11 +293,8 @@ This primes the audio pipeline without generating double-audio echoes.
 3. In `apps/api/src/voice/voice.rules.ts`, update `SERVER_EARSHOT_TILES` (currently `4`) to match `ANSWER_RADIUS_TILES`.
 4. In `apps/api/src/voice/voice.rules.spec.ts`, update test assertions to reflect the modified distance.
 
-### Adding Audio Input Device Selector
-1. Query available microphones via `navigator.mediaDevices.enumerateDevices()`, filtering for `kind === 'audioinput'`.
-2. When the user selects a device ID, invoke `mic.getAudioTracks().forEach(t => t.stop())`.
-3. Call `navigator.mediaDevices.getUserMedia({ audio: { deviceId: { exact: selectedId }, ... } })`.
-4. Replace tracks across active peer connections via `peer.pc.getSenders().find(s => s.track?.kind === 'audio')?.replaceTrack(newTrack)`.
+### Switching the Microphone During a Call
+The device choice applies when voice is joined (Settings → Voice is another page). To switch live, reuse the unplug path: open the new stream with `openMicrophone(choice)`, then `VoicePeer.replaceMic(track)` on every peer and rebuild `micLevel`, as `VoiceManager.recoverMic()` does.
 
 ---
 

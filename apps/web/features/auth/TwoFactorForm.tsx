@@ -4,14 +4,14 @@
 
 import { ShieldCheck } from 'lucide-react';
 import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { useState } from 'react';
 import { Alert } from '@/components/ui/Alert';
 import { Button } from '@/components/ui/Button';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { TextField } from '@/components/ui/TextField';
 import { api, ApiError } from '@/lib/api';
-import { safeRedirect } from '@/lib/redirect';
+import { navigateAfterAuthChange, safeRedirect } from '@/lib/redirect';
 import { ActiveSessionNotice } from './ActiveSessionNotice';
 import { AuthShell } from './AuthShell';
 import { useAuth } from './AuthProvider';
@@ -23,7 +23,6 @@ const MAX_BACKUP_CODE_LENGTH = 20;
 
 /** Second sign-in step when 2FA is on: a code from the app, or a backup code. */
 export function TwoFactorForm() {
-  const router = useRouter();
   const params = useSearchParams();
   const { setUser } = useAuth();
   const redirect = safeRedirect(params.get('redirect'));
@@ -55,7 +54,7 @@ export function TwoFactorForm() {
         return setActiveDevice(result.device);
       }
       if (result.status === 'signed-in') setUser(result.user);
-      router.replace(redirect);
+      navigateAfterAuthChange(redirect);
     } catch (err) {
       setLoading(false);
       setExpired(err instanceof ApiError && err.code === 'MFA_EXPIRED');

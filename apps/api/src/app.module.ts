@@ -16,6 +16,7 @@ import { HealthModule } from './health/health.module';
 import { InvitationsModule } from './invitations/invitations.module';
 import { OfficeModule } from './office/office.module';
 import { MailModule } from './mail/mail.module';
+import { MeetingRoomModule } from './meeting-room/meeting-room.module';
 import { MeetingsModule } from './meetings/meetings.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { SettingsModule } from './settings/settings.module';
@@ -39,6 +40,7 @@ const DEFAULT_THROTTLE_LIMIT = 300;
     OfficeModule,
     MeetingsModule,
     VoiceModule,
+    MeetingRoomModule,
     ChatModule,
     GamesModule,
     TasksModule,

@@ -35,7 +35,9 @@ person picks up next. Details live in **[PLAN.md](PLAN.md)** (who does what), **
 | Notifications system & file upload | ⬜ not started | PLAN.md |
 | Transfer of workspace ownership (owner handoff) | ⬜ not started | PLAN.md |
 | TURN server for WebRTC voice (production ICE relays) | ⬜ not started | `docs/code/voice.md` |
-| Optional screen sharing in meeting rooms (Z4 extra) | ⬜ not started | PLAN.md |
+| Screen sharing in meeting rooms (Z4 extra) | ✅ | `docs/code/meeting-room.md` |
+| Shared whiteboard (Excalidraw) in meeting rooms | ✅ | `docs/code/meeting-room.md` |
+| Microphone / speaker selection and mic test (Settings → Voice) | ✅ | `docs/code/voice.md` |
 
 ## 2. Run it
 
@@ -65,7 +67,6 @@ office to another template, a 100-desk headquarters template, and browser tests 
 Zakaria's tasks and minigames are integrated. What remains is support for remaining gaps and final polish:
 
 - **Avatars from Roy's profile** (M3): display avatar images in the people list and on desk plates once profile avatar upload is built.
-- **Screen sharing surface** (Z4): if optional screen sharing is added, coordinate the in-room canvas or video presentation element.
 - **Before the evaluation**: run the full browser test suite against Docker (`E2E_BASE_URL=https://localhost:8443`), verify clean console on every page, and help finalize team README markers (PLAN.md §8).
 - Ideas if there's time: sound effects (footsteps, proximity arrival chimes), player emotes, a "follow" camera button in the people roster.
 
@@ -95,7 +96,6 @@ Zakaria's tasks and minigames are integrated. What remains is support for remain
 - **Minigames framework is built**: Foosball (2D physics simulation), Uno (turn rules engine), Lego wall (shared brick persistence), and weekly workspace leaderboards (`apps/api/src/games/`, `apps/web/features/games/`). Details in `docs/code/games.md`.
 - **What remains / next gaps**:
   - **TURN server**: add Coturn / production TURN ICE relay servers in `VoicePeer.ts` so audio connects across restrictive symmetric NATs and mobile networks.
-  - **Optional screen sharing**: WebRTC screen share (`getDisplayMedia`) in meeting rooms.
 
 ## 6. Known gaps
 

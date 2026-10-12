@@ -4,7 +4,6 @@
 
 import { ChevronDown, Keyboard, LogOut, Palette, Repeat, ShieldCheck, Smile, Users } from 'lucide-react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Avatar } from '@/components/ui/Avatar';
@@ -16,6 +15,7 @@ import { useEscape } from '@/lib/escape';
 import { useAuth } from './AuthProvider';
 import { useDevLogin } from '@/features/dev/useDevLogin';
 import type { User } from './types';
+import { navigateAfterAuthChange } from '@/lib/redirect';
 
 const MENU_OFFSET_PX = 8;
 const MIN_VIEWPORT_MARGIN_PX = 8;
@@ -34,7 +34,6 @@ export interface UserMenuProps {
 export function UserMenu({ className, compact, profile }: UserMenuProps) {
   const { user, signOut } = useAuth();
   const devEnabled = useDevLogin()?.enabled ?? false;
-  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [statusExpanded, setStatusExpanded] = useState(false);
   const [characterModalOpen, setCharacterModalOpen] = useState(false);
@@ -128,7 +127,7 @@ export function UserMenu({ className, compact, profile }: UserMenuProps) {
             }}
             onSignOut={async () => {
               await signOut();
-              router.replace('/login');
+              navigateAfterAuthChange('/login');
             }}
           />,
           document.body,

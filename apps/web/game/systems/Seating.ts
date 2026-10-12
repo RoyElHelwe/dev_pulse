@@ -10,7 +10,7 @@ import {
   SEAT_Y_OFFSET_PX,
   SEAT_ZONE_TILES,
   SIT_DWELL_MS,
-  STAND_HOLD_MS,
+  STAND_GRACE_MS,
   STEP_OFF_DISTANCE_PX,
   TILE,
 } from '../constants';
@@ -102,7 +102,8 @@ export class Seating {
   private seat: ActiveSeat | null = null;
   private seatCandidate: Seat | null = null;
   private dwellMs = 0;
-  private standHoldMs = 0;
+  /** How long we have been sitting (direction keys stand up once it passes STAND_GRACE_MS). */
+  private seatedMs = 0;
   private justLeft: string | null = null;
 
   constructor(opts: SeatingOptions) {
@@ -160,7 +161,7 @@ export class Seating {
   sit(seat: Seat): void {
     const dir = seat.dir ?? this.player.facing;
     this.seat = { ...seat, dir };
-    this.standHoldMs = 0;
+    this.seatedMs = 0;
     const body = this.player.body as Phaser.Physics.Arcade.Body;
     body.checkCollision.none = true;
     body.setVelocity(0, 0);
@@ -212,7 +213,7 @@ export class Seating {
     this.player.setSeated(false);
     this.seat = null;
     this.justLeft = seatId;
-    this.standHoldMs = 0;
+    this.seatedMs = 0;
     this.sendPosition(false);
   }
 
@@ -226,20 +227,17 @@ export class Seating {
       body.reset(this.seat.x, this.seat.y);
       this.player.animateAs(this.seat.dir, false, delta);
 
+      // Any direction press stands up: a quick tap is enough (holding used to be required, and
+      // tapping keys reset the hold, leaving the player stuck in the chair).
+      this.seatedMs += delta;
       const hasInput = (inputX !== 0 || inputY !== 0) && canSit;
-      if (hasInput) {
-        this.standHoldMs += delta;
-        if (this.standHoldMs >= STAND_HOLD_MS) {
-          this.standUp(false, inputX, inputY);
-        }
-      } else {
-        this.standHoldMs = 0;
-      }
+      if (hasInput && this.seatedMs >= STAND_GRACE_MS) this.standUp(false, inputX, inputY);
       return;
     }
 
-    // WHY: Dwell timer prevents accidental sitting when merely walking past chairs.
-    if (canSit) {
+    // WHY: Only standing still on a seat sits you down; walking or tapping keys across chairs never does.
+    const idle = inputX === 0 && inputY === 0;
+    if (canSit && idle) {
       let candidate: Seat | null = null;
       let bestDistance = Infinity;
       const px = this.player.x;

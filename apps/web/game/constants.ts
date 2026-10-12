@@ -84,17 +84,19 @@ export const DPR_SCENERY_FACTOR = 1.5;
 // Network broadcast cadences and proximity distance polling intervals.
 /** Send the local position at most every 50 ms (20 per second) while walking. */
 export const SEND_INTERVAL_MS = 50;
+/** Fastest a direction / start / stop change is sent (~30/s, under the server's 40 moves a second). */
+export const MIN_CHANGE_INTERVAL_MS = 33;
 
 /** Cadence in milliseconds for calculating proximity audio / tile points. */
 export const PROXIMITY_TICK_MS = 100;
 
 // ---- Seating ----------------------------------------------------------------
 // Dwell thresholds, occupancy radii, and geometric offsets for sitting mechanics.
-/** Milliseconds the player must dwell near a seat before sitting down. */
+/** Milliseconds the player must stand still on a seat before sitting down (walking past never sits). */
 export const SIT_DWELL_MS = 500;
 
-/** Milliseconds of directional input required to stand up from a seat. */
-export const STAND_HOLD_MS = 500;
+/** After sitting, direction keys are ignored this long; then any press stands up at once. */
+export const STAND_GRACE_MS = 150;
 
 /** Radius in pixels around a seat within which another player is considered occupying it. */
 export const SEAT_TAKEN_RADIUS_PX = 14;

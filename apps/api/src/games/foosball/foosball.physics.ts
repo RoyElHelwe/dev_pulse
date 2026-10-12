@@ -103,7 +103,13 @@ const BALL_FRICTION = 0.4;
 const UNSTUCK_SPEED = 3;
 
 /** Stationary duration required before triggering an unstuck impulse (seconds). */
-const UNSTUCK_TIME = 6;
+const UNSTUCK_TIME = 3;
+
+/**
+ * Smallest sideways part of a ball-vs-man contact normal. A perfectly head-on contact
+ * (dy = 0) pushed the ball straight back and forth between two facing men forever.
+ */
+const MIN_CONTACT_NORMAL_Y = 0.25;
 
 /** Horizontal impulse speed applied to free a stuck ball toward center (units/s). */
 const UNSTUCK_IMPULSE_X = 25;
@@ -432,6 +438,12 @@ function collideBallWithMen(world: PhysicsWorld, events: PhysicsEvent[]): void {
           if (dist > 1e-4) {
             nx = dx / dist;
             ny = dy / dist;
+          }
+          if (Math.abs(ny) < MIN_CONTACT_NORMAL_Y) {
+            // Deflect head-on contacts sideways (toward the ball's own side of the man) so the
+            // ball can't be pinned or ping-pong in a straight line between two men.
+            ny = (dy !== 0 ? Math.sign(dy) : world.ball.y < FIELD_W / 2 ? -1 : 1) * MIN_CONTACT_NORMAL_Y;
+            nx = Math.sign(nx || dirX) * Math.sqrt(1 - ny * ny);
           }
           world.ball.x = manX + nx * collisionDist;
           world.ball.y = manY + ny * collisionDist;

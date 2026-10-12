@@ -5,6 +5,9 @@ next-env.d.ts
 *.tsbuildinfo
 coverage/
 
+# Copied from node_modules by apps/web/scripts/excalidraw-assets.mjs
+apps/web/public/excalidraw/
+
 .env
 .env*.local
 

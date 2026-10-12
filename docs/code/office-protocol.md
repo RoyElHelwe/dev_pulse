@@ -126,6 +126,10 @@ DevPulse partitions WebSocket communication across three dedicated namespaces:
 | `voice:leave` | Client &rarr; Server | None (`void`) | Server | `apps/api/src/voice/voice.gateway.ts` (`VoiceGateway.leave`)<br>`apps/web/features/voice/VoiceManager.ts` (`leave`) |
 | `voice:states` | Client &rarr; Server (Ack) | None (`void`).<br>Ack response: `[userId: string, muted: boolean, deafened: boolean][]` | Calling client only | `apps/api/src/voice/voice.gateway.ts` (`VoiceGateway.list`)<br>`apps/web/features/voice/VoiceControls.tsx` (`sync`) |
 
+### Meeting room tools (screen sharing, whiteboard)
+
+`screen:*` and `wb:*` events, handled in `apps/api/src/meeting-room/` and `apps/web/features/meeting-room/`: see the event table in [meeting-room.md](meeting-room.md#events).
+
 ### Chat
 
 | Event name | Direction | Payload | Who receives | Handled in |
@@ -278,7 +282,8 @@ This section documents the WebSocket events and HTTP endpoints that manage offic
   - Replaced tabs receive `office:replaced` and are disconnected after 300ms, permanently preventing dual-avatar ghosting.
 
 ### 3. Throttling and transport optimization
-- **Volatile Sockets**: Both client and server use `volatile.emit` for high-frequency position packets (`move` and `office:moved`). If a client or server connection experiences buffer congestion, outdated movement frames drop instead of queueing, eliminating rubber-band lag.
+- **Volatile Sockets**: Both client and server use `volatile.emit` for high-frequency position packets (`move` and `office:moved`). If a client or server connection experiences buffer congestion, outdated movement frames drop instead of queueing, eliminating rubber-band lag. The `move` that says the player stopped is sent with a plain `emit`, so where someone stopped always arrives.
+- **Change throttle**: direction / start / stop changes are sent at most every `MIN_CHANGE_INTERVAL_MS = 33` ms (pending changes go out on a following frame), so tapping keys stays under the server's 40 moves per second. Remote avatars whose positions stop arriving stop their walk cycle after 400 ms.
 - **Transport Pinning**: Sockets specify `transports: ['websocket']`, completely bypassing HTTP long-polling and socket upgrade latency.
 
 ---
