@@ -86,6 +86,8 @@ export interface OfficeController {
   setPlayerZone(id: string, zone: string | null): void;
   /** Update status bubble text for a remote player. */
   setPlayerStatus(id: string, status: string | null): void;
+  /** Kitchen: someone (us included) holds a bought item for `ms`. */
+  setHolding(id: string, item: string | null, ms: number): void;
   /** Update status bubble text for the local player. */
   setOwnStatus(status: string | null): void;
   /** Voice: `id` (yours or someone else's) is in a call → headset on; `talking` → its light blinks. */
@@ -273,6 +275,11 @@ function buildController(
       const p = state.players.get(id);
       if (p) p.status = status;
       getScene()?.setPlayerStatus(id, status);
+    },
+    setHolding(id, item, ms) {
+      const p = state.players.get(id);
+      if (p) p.holding = item ? { item, ms } : null;
+      getScene()?.setHolding(id, item, ms);
     },
     setVoice(id, inCall, talking) {
       if (inCall) state.voice.set(id, { inCall, talking });

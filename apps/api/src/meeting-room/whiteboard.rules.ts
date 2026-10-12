@@ -30,7 +30,12 @@ export function parseElements(value: unknown, maxCount = MAX_ELEMENTS): BoardEle
     if (!item || typeof item !== 'object' || Array.isArray(item)) return null;
     const el = item as Record<string, unknown>;
     if (typeof el.id !== 'string' || !ELEMENT_ID.test(el.id)) return null;
-    if (!Number.isSafeInteger(el.version) || (el.version as number) < 1 || !Number.isSafeInteger(el.versionNonce)) return null;
+    if (
+      !Number.isSafeInteger(el.version) ||
+      (el.version as number) < 1 ||
+      !Number.isSafeInteger(el.versionNonce)
+    )
+      return null;
     if (el.isDeleted !== undefined && typeof el.isDeleted !== 'boolean') return null;
     if (JSON.stringify(el).length > MAX_ELEMENT_BYTES) return null;
     out.push({ ...el, isDeleted: el.isDeleted === true } as BoardElement);
@@ -52,7 +57,11 @@ export function isNewer(incoming: BoardElement, current: BoardElement | undefine
  * Applies incoming elements to the board (mutates `board`) and returns the ones accepted,
  * to pass on to the others. A full board drops its deleted elements to make room for new ones.
  */
-export function mergeElements(board: Map<string, BoardElement>, incoming: BoardElement[], maxElements = MAX_ELEMENTS): BoardElement[] {
+export function mergeElements(
+  board: Map<string, BoardElement>,
+  incoming: BoardElement[],
+  maxElements = MAX_ELEMENTS,
+): BoardElement[] {
   const accepted: BoardElement[] = [];
   for (const el of incoming) {
     const current = board.get(el.id);

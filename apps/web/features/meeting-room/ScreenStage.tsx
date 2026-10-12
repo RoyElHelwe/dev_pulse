@@ -47,12 +47,16 @@ export function ScreenStage({ stream, mine, presenterName, viewers, onStop }: Sc
     const video = videoRef.current;
     if (!video) return;
     video.muted = false;
-    void video.play().then(() => setNeedsTap(false), () => {});
+    void video.play().then(
+      () => setNeedsTap(false),
+      () => {},
+    );
   };
 
   const fullscreen = () => {
     const video = videoRef.current as IOSVideo | null;
-    if (frameRef.current?.requestFullscreen) void frameRef.current.requestFullscreen().catch(() => video?.webkitEnterFullscreen?.());
+    if (frameRef.current?.requestFullscreen)
+      void frameRef.current.requestFullscreen().catch(() => video?.webkitEnterFullscreen?.());
     else video?.webkitEnterFullscreen?.();
   };
 
@@ -83,14 +87,29 @@ export function ScreenStage({ stream, mine, presenterName, viewers, onStop }: Sc
             <IconButton aria-label="Full screen" onClick={fullscreen}>
               <Maximize className="size-4" />
             </IconButton>
-            <IconButton aria-label={expanded ? 'Make smaller' : 'Make bigger'} onClick={() => setExpanded(!expanded)}>
-              {expanded ? <Minimize2 className="size-4" /> : <Maximize className="size-4 rotate-90" />}
+            <IconButton
+              aria-label={expanded ? 'Make smaller' : 'Make bigger'}
+              onClick={() => setExpanded(!expanded)}
+            >
+              {expanded ? (
+                <Minimize2 className="size-4" />
+              ) : (
+                <Maximize className="size-4 rotate-90" />
+              )}
             </IconButton>
           </>
         )}
       </header>
-      <div ref={frameRef} className={cn('relative bg-zinc-950', big ? 'min-h-0 flex-1' : 'aspect-video')}>
-        <video ref={videoRef} autoPlay playsInline className="absolute inset-0 size-full object-contain" />
+      <div
+        ref={frameRef}
+        className={cn('relative bg-zinc-950', big ? 'min-h-0 flex-1' : 'aspect-video')}
+      >
+        <video
+          ref={videoRef}
+          autoPlay
+          playsInline
+          className="absolute inset-0 size-full object-contain"
+        />
         {needsTap && (
           <button
             type="button"

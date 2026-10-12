@@ -40,6 +40,8 @@ model User {
   bookings        RoomBooking[]
   tasksReported   Task[]           @relation("TaskReporter")
   tasksAssigned   Task[]           @relation("TaskAssignee")
+  wallet          Wallet?
+  coinTxs         CoinTx[]
 }
 
 /// Organization and virtual office environment containing layout, rooms, and shared resources.
@@ -64,6 +66,7 @@ model Workspace {
   gameResults  GameResult[]
   legoBoards   LegoBoard[]
   whiteboards  Whiteboard[]
+  coinTxs      CoinTx[]
 }
 
 /// Workspace permission role determining administrative, invitation, and office editing privileges.
@@ -397,4 +400,63 @@ model Whiteboard {
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@unique([workspaceId, roomId])
+}
+
+/// A member's wallet on the office blockchain (PulseCoin, spent in the kitchen). The app keeps the key
+/// (custodial): members never need a crypto wallet of their own, nor gas.
+model Wallet {
+  userId       String   @id
+  address      String   @unique
+  /// Private key, AES-256-GCM encrypted with a key derived from JWT_SECRET (like 2FA secrets).
+  encryptedKey String
+  createdAt    DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+/// Why coins moved: rewards (welcome, daily allowance, task done, game won, admin grant) or a kitchen purchase.
+enum CoinTxKind {
+  WELCOME
+  DAILY
+  TASK
+  GAME
+  GRANT
+  PURCHASE
+}
+
+/// A PulseCoin transaction made by the app, with its on-chain proof. Balances are read from the chain;
+/// this is the history and the office ledger.
+model CoinTx {
+  id          String     @id @default(cuid())
+  workspaceId String
+  /// Whose wallet received or paid.
+  userId      String
+  kind        CoinTxKind
+  /// Whole coins: positive received, negative spent.
+  amount      Int
+  /// Kitchen item bought ("water", "pepsi", "dinner").
+  item        String?
+  /// Grants: who gave the coins, and their note.
+  byUserId    String?
+  note        String?
+  /// Makes each reward happen once ("welcome:<user>", "task:<task>", "game:<result>:<user>").
+  rewardKey   String?    @unique
+  txHash      String     @unique
+  blockNumber Int
+  chainId     Int
+  createdAt   DateTime   @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, createdAt])
+  @@index([userId, createdAt])
+}
+
+/// Where the contracts live on each chain (deployed by the API on first start).
+model ChainDeployment {
+  chainId     Int      @id
+  coinAddress String
+  shopAddress String
+  deployedAt  DateTime @default(now())
 }

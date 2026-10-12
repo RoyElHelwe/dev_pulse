@@ -49,6 +49,14 @@ export function itemBounds(item: Furniture): Rect {
   return { x: item.x - w / 2, y: item.y - h / 2, w, h };
 }
 
+/** Distance in tiles from a point (tiles) to an item's footprint (0 when standing on it). */
+export function distanceToItem(x: number, y: number, item: Furniture): number {
+  const b = itemBounds(item);
+  const dx = Math.max(b.x - x, 0, x - (b.x + b.w));
+  const dy = Math.max(b.y - y, 0, y - (b.y + b.h));
+  return Math.hypot(dx, dy);
+}
+
 /** What blocks the player for a wall, in pixels: its footprint (the tall face is only drawn). */
 export function wallRect(wall: Wall): Rect {
   const { thickness } = WALL[wall.kind];

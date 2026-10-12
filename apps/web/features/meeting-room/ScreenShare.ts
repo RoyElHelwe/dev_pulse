@@ -12,7 +12,12 @@ const ACK_TIMEOUT_MS = 5_000;
 const MAX_FRAME_RATE = 30;
 
 /** What travels through the server. `want`: a viewer asks for the stream; `bye`: hung up. */
-type ScreenSignal = { want?: true; bye?: true; description?: RTCSessionDescriptionInit; candidate?: RTCIceCandidateInit };
+type ScreenSignal = {
+  want?: true;
+  bye?: true;
+  description?: RTCSessionDescriptionInit;
+  candidate?: RTCIceCandidateInit;
+};
 
 /** Immutable view of the share in the room we stand in, for React. */
 export interface ScreenSnapshot {
@@ -33,7 +38,8 @@ export interface ScreenSnapshot {
 export type StartResult = 'ok' | 'unsupported' | 'cancelled' | 'busy' | 'forbidden' | 'failed';
 
 /** Phones and tablets can watch but cannot capture their screen from a browser. */
-export const canShareScreen = () => typeof navigator !== 'undefined' && typeof navigator.mediaDevices?.getDisplayMedia === 'function';
+export const canShareScreen = () =>
+  typeof navigator !== 'undefined' && typeof navigator.mediaDevices?.getDisplayMedia === 'function';
 
 /** Presenter and viewer sides of meeting room screen sharing for one /office socket. */
 export class ScreenShare {
@@ -140,7 +146,8 @@ export class ScreenShare {
     this.local.getTracks().forEach((t) => t.stop());
     this.local = null;
     for (const id of [...this.viewers.keys()]) this.dropViewer(id, true);
-    if (this.roomId && this.socket.connected) this.socket.emit('screen:stop', { roomId: this.roomId });
+    if (this.roomId && this.socket.connected)
+      this.socket.emit('screen:stop', { roomId: this.roomId });
     if (this.presenterId === this.myId) this.presenterId = null;
     this.onChange();
   }
@@ -182,7 +189,8 @@ export class ScreenShare {
     if (!presenter || !this.roomId) return;
     const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
     this.watching = pc;
-    pc.onicecandidate = ({ candidate }) => candidate && this.send(presenter, { candidate: candidate.toJSON() });
+    pc.onicecandidate = ({ candidate }) =>
+      candidate && this.send(presenter, { candidate: candidate.toJSON() });
     pc.ontrack = ({ track, streams }) => {
       // Audio and video come in one stream; a new MediaStream object makes React re-render.
       this.remote = new MediaStream(streams[0]?.getTracks() ?? [track]);
@@ -191,7 +199,10 @@ export class ScreenShare {
     pc.onconnectionstatechange = () => {
       if (pc.connectionState === 'failed') this.retry();
     };
-    this.retryTimer = setTimeout(() => pc.connectionState !== 'connected' && this.retry(), CONNECT_TIMEOUT_MS);
+    this.retryTimer = setTimeout(
+      () => pc.connectionState !== 'connected' && this.retry(),
+      CONNECT_TIMEOUT_MS,
+    );
     this.send(presenter, { want: true });
   }
 
@@ -235,9 +246,11 @@ export class ScreenShare {
         // Closed while the offer was being made.
       }
     };
-    pc.onicecandidate = ({ candidate }) => candidate && this.send(id, { candidate: candidate.toJSON() });
+    pc.onicecandidate = ({ candidate }) =>
+      candidate && this.send(id, { candidate: candidate.toJSON() });
     pc.onconnectionstatechange = () => {
-      if (pc.connectionState === 'failed' || pc.connectionState === 'closed') this.dropViewer(id, false);
+      if (pc.connectionState === 'failed' || pc.connectionState === 'closed')
+        this.dropViewer(id, false);
       this.onChange();
     };
   }
@@ -253,11 +266,21 @@ export class ScreenShare {
   // ---- signalling ----------------------------------------------------------------
 
   private send(to: string, data: ScreenSignal) {
-    if (this.roomId && this.socket.connected) this.socket.emit('screen:signal', { roomId: this.roomId, to, data });
+    if (this.roomId && this.socket.connected)
+      this.socket.emit('screen:signal', { roomId: this.roomId, to, data });
   }
 
-  private onSignal = async ({ roomId, from, data }: { roomId: string; from: string; data: ScreenSignal }) => {
-    if (roomId !== this.roomId || typeof from !== 'string' || !data || typeof data !== 'object') return;
+  private onSignal = async ({
+    roomId,
+    from,
+    data,
+  }: {
+    roomId: string;
+    from: string;
+    data: ScreenSignal;
+  }) => {
+    if (roomId !== this.roomId || typeof from !== 'string' || !data || typeof data !== 'object')
+      return;
     // We present: messages come from viewers.
     if (this.local) {
       if (data.want) return this.addViewer(from);

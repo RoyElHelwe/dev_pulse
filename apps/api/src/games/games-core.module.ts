@@ -4,6 +4,7 @@
  */
 
 import { Module } from '@nestjs/common';
+import { KitchenModule } from '../kitchen/kitchen.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { GameResultsService } from './game-results.service';
 import { GamesRegistry } from './games.registry';
@@ -12,7 +13,8 @@ import { GamesRegistry } from './games.registry';
  * Shared infrastructure module providing registry and result persistence services.
  */
 @Module({
-  imports: [PrismaModule],
+  // KitchenModule: winners are paid in PulseCoin.
+  imports: [PrismaModule, KitchenModule],
   providers: [GamesRegistry, GameResultsService],
   exports: [GamesRegistry, GameResultsService],
 })

@@ -40,11 +40,17 @@ interface MicTest {
 }
 
 /** Position of a loudness (RMS) on the meter, 0..1. */
-const meterOf = (rms: number) => Math.min(1, Math.max(0, (20 * Math.log10(Math.max(rms, 1e-6)) - METER_FLOOR_DB) / -METER_FLOOR_DB));
+const meterOf = (rms: number) =>
+  Math.min(
+    1,
+    Math.max(0, (20 * Math.log10(Math.max(rms, 1e-6)) - METER_FLOOR_DB) / -METER_FLOOR_DB),
+  );
 
 /** Microphone / speaker pickers with a microphone test and a speaker test sound. */
 export function AudioDevices() {
-  const [devices, setDevices] = useState<{ inputs: MediaDeviceInfo[]; outputs: MediaDeviceInfo[] }>({ inputs: [], outputs: [] });
+  const [devices, setDevices] = useState<{ inputs: MediaDeviceInfo[]; outputs: MediaDeviceInfo[] }>(
+    { inputs: [], outputs: [] },
+  );
   const [choice, setChoice] = useState<VoiceDevices>({ input: null, output: null });
   const [outputSupported, setOutputSupported] = useState(false);
   const [testing, setTesting] = useState<string | null>(null);
@@ -110,7 +116,9 @@ export function AudioDevices() {
   const choose = (kind: 'input' | 'output', id: string) => {
     const list = kind === 'input' ? devices.inputs : devices.outputs;
     const device = list.find((d) => d.deviceId === id);
-    const picked: DeviceChoice | null = device ? { id: device.deviceId, label: device.label } : null;
+    const picked: DeviceChoice | null = device
+      ? { id: device.deviceId, label: device.label }
+      : null;
     const next = { ...choice, [kind]: picked };
     setChoice(next);
     saveDevices(next);
@@ -149,10 +157,17 @@ export function AudioDevices() {
   const loud = level > TALKING_RMS_THRESHOLD;
 
   return (
-    <Card title="Microphone and speakers" description="Saved in this browser. Used the next time you join voice in the office.">
+    <Card
+      title="Microphone and speakers"
+      description="Saved in this browser. Used the next time you join voice in the office."
+    >
       <div className="flex flex-col gap-4">
         <div className="grid gap-3 sm:grid-cols-2">
-          <Select label="Microphone" value={inputId} onChange={(e) => choose('input', e.target.value)}>
+          <Select
+            label="Microphone"
+            value={inputId}
+            onChange={(e) => choose('input', e.target.value)}
+          >
             <option value="">System default</option>
             {devices.inputs.map((d, i) => (
               <option key={d.deviceId} value={d.deviceId}>
@@ -161,7 +176,11 @@ export function AudioDevices() {
             ))}
           </Select>
           {outputSupported ? (
-            <Select label="Speakers" value={outputId} onChange={(e) => choose('output', e.target.value)}>
+            <Select
+              label="Speakers"
+              value={outputId}
+              onChange={(e) => choose('output', e.target.value)}
+            >
               <option value="">System default</option>
               {devices.outputs.map((d, i) => (
                 <option key={d.deviceId} value={d.deviceId}>
@@ -172,11 +191,18 @@ export function AudioDevices() {
           ) : (
             <div className="flex flex-col gap-1.5">
               <span className="text-sm font-medium text-zinc-800">Speakers</span>
-              <p className="text-sm text-zinc-500">This browser plays voice through your system’s default speakers. Change them in your system’s sound settings.</p>
+              <p className="text-sm text-zinc-500">
+                This browser plays voice through your system’s default speakers. Change them in your
+                system’s sound settings.
+              </p>
             </div>
           )}
         </div>
-        {!named && <p className="text-sm text-zinc-500">Device names appear once you allow the microphone: start a test.</p>}
+        {!named && (
+          <p className="text-sm text-zinc-500">
+            Device names appear once you allow the microphone: start a test.
+          </p>
+        )}
 
         <div className="flex flex-wrap gap-2">
           {testing ? (
@@ -196,7 +222,8 @@ export function AudioDevices() {
         {testing && (
           <div className="flex flex-col gap-2 rounded-xl bg-zinc-50 p-4 ring-1 ring-zinc-200/80">
             <p className="text-sm text-zinc-700">
-              Testing <b className="font-semibold">{testing}</b>. Speak normally: the bar should pass the mark.
+              Testing <b className="font-semibold">{testing}</b>. Speak normally: the bar should
+              pass the mark.
             </p>
             <div
               role="meter"
@@ -206,11 +233,27 @@ export function AudioDevices() {
               aria-valuenow={Math.round(meterOf(level) * 100)}
               className="relative h-3 overflow-hidden rounded-full bg-zinc-200"
             >
-              <div className={cn('h-full rounded-full transition-[width] duration-75', loud ? 'bg-emerald-500' : 'bg-zinc-400')} style={{ width: `${meterOf(level) * 100}%` }} />
-              <div className="absolute inset-y-0 w-0.5 bg-zinc-700/60" style={{ left: `${meterOf(TALKING_RMS_THRESHOLD) * 100}%` }} title="Others see you talking above this mark" />
+              <div
+                className={cn(
+                  'h-full rounded-full transition-[width] duration-75',
+                  loud ? 'bg-emerald-500' : 'bg-zinc-400',
+                )}
+                style={{ width: `${meterOf(level) * 100}%` }}
+              />
+              <div
+                className="absolute inset-y-0 w-0.5 bg-zinc-700/60"
+                style={{ left: `${meterOf(TALKING_RMS_THRESHOLD) * 100}%` }}
+                title="Others see you talking above this mark"
+              />
             </div>
-            <p className={cn('text-xs', loud ? 'text-emerald-700' : 'text-zinc-500')}>{loud ? 'Others hear you talking.' : 'Quiet: nobody hears anything right now.'}</p>
-            <Checkbox label="Hear yourself (use headphones, or you will hear an echo)" checked={hearSelf} onChange={(e) => toggleHearSelf(e.target.checked)} />
+            <p className={cn('text-xs', loud ? 'text-emerald-700' : 'text-zinc-500')}>
+              {loud ? 'Others hear you talking.' : 'Quiet: nobody hears anything right now.'}
+            </p>
+            <Checkbox
+              label="Hear yourself (use headphones, or you will hear an echo)"
+              checked={hearSelf}
+              onChange={(e) => toggleHearSelf(e.target.checked)}
+            />
           </div>
         )}
 

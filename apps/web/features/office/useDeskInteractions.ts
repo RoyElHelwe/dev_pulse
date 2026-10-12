@@ -56,7 +56,7 @@ export function useDeskInteractions({
         if (e.type === 'kanban') {
           return onOpenBoard({ ...EMPTY_FILTER, onlyMine: false });
         }
-        if (e.type === 'board') return setToast('Screen: sharing arrives with the meeting rooms.');
+        if (e.type === 'board') return setToast('To share your screen, use Share screen inside a meeting room.');
         if (e.type !== 'desk') return; // game tables and the Lego wall belong to GameHost
         if (e.ownerId && e.ownerId === myId) {
           return onOpenBoard({ ...EMPTY_FILTER, onlyMine: true });

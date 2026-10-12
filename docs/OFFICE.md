@@ -407,6 +407,8 @@ details; its creator, or an owner / admin, can cancel it.
 | People | members of the office, 30 at most; the creator is always one of them |
 | No double booking | refused with "Atlas is booked 14:00–15:00 by Roy". Race-free: each booking takes a Postgres advisory lock for its room (`pg_advisory_xact_lock`) inside the transaction that checks and inserts |
 
+**The kitchen café**: press E at the kitchen's fridge or counter to buy water, Pepsi or dinner with PulseCoin (a token on the office blockchain), earned by closing tasks, winning games, a daily allowance or admin grants. What you buy stays in your avatar's hand for 3 minutes. Details: [docs/code/kitchen.md](code/kitchen.md).
+
 **In a meeting room**, a bar under the office name offers **Share screen** (one presenter per room; everyone in the room watches, on any device; presenting needs a desktop browser) and **Whiteboard** (a shared Excalidraw canvas, live for everyone in the room and kept for the next meeting). Details: [docs/code/meeting-room.md](code/meeting-room.md).
 
 **During a meeting only its people get in.**

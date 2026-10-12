@@ -1,6 +1,6 @@
 /**
  * Mounted in-office real-time features container.
- * Houses voice proximity controls, chat, meeting scheduler, meeting room tools, mini-games, and Lego sync.
+ * Houses voice proximity controls, chat, meeting scheduler, meeting room tools, the kitchen café, mini-games, and Lego sync.
  */
 
 'use client';
@@ -10,6 +10,7 @@ import type { Socket } from 'socket.io-client';
 import { ChatPanel } from '@/features/chat/ChatPanel';
 import { GameHost } from '@/features/games/GameHost';
 import { LegoSync } from '@/features/games/lego/LegoSync';
+import { KitchenPanel } from '@/features/kitchen/KitchenPanel';
 import { MeetingRoomTools } from '@/features/meeting-room/MeetingRoomTools';
 import { MeetingsPanel } from '@/features/meetings/MeetingsPanel';
 import { VoiceControls } from '@/features/voice/VoiceControls';
@@ -61,6 +62,7 @@ export function OfficeFeatures({
       <ChatPanel {...features} />
       <MeetingsPanel {...features} />
       <MeetingRoomTools {...features} />
+      <KitchenPanel {...features} />
       <GameHost
         socket={socket}
         me={{ id: user.id, name: user.displayName, character: workspace.character }}

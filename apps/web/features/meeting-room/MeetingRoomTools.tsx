@@ -14,17 +14,33 @@ import { canShareScreen, ScreenShare, type ScreenSnapshot, type StartResult } fr
 import { ScreenStage } from './ScreenStage';
 import { WhiteboardOverlay } from './WhiteboardOverlay';
 
-const IDLE: ScreenSnapshot = { roomId: null, presenterId: null, local: null, remote: null, viewers: 0, starting: false };
+const IDLE: ScreenSnapshot = {
+  roomId: null,
+  presenterId: null,
+  local: null,
+  remote: null,
+  viewers: 0,
+  starting: false,
+};
 
 const START_MESSAGES: Partial<Record<StartResult, string>> = {
-  unsupported: 'Screen sharing needs a desktop browser. Phones and tablets can watch, but not present.',
+  unsupported:
+    'Screen sharing needs a desktop browser. Phones and tablets can watch, but not present.',
   busy: 'Someone is already presenting in this room.',
   forbidden: 'Only people in this meeting room can present here.',
   failed: 'Your screen could not be shared. Please try again.',
 };
 
 /** Meeting room bar (share screen, whiteboard), the shared screen, and the whiteboard overlay. */
-export function MeetingRoomTools({ socket, controller, workspace, people, myId, onToast, editing }: OfficeFeatureProps) {
+export function MeetingRoomTools({
+  socket,
+  controller,
+  workspace,
+  people,
+  myId,
+  onToast,
+  editing,
+}: OfficeFeatureProps) {
   const current = useCurrentRoom(controller, workspace.layout);
   const room = current?.kind === 'meeting' ? current : null;
   const [screen, setScreen] = useState<ScreenSnapshot>(IDLE);
@@ -52,7 +68,10 @@ export function MeetingRoomTools({ socket, controller, workspace, people, myId, 
     setBoardOpen(false);
   }, [room?.id]);
 
-  const nameOf = useCallback((id: string) => (id === myId ? 'You' : (people.find((p) => p.id === id)?.name ?? 'Someone')), [people, myId]);
+  const nameOf = useCallback(
+    (id: string) => (id === myId ? 'You' : (people.find((p) => p.id === id)?.name ?? 'Someone')),
+    [people, myId],
+  );
 
   const share = async () => {
     const manager = managerRef.current;
@@ -70,8 +89,14 @@ export function MeetingRoomTools({ socket, controller, workspace, people, myId, 
   return (
     <>
       {room && (
-        <Panel role="toolbar" aria-label={`${room.name} tools`} className="absolute top-[4.5rem] left-4 z-10 flex items-center gap-1 p-1">
-          <span className="hidden max-w-32 truncate pr-1 pl-2 text-sm font-semibold text-zinc-700 sm:block">{room.name}</span>
+        <Panel
+          role="toolbar"
+          aria-label={`${room.name} tools`}
+          className="absolute top-[4.5rem] left-4 z-10 flex items-center gap-1 p-1"
+        >
+          <span className="hidden max-w-32 truncate pr-1 pl-2 text-sm font-semibold text-zinc-700 sm:block">
+            {room.name}
+          </span>
           <button
             type="button"
             onClick={share}
@@ -87,7 +112,11 @@ export function MeetingRoomTools({ socket, controller, workspace, people, myId, 
                     ? 'Share your screen with the room'
                     : 'Phones and tablets can watch a shared screen, but not present'
             }
-            className={cn(buttonStyles('ghost', 'sm', 'h-9'), presenting && 'bg-rose-50 text-rose-700 hover:bg-rose-100', !canShareScreen() && 'opacity-60')}
+            className={cn(
+              buttonStyles('ghost', 'sm', 'h-9'),
+              presenting && 'bg-rose-50 text-rose-700 hover:bg-rose-100',
+              !canShareScreen() && 'opacity-60',
+            )}
           >
             {presenting ? <ScreenShareOff className="size-4" /> : <MonitorUp className="size-4" />}
             <span className="hidden sm:inline">{presenting ? 'Stop sharing' : 'Share screen'}</span>

@@ -4,9 +4,17 @@
 // Loaded on demand by WhiteboardOverlay (Excalidraw is large, and needs the browser).
 
 import '@excalidraw/excalidraw/index.css';
-import { CaptureUpdateAction, Excalidraw, reconcileElements, restoreElements } from '@excalidraw/excalidraw';
+import {
+  CaptureUpdateAction,
+  Excalidraw,
+  reconcileElements,
+  restoreElements,
+} from '@excalidraw/excalidraw';
 import type { RemoteExcalidrawElement } from '@excalidraw/excalidraw/data/reconcile';
-import type { ExcalidrawElement, OrderedExcalidrawElement } from '@excalidraw/excalidraw/element/types';
+import type {
+  ExcalidrawElement,
+  OrderedExcalidrawElement,
+} from '@excalidraw/excalidraw/element/types';
 import type { Collaborator, ExcalidrawImperativeAPI, SocketId } from '@excalidraw/excalidraw/types';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Socket } from 'socket.io-client';
@@ -42,7 +50,12 @@ interface WhiteboardCanvasProps {
 type Remote = readonly ExcalidrawElement[];
 
 /** Excalidraw scene of one meeting room: loads it, merges others' edits in, sends ours out. */
-export default function WhiteboardCanvas({ socket, roomId, nameOf, onLost }: WhiteboardCanvasProps) {
+export default function WhiteboardCanvas({
+  socket,
+  roomId,
+  nameOf,
+  onLost,
+}: WhiteboardCanvasProps) {
   const [initial, setInitial] = useState<OrderedExcalidrawElement[] | null>(null);
   const [error, setError] = useState('');
   const apiRef = useRef<ExcalidrawImperativeAPI | null>(null);
@@ -62,8 +75,13 @@ export default function WhiteboardCanvas({ socket, roomId, nameOf, onLost }: Whi
   const apply = useCallback((remote: Remote) => {
     const api = apiRef.current;
     if (!api) return void pending.current.push(remote);
-    for (const el of remote) known.current.set(el.id, Math.max(known.current.get(el.id) ?? 0, el.version));
-    const elements = reconcileElements(api.getSceneElementsIncludingDeleted(), remote as RemoteExcalidrawElement[], api.getAppState());
+    for (const el of remote)
+      known.current.set(el.id, Math.max(known.current.get(el.id) ?? 0, el.version));
+    const elements = reconcileElements(
+      api.getSceneElementsIncludingDeleted(),
+      remote as RemoteExcalidrawElement[],
+      api.getAppState(),
+    );
     // NEVER: others' strokes do not go into our undo history.
     api.updateScene({ elements, captureUpdate: CaptureUpdateAction.NEVER });
   }, []);
@@ -74,7 +92,9 @@ export default function WhiteboardCanvas({ socket, roomId, nameOf, onLost }: Whi
     sendTimer.current = null;
     const api = apiRef.current;
     if (!api || !socket.connected) return;
-    const changed = api.getSceneElementsIncludingDeleted().filter((el) => (known.current.get(el.id) ?? 0) < el.version);
+    const changed = api
+      .getSceneElementsIncludingDeleted()
+      .filter((el) => (known.current.get(el.id) ?? 0) < el.version);
     let batch: ExcalidrawElement[] = [];
     let bytes = 0;
     const send = () => batch.length > 0 && socket.emit('wb:update', { roomId, elements: batch });
@@ -93,19 +113,34 @@ export default function WhiteboardCanvas({ socket, roomId, nameOf, onLost }: Whi
   }, [socket, roomId]);
 
   const showCursors = useCallback(() => {
-    const collaborators = new Map([...cursors.current].map(([id, c]) => [id as SocketId, c.collaborator]));
+    const collaborators = new Map(
+      [...cursors.current].map(([id, c]) => [id as SocketId, c.collaborator]),
+    );
     apiRef.current?.updateScene({ collaborators });
   }, []);
 
   // Open the board, follow the others' edits and cursors, and close it again.
   useEffect(() => {
     let alive = true;
-    const onUpdate = ({ roomId: r, elements }: { roomId: string; elements: Remote }) => r === roomId && Array.isArray(elements) && apply(elements);
-    const onPointer = (p: { roomId: string; from: string; x: number; y: number; tool: 'pointer' | 'laser'; button: 'up' | 'down' }) => {
+    const onUpdate = ({ roomId: r, elements }: { roomId: string; elements: Remote }) =>
+      r === roomId && Array.isArray(elements) && apply(elements);
+    const onPointer = (p: {
+      roomId: string;
+      from: string;
+      x: number;
+      y: number;
+      tool: 'pointer' | 'laser';
+      button: 'up' | 'down';
+    }) => {
       if (p.roomId !== roomId || typeof p.from !== 'string') return;
       cursors.current.set(p.from, {
         at: performance.now(),
-        collaborator: { id: p.from, username: nameRef.current(p.from), pointer: { x: p.x, y: p.y, tool: p.tool }, button: p.button },
+        collaborator: {
+          id: p.from,
+          username: nameRef.current(p.from),
+          pointer: { x: p.x, y: p.y, tool: p.tool },
+          button: p.button,
+        },
       });
       showCursors();
     };
@@ -120,7 +155,12 @@ export default function WhiteboardCanvas({ socket, roomId, nameOf, onLost }: Whi
       .then(
         (res: { elements?: unknown; error?: string }) => {
           if (!alive) return;
-          if (!Array.isArray(res?.elements)) return setError(res?.error === 'FORBIDDEN' ? 'Only people in this meeting room can open its whiteboard.' : 'The whiteboard could not be loaded. Please try again.');
+          if (!Array.isArray(res?.elements))
+            return setError(
+              res?.error === 'FORBIDDEN'
+                ? 'Only people in this meeting room can open its whiteboard.'
+                : 'The whiteboard could not be loaded. Please try again.',
+            );
           const elements = restoreElements(res.elements as ExcalidrawElement[], null);
           for (const el of elements) known.current.set(el.id, el.version);
           setInitial(elements);
@@ -131,7 +171,8 @@ export default function WhiteboardCanvas({ socket, roomId, nameOf, onLost }: Whi
     const sweep = setInterval(() => {
       const now = performance.now();
       let changed = false;
-      for (const [id, c] of cursors.current) if (now - c.at > CURSOR_TTL_MS && cursors.current.delete(id)) changed = true;
+      for (const [id, c] of cursors.current)
+        if (now - c.at > CURSOR_TTL_MS && cursors.current.delete(id)) changed = true;
       if (changed) showCursors();
     }, CURSOR_SWEEP_MS);
 
@@ -146,10 +187,23 @@ export default function WhiteboardCanvas({ socket, roomId, nameOf, onLost }: Whi
     };
   }, [socket, roomId, apply, flush, showCursors]);
 
-  const initialData = useMemo(() => (initial ? { elements: initial, scrollToContent: true } : null), [initial]);
+  const initialData = useMemo(
+    () => (initial ? { elements: initial, scrollToContent: true } : null),
+    [initial],
+  );
 
-  if (error) return <p className="flex h-full items-center justify-center px-6 text-center text-sm text-zinc-500">{error}</p>;
-  if (!initialData) return <p className="flex h-full items-center justify-center text-sm text-zinc-400">Loading whiteboard…</p>;
+  if (error)
+    return (
+      <p className="flex h-full items-center justify-center px-6 text-center text-sm text-zinc-500">
+        {error}
+      </p>
+    );
+  if (!initialData)
+    return (
+      <p className="flex h-full items-center justify-center text-sm text-zinc-400">
+        Loading whiteboard…
+      </p>
+    );
 
   return (
     <Excalidraw
@@ -165,13 +219,27 @@ export default function WhiteboardCanvas({ socket, roomId, nameOf, onLost }: Whi
       onPointerUpdate={({ pointer, button }) => {
         const now = performance.now();
         // Always send a press or release; throttle plain moves.
-        if (button === lastPointer.current.button && now - lastPointer.current.at < POINTER_INTERVAL_MS) return;
+        if (
+          button === lastPointer.current.button &&
+          now - lastPointer.current.at < POINTER_INTERVAL_MS
+        )
+          return;
         lastPointer.current = { at: now, button };
-        if (socket.connected) socket.emit('wb:pointer', { roomId, x: pointer.x, y: pointer.y, tool: pointer.tool, button });
+        if (socket.connected)
+          socket.emit('wb:pointer', {
+            roomId,
+            x: pointer.x,
+            y: pointer.y,
+            tool: pointer.tool,
+            button,
+          });
       }}
       isCollaborating
       // Images would make the shared scene heavy; scenes from files could carry them in.
-      UIOptions={{ tools: { image: false }, canvasActions: { loadScene: false, saveToActiveFile: false } }}
+      UIOptions={{
+        tools: { image: false },
+        canvasActions: { loadScene: false, saveToActiveFile: false },
+      }}
     />
   );
 }

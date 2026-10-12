@@ -7,6 +7,8 @@ coverage/
 
 # Copied from node_modules by apps/web/scripts/excalidraw-assets.mjs
 apps/web/public/excalidraw/
+# Compiled by apps/api/scripts/compile-contracts.mjs
+apps/api/contracts/build/
 
 .env
 .env*.local

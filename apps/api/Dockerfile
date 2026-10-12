@@ -29,6 +29,7 @@ COPY --from=build /app/package.json ./
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/prisma ./prisma
 COPY --from=build /app/dist ./dist
+COPY --from=build /app/contracts/build ./contracts/build
 USER node
 EXPOSE 4000
 CMD ["sh", "-c", "node_modules/.bin/prisma db push --skip-generate && node dist/main.js"]

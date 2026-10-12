@@ -24,7 +24,7 @@ export interface OfficeEventMap {
   'player:far': { userId: string };
   /** E pressed next to something. Desks: `ownerId` = who sits there (null = free desk). */
   'object:interact': {
-    type: 'desk' | 'board' | 'kanban' | 'foosball' | 'uno' | 'lego';
+    type: 'desk' | 'board' | 'kanban' | 'foosball' | 'uno' | 'lego' | 'kitchen';
     id: string;
     name: string;
     ownerId?: string | null;

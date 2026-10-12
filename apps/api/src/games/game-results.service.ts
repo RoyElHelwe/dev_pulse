@@ -3,7 +3,8 @@
  * Records game outcomes and calculates ranked stats over configurable time windows.
  */
 
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
+import { CoinsService } from '../kitchen/coins.service';
 import { PrismaService } from '../prisma/prisma.service';
 import type { GameKind } from './game.types';
 
@@ -97,9 +98,16 @@ export function aggregateLeaderboard(
 /**
  * Service managing persistence of match outcomes and generating ranked leaderboards.
  */
+/** How games are named in reward notes ("for winning a baby foot match"). */
+const GAME_NAMES: Record<string, string> = { foosball: 'a baby foot match', uno: 'a game of Uno' };
+
 @Injectable()
 export class GameResultsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    /** Pays winners in PulseCoin (optional: unit tests build the service without it). */
+    @Optional() private readonly coins?: CoinsService,
+  ) {}
 
   /**
    * Persists a completed match result to the database.
@@ -110,7 +118,7 @@ export class GameResultsService {
     winners: string[];
     losers: string[];
   }) {
-    return this.prisma.gameResult.create({
+    const result = await this.prisma.gameResult.create({
       data: {
         workspaceId: params.workspaceId,
         game: params.game,
@@ -118,6 +126,9 @@ export class GameResultsService {
         losers: params.losers,
       },
     });
+    // In the background: a slow or unavailable chain never delays the end of a match.
+    this.coins?.rewardGame(params.workspaceId, result.id, params.winners, GAME_NAMES[params.game] ?? params.game);
+    return result;
   }
 
   /**

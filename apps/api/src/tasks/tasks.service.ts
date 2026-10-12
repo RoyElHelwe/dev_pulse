@@ -2,10 +2,11 @@
  * Task persistence and orchestration: membership checks, per-workspace numbering, column ranking,
  * and live `task:*` broadcasts to the office. HTTP lives in tasks.controller.ts; pure rules in tasks.rules.ts.
  */
-import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, OnModuleDestroy, OnModuleInit, Optional } from '@nestjs/common';
 import { type Prisma, type Task, TaskPriority, TaskStatus, TaskType } from '@prisma/client';
 import type { Subscription } from 'rxjs';
 import { FormError } from '../common/form-error';
+import { CoinsService } from '../kitchen/coins.service';
 import { OfficeGateway } from '../office/office.gateway';
 import { PrismaService } from '../prisma/prisma.service';
 import { MembershipService } from '../workspace/membership.service';
@@ -61,6 +62,8 @@ export class TasksService implements OnModuleInit, OnModuleDestroy {
     private readonly membership: MembershipService,
     private readonly office: OfficeGateway,
     private readonly events: WorkspaceEvents,
+    /** Pays for closed tasks in PulseCoin (optional: unit tests build the service without it). */
+    @Optional() private readonly coins?: CoinsService,
   ) {}
 
   onModuleInit() {
@@ -175,6 +178,10 @@ export class TasksService implements OnModuleInit, OnModuleDestroy {
     }
 
     const updated = await this.prisma.task.update({ where: { id }, data });
+    // Closing a task (first move into Done) earns coins: its assignee's, or the closer's when unassigned.
+    if (targetStatus === TaskStatus.DONE && task.status !== TaskStatus.DONE) {
+      this.coins?.rewardTask(workspaceId, task.id, updated.assigneeId ?? userId, taskKey(prefix, task.number));
+    }
 
     if (isMove) {
       const rebalanced = await this.rebalanceColumnIfCrowded(workspaceId, targetStatus, prefix);

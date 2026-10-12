@@ -130,6 +130,14 @@ DevPulse partitions WebSocket communication across three dedicated namespaces:
 
 `screen:*` and `wb:*` events, handled in `apps/api/src/meeting-room/` and `apps/web/features/meeting-room/`: see the event table in [meeting-room.md](meeting-room.md#events).
 
+### Kitchen café and PulseCoin
+
+| Event name | Direction | Payload | Who receives | Handled in |
+| --- | --- | --- | --- | --- |
+| `office:holding` | Server &rarr; Client | `{ id, item: 'water' \| 'pepsi' \| 'dinner', ms }` (time left; also in each player's state as `holding`) | Everyone in the office | `apps/api/src/office/office.gateway.ts` (`setHolding`)<br>`apps/web/features/office/connection.ts` |
+| `coins:tx` | Server &rarr; Client | A ledger line (`CoinTxView`) | Everyone in the office | `apps/api/src/kitchen/coins.service.ts` (`record`)<br>`apps/web/features/kitchen/KitchenPanel.tsx` |
+| `coins:received` | Server &rarr; Client | The ledger line of coins someone received | That person | same, shown as a toast |
+
 ### Chat
 
 | Event name | Direction | Payload | Who receives | Handled in |

@@ -22,6 +22,19 @@ services:
       timeout: 5s
       retries: 10
 
+  # Local EVM blockchain (Anvil) for PulseCoin and the kitchen shop contracts (deployed by the api on start).
+  # Internal only (no host port); its state is dumped to the chain_data volume so coins survive restarts.
+  chain:
+    build: ./chain
+    restart: unless-stopped
+    volumes:
+      - chain_data:/data
+    healthcheck:
+      test: ['CMD-SHELL', 'cast block-number --rpc-url http://localhost:8545']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   # NestJS backend service providing REST API endpoints (/api/*) and WebSockets (/socket.io/*).
   # Built using the prod multi-stage target and runs on internal port 4000 without exposing host ports.
   # Loads .env for secrets and OAuth; dev-login flag is ignored in production (requires NODE_ENV!=production).
@@ -38,8 +51,12 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?schema=public
       APP_URL: https://${SERVER_NAME:-localhost}:${HTTPS_PORT:-8443}
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+      # The local chain by default; set CHAIN_RPC_URL (and a funded CHAIN_RELAYER_KEY) in .env for e.g. Avalanche Fuji.
+      CHAIN_RPC_URL: ${CHAIN_RPC_URL:-http://chain:8545}
     depends_on:
       db:
+        condition: service_healthy
+      chain:
         condition: service_healthy
 
   # Next.js frontend serving web pages and the Phaser 2D virtual office client.
@@ -76,3 +93,5 @@ volumes:
   db_data:
   # Named volume storing generated TLS certificates (cert.pem and key.pem).
   certs:
+  # Named volume holding the local blockchain's state (PulseCoin balances, kitchen purchases).
+  chain_data:

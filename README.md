@@ -13,6 +13,7 @@ For comprehensive architectural specifications, development roadmap, and feature
 - **Key Features:**
   - **2D Virtual Office:** Real-time multiplayer movement, customizable avatar recipes, minimap, mobile touch joystick, and sitting at interactive desks.
   - **Proximity Voice & Spatial Audio:** Peer-to-peer WebRTC mesh voice with Web Audio API HRTF 3D spatial panning and distance attenuation, plus microphone / speaker selection and a live mic test in Settings → Voice.
+  - **Kitchen Café on a Blockchain:** Buy water, Pepsi or dinner at the kitchen with PulseCoin, an ERC-20 token on a local EVM chain (Solidity contracts deployed by `make`). Earn coins by closing tasks, winning games, a daily allowance or admin grants; every purchase is an on-chain transaction with a receipt, and the avatar holds what it bought.
   - **Screen Sharing & Whiteboard in Meeting Rooms:** One presenter per room shares their screen (WebRTC, watchable on any device), and a live Excalidraw whiteboard is shared by everyone in the room and saved per room.
   - **Meeting Rooms & Timetable Bookings:** Acoustically isolated meeting rooms with a 24-hour booking calendar and race-free PostgreSQL advisory locking.
   - **Jira-Style Kanban Board:** Live shared task management with HTML5 drag-and-drop, float ranking, and desk interaction.
@@ -25,7 +26,8 @@ For comprehensive architectural specifications, development roadmap, and feature
 ```
 Browser ──HTTPS──► proxy (nginx) ──► web  (Next.js)  pages + Phaser game
                                  └─► api  (NestJS)   REST /api/* + Socket.IO /socket.io/*
-                                          └─► db (PostgreSQL)
+                                          ├─► db (PostgreSQL)
+                                          └─► chain (Anvil EVM)  PulseCoin + KitchenShop contracts
 ```
 
 | Service | Tech | Role |
@@ -34,6 +36,7 @@ Browser ──HTTPS──► proxy (nginx) ──► web  (Next.js)  pages + Pha
 | `api` | NestJS 11, Prisma 6, Socket.IO | One backend app, one module per feature |
 | `db` | PostgreSQL 16 | Data persistence |
 | `proxy` | nginx | HTTPS for everything, a single origin for the app |
+| `chain` | Anvil (Foundry) | Local EVM blockchain for PulseCoin and the kitchen shop (internal, state kept in a volume) |
 
 ## Instructions
 
@@ -56,7 +59,7 @@ Open **https://localhost:8443**. The certificate is self-signed, so accept the b
 | `make studio` | Prisma Studio at http://localhost:5555 (while `make dev` is running) |
 | `make logs` | Follow logs (`make logs s=api` for one service) |
 | `make down` | Stop containers (data is kept in persistent volumes) |
-| `make clean` | Stop and **delete** the database volumes and certificate |
+| `make clean` | Stop and **delete** the database, the blockchain state (PulseCoin balances) and the certificate |
 
 Added a dependency? `cd apps/web && pnpm add <pkg>` (commits the lockfile), then rerun `make dev`; it rebuilds the image.
 
@@ -85,9 +88,11 @@ Set `SERVER_NAME` in `.env` to your machine's IP (e.g. `10.12.1.5`), then run `m
   workflows/ci.yml   CI pipeline (build, typecheck, vitest unit tests, playwright e2e)
 apps/
   api/               NestJS 11 backend modular monolith
+    contracts/       Solidity contracts: PulseCoin (ERC-20) and KitchenShop
     prisma/          schema.prisma (PostgreSQL database schema)
     src/
       auth/          authentication, JWT tokens, sessions, 2FA, OAuth
+      chain/         blockchain connection, contract deployment, relayer queue, wallets
       chat/          office and room chat service & gateway
       common/        guards, interceptors, auth decorators
       config/        environment configuration
@@ -95,7 +100,9 @@ apps/
       games/         games engine, foosball, uno, lego wall, leaderboards
       health/        health check endpoints
       invitations/   workspace email invitations
+      kitchen/       kitchen café: PulseCoin rewards, purchases, ledger
       mail/          SMTP mailer service
+      meeting-room/  screen sharing & shared whiteboard in meeting rooms
       meetings/      meeting room reservations & timetable
       office/        virtual office state, layout validation & wings
       settings/      user voice & keybind settings
@@ -104,7 +111,7 @@ apps/
       workspace/     workspace CRUD, members, desks & wings
   web/               Next.js 16 (React 19) frontend & Phaser 3 game
     app/             App Router pages ((auth), office, onboarding, team, settings, privacy, terms)
-    features/        domain feature components (auth, office, tasks, voice, meetings, games, chat, team)
+    features/        domain feature components (auth, office, tasks, voice, meetings, meeting-room, kitchen, games, chat, team)
     game/            Phaser 3 office scene, avatar art, systems, layout & editor
     lib/             API client, WebSocket client, escape stack, utilities
 docs/                project documentation (PLAN.md, HANDOFF.md, OFFICE.md, AUTH.md)
@@ -113,6 +120,7 @@ e2e/                 Playwright browser test suite & fixtures
 nginx/               HTTPS reverse proxy configuration & self-signed TLS cert generator
 tools/
   art-lab/           standalone character avatar & desk art preview lab
+chain/               local EVM blockchain image (Anvil) for PulseCoin and the kitchen shop
 Makefile             single-command docker orchestration (`make`, `make dev`, `make clean`)
 docker-compose.yml   multi-container orchestration (proxy, web, api, db)
 ```
@@ -151,6 +159,8 @@ docker-compose.yml   multi-container orchestration (proxy, web, api, db)
 | **Backend Framework** | NestJS (Express platform) | `^11.2.7` (`@nestjs/platform-express`) | Modular monolith backend architecture with dependency injection |
 | **Runtime & Language** | Node.js / TypeScript | `22-alpine` / `5.9.3` | Modern JavaScript runtime & strict static typing across packages |
 | **Database & ORM** | PostgreSQL / Prisma | `16-alpine` / `6.19.3` | Relational database & type-safe ORM schema and migrations |
+| **Blockchain** | Solidity / OpenZeppelin / Anvil / ethers | `0.8.37` / `5.6.1` / `1.5.1` / `6.17.0` | PulseCoin (ERC-20 + permit) and KitchenShop contracts on a local EVM chain, driven by the API |
+| **Whiteboard** | Excalidraw | `0.18.1` | Shared meeting-room whiteboard, synced live over Socket.IO |
 | **Real-Time WebSockets** | Socket.IO | `4.8.3` (srv) / `4.8.4` (clt) | Low-latency bi-directional event gateways (`/office`, `/session`) |
 | **Voice & Spatial Audio** | WebRTC / Web Audio API | Native Browser APIs | P2P audio mesh with HRTF spatial panner & Google STUN |
 | **Reverse Proxy & TLS** | Nginx | `1.27-alpine` | HTTPS reverse proxy, single origin routing, auto TLS generation |
@@ -402,6 +412,7 @@ erDiagram
 | **OAuth 2.0 Authentication** | Minor | 1 | Implemented | Third-party OAuth authentication with Google, GitHub, and 42 school API (`apps/api/src/auth/oauth`, `apps/web/features/auth/OAuthButtons.tsx`). | Roy, Roy, Zakaria |
 | **Two-Factor Authentication (2FA)** | Minor | 1 | Implemented | Time-based One-Time Password (TOTP) with AES-256-GCM encrypted secrets (HKDF-derived key, `apps/api/src/auth/crypto/secrets.ts`), QR code enrollment, backup codes, and login challenge enforcement (`apps/api/src/auth/auth.service.ts`, `apps/web/features/settings/TwoFactorCard.tsx`). | Roy, Roy, Zakaria |
 | **Module of Choice: Proximity Voice + Meeting Rooms** | Major | 2 | Implemented | Custom module combining peer-to-peer WebRTC mesh voice calling with 3D HRTF spatial audio via Web Audio API, dynamic proximity detection, and acoustic meeting room isolation (`apps/api/src/voice`, `apps/api/src/meetings`, `apps/web/features/voice`, `apps/web/features/meetings`). Detailed justification below. | Zakaria, Claude |
+| **Module of Choice: Kitchen Café on a Blockchain (PulseCoin)** | Major | 2 | Implemented | Solidity ERC-20 token (permits, on-chain daily allowance) and shop contracts on a local EVM chain started by `make`, custodial wallets with EIP-712 permit signatures and a gas-paying relayer, coins earned from tasks / games / grants, purchases at the kitchen with on-chain receipts and a verifiable ledger (`apps/api/contracts`, `apps/api/src/chain`, `apps/api/src/kitchen`, `apps/web/features/kitchen`). See justification below. | Claude |
 | *Candidate: Multiplayer Games (Baby foot, Uno, Lego) + Leaderboard* | Major | 2 | Implemented | Server-authoritative physics foosball, Uno turn rules engine, shared Lego art board, and weekly win/loss leaderboards (`apps/api/src/games`, `apps/web/features/games`). <!-- FILL: confirm type and points with the subject's module list --> | Zakaria |
 | *Candidate: Advanced Role & Permission Management* | Minor | — | Implemented | Multi-tier role permissions (`OWNER`, `ADMIN`, `MEMBER`) enforced on all API endpoints via `MembershipService.require` and UI capability guards. <!-- FILL: team decides whether to claim Advanced Permissions --> | Roy, Roy |
 | Standard User Management (Avatar upload, public profile) | Major | 2 | Not implemented | Planned M3, not claimed. | — |
@@ -409,8 +420,20 @@ erDiagram
 | Notification System | Minor | 1 | Not implemented | Planned buffer, not claimed. | — |
 | File Upload System | Minor | 1 | Not implemented | Planned avatar upload, not claimed. | — |
 
-**Total Claimed Points:** **14 points** (12 base implemented points + 2 points for Multiplayer Games candidate module).
+**Total Claimed Points:** **16 points** (12 base implemented points + 2 points for Multiplayer Games candidate module + 2 points for the Kitchen Café blockchain module of choice).
 <!-- FILL: confirm final claimed set vs subject's module list (need >= 14) -->
+
+### Justification: Module of Choice — Kitchen Café on a Blockchain (Major, 2 pts)
+
+- **Why chosen:** a virtual office needs small rituals that bring people together. The kitchen is where colleagues meet, and a shared office currency turns everyday work (closing tasks, winning a break-time match) into something to spend there. The subject's Blockchain modules cover tournament scores (Avalanche) and an ICP backend; neither fits this product, so this is a module of choice that uses the same technology (Solidity smart contracts on an EVM chain, Avalanche-compatible) for a feature of our own.
+- **Technical challenges addressed:**
+  - **Real smart contracts, no shortcut:** `PulseCoin` (ERC-20 with EIP-2612 permits and role-based minting, the 24 h daily-allowance rule enforced on-chain) and `KitchenShop` (on-chain menu and prices, purchases recorded as events), compiled with solc and deployed automatically by the API to a blockchain container started by `make` (Anvil, state persisted in a volume); the same contracts run on Avalanche Fuji with two environment variables.
+  - **Gasless, wallet-free payments that stay secure:** members get custodial wallets (keys AES-256-GCM encrypted); a purchase is authorised by the buyer's own EIP-712 permit signature for exactly the item's price, and a relayer submits it and pays the gas. Forged, replayed or under-priced permits are rejected by the contract (contract tests on a real chain).
+  - **Concurrency and exactly-once rewards:** one relayer transaction queue (no nonce collisions), serialized coin operations, unique reward keys, a daily earning cap, and an ethers RPC-cache pitfall found and fixed (a cached gas estimate would have let a double daily claim through).
+  - **Integration with the live office:** server-side "standing at the kitchen" check from the authoritative positions, rewards hooked into task completion and game results, the bought item rendered in the avatar's hand for everyone in real time, live ledger updates and toasts over Socket.IO.
+- **Value:** gives the break areas a purpose, rewards finishing work and playing together, and makes every transaction verifiable: the Ledger tab shows block, hash and the decoded on-chain events of any purchase or reward.
+- **Why Major:** two production-style contracts with tests on a real chain, a new infrastructure service, key management and signatures (EIP-712 / EIP-2612), a relayer with transaction ordering, database ↔ chain consistency, and a full UI in the office (menu, wallet, ledger, proofs, avatar items), comparable in scope to the subject's own Blockchain Major.
+- **Code Pointers:** `apps/api/contracts/*.sol`, `apps/api/src/chain/`, `apps/api/src/kitchen/`, `apps/web/features/kitchen/`, `chain/Dockerfile`; details in [docs/code/kitchen.md](docs/code/kitchen.md).
 
 ### Justification: Module of Choice — Proximity Voice & Meeting Rooms in a 2D Office (Major, 2 pts)
 

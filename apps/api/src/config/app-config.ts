@@ -20,7 +20,16 @@ export interface SmtpConfig {
   pass?: string;
 }
 
+/** The blockchain behind PulseCoin and the kitchen shop (see docs/code/kitchen.md). */
+export interface ChainConfig {
+  /** JSON-RPC endpoint: the local Anvil container by default, or e.g. Avalanche Fuji. */
+  rpcUrl: string;
+  /** Private key of the account that deploys the contracts and pays the gas; null = derived from JWT_SECRET. */
+  relayerKey: string | null;
+}
+
 const MIN_JWT_SECRET_LENGTH = 32;
+const PRIVATE_KEY = /^0x[0-9a-fA-F]{64}$/;
 // 15-minute access token limits the blast radius of stolen tokens without requiring server-side revocation checks on every call.
 const DEFAULT_ACCESS_TOKEN_TTL_S = 15 * 60;
 // 30-day refresh token balances convenience with regular session lifecycle expiration.
@@ -48,6 +57,7 @@ export class AppConfig {
   readonly smtp: SmtpConfig | null;
   readonly emailFrom: string;
   readonly oauth: Partial<Record<OAuthProvider, OAuthClient>>;
+  readonly chain: ChainConfig;
 
   constructor(env: NodeJS.ProcessEnv) {
     this.appUrl = (env.APP_URL ?? 'https://localhost:8443').replace(/\/$/, '');
@@ -82,6 +92,10 @@ export class AppConfig {
       github: client(env.GITHUB_CLIENT_ID, env.GITHUB_CLIENT_SECRET),
       '42': client(env.FORTYTWO_CLIENT_ID, env.FORTYTWO_CLIENT_SECRET),
     };
+
+    const relayerKey = env.CHAIN_RELAYER_KEY || null;
+    if (relayerKey && !PRIVATE_KEY.test(relayerKey)) throw new Error('CHAIN_RELAYER_KEY must be a 0x-prefixed 32-byte hex private key.');
+    this.chain = { rpcUrl: env.CHAIN_RPC_URL || 'http://chain:8545', relayerKey };
   }
 }
 

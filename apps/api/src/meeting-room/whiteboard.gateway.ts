@@ -3,7 +3,13 @@
  * Only people standing in the room (and invited to its running booking) can read or draw.
  */
 
-import { ConnectedSocket, MessageBody, SubscribeMessage, WebSocketGateway, WebSocketServer } from '@nestjs/websockets';
+import {
+  ConnectedSocket,
+  MessageBody,
+  SubscribeMessage,
+  WebSocketGateway,
+  WebSocketServer,
+} from '@nestjs/websockets';
 import type { Namespace, Socket } from 'socket.io';
 import { Budget } from '../office/office.rules';
 import { roomOf } from './meeting-room.rules';
@@ -39,7 +45,8 @@ export class WhiteboardGateway {
   async join(@ConnectedSocket() socket: Socket, @MessageBody() body: unknown) {
     const me = this.me(socket);
     const roomId = roomOf(body);
-    if (!me || !roomId || !(await this.access.allows(me.workspaceId, me.userId, roomId))) return { error: 'FORBIDDEN' };
+    if (!me || !roomId || !(await this.access.allows(me.workspaceId, me.userId, roomId)))
+      return { error: 'FORBIDDEN' };
     try {
       const elements = await this.boards.elements(me.workspaceId, roomId);
       // One board open per tab.
@@ -68,7 +75,8 @@ export class WhiteboardGateway {
     const elements = parseElements((body as { elements?: unknown }).elements);
     if (!elements?.length || !(await this.access.allows(me.workspaceId, me.userId, roomId))) return;
     const accepted = await this.boards.apply(me.workspaceId, roomId, elements).catch(() => []);
-    if (accepted.length > 0) await this.relay(socket, me.workspaceId, roomId, 'wb:update', { roomId, elements: accepted });
+    if (accepted.length > 0)
+      await this.relay(socket, me.workspaceId, roomId, 'wb:update', { roomId, elements: accepted });
   }
 
   /** { roomId, x, y, tool, button }: where someone's cursor is on the board (scene coordinates). */
@@ -77,8 +85,19 @@ export class WhiteboardGateway {
     const me = this.me(socket);
     const roomId = roomOf(body);
     if (!me || !roomId || !socket.rooms.has(channel(me.workspaceId, roomId))) return;
-    const { x, y, tool, button } = body as { x?: unknown; y?: unknown; tool?: unknown; button?: unknown };
-    if (typeof x !== 'number' || typeof y !== 'number' || !Number.isFinite(x) || !Number.isFinite(y)) return;
+    const { x, y, tool, button } = body as {
+      x?: unknown;
+      y?: unknown;
+      tool?: unknown;
+      button?: unknown;
+    };
+    if (
+      typeof x !== 'number' ||
+      typeof y !== 'number' ||
+      !Number.isFinite(x) ||
+      !Number.isFinite(y)
+    )
+      return;
     const pointer = {
       roomId,
       from: me.userId,
@@ -94,7 +113,14 @@ export class WhiteboardGateway {
    * Sends to the others who have the board open. Anyone who walked out of the room (or
    * lost access to a booking that started) is dropped from the board instead.
    */
-  private async relay(from: Socket, workspaceId: string, roomId: string, event: string, payload: unknown, volatile = false) {
+  private async relay(
+    from: Socket,
+    workspaceId: string,
+    roomId: string,
+    event: string,
+    payload: unknown,
+    volatile = false,
+  ) {
     const sockets = await this.server.in(channel(workspaceId, roomId)).fetchSockets();
     for (const s of sockets) {
       if (s.id === from.id) continue;

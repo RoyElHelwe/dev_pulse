@@ -150,6 +150,11 @@ export function connectOffice(controller: () => OfficeController | null, handler
     publish();
     controller()?.setPlayerZone(id, z);
   });
+  socket.on('office:holding', ({ id, item, ms }: { id: string; item: string; ms: number }) => {
+    const state = known.get(id);
+    if (state) state.holding = { item, ms };
+    controller()?.setHolding(id, item, ms);
+  });
   socket.on('office:desks', ({ desks }: { desks: DeskOwner[] }) => handlers.onDesks(desks));
   socket.on('office:layout', ({ layout, version, by }: { layout: OfficeLayout; version: number; by: string }) =>
     handlers.onLayout(layout, version, by),

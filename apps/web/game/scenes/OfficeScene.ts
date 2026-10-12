@@ -279,6 +279,12 @@ export class OfficeScene extends Phaser.Scene {
     this.netSync.setStatus(id, status);
   }
 
+  /** Puts a kitchen item in someone's hand (the local player's too) for `ms`. */
+  setHolding(id: string, item: string | null, ms: number) {
+    if (id === this.opts.myId) this.player.setHolding(item, ms);
+    else this.netSync.setHolding(id, item, ms);
+  }
+
   /** Sets voice activity (headset indicator and talking pulse) for a player. */
   setVoice(id: string, inCall: boolean, talking: boolean) {
     this.netSync.setVoice(id, inCall, talking);

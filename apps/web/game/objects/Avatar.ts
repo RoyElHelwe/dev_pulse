@@ -62,6 +62,43 @@ const STATUS_DOT_COLOR = 0x34d399;
 const NAME_LABEL_OFFSET_X_PX = 4.5;
 
 const STATUS_BUBBLE_Y_PX = -78;
+
+/** Kitchen items (bought with PulseCoin) an avatar can hold for a while. */
+export type HeldItem = 'water' | 'pepsi' | 'dinner';
+export const HELD_ITEMS: readonly HeldItem[] = ['water', 'pepsi', 'dinner'];
+/** Drawing area of a held item around its anchor (the hand), in pixels. */
+const HELD_BOUNDS = { x: -9, y: -15, w: 18, h: 17 };
+/** Where the hand is, relative to the feet, for each facing (up: behind the body). */
+const HELD_ANCHORS: Record<Direction, { x: number; y: number }> = {
+  down: { x: 10, y: -19 },
+  up: { x: -10, y: -21 },
+  left: { x: -9, y: -19 },
+  right: { x: 9, y: -19 },
+};
+const HELD_SEATED_DY_PX = 6;
+
+/** Draws a held item, anchored at its bottom centre (0, 0). */
+function drawHeld(g: Phaser.GameObjects.Graphics, item: HeldItem) {
+  if (item === 'water') {
+    rr(g, -3.5, -12, 7, 12, 2.2, 0xbfe6fb, 0.95);
+    rr(g, -3.5, -7.5, 7, 3.2, 0.5, 0xffffff, 0.9);
+    rr(g, -1.8, -14.5, 3.6, 2.8, 0.8, 0x2f6fbf);
+    g.fillStyle(0xffffff, 0.6).fillRect(-2.4, -11, 1, 3);
+  } else if (item === 'pepsi') {
+    rr(g, -3.2, -11, 6.4, 11, 1.4, 0x1d4fb2);
+    g.fillStyle(0xe03131).fillRect(-3.2, -7.4, 6.4, 2.6);
+    g.fillStyle(0xffffff).fillRect(-3.2, -4.8, 6.4, 0.9);
+    rr(g, -3.2, -12, 6.4, 1.6, 0.8, 0xc9ced6);
+  } else {
+    // A plate seen from above: rim, food, a bit of salad.
+    g.fillStyle(0x000000, 0.12).fillEllipse(0, -2.2, 17, 7);
+    g.fillStyle(0xffffff).fillEllipse(0, -3, 16, 6.5);
+    g.fillStyle(0xe7e9ee).fillEllipse(0, -3, 11, 4.2);
+    g.fillStyle(0xb7652f).fillEllipse(-1.5, -3.6, 6, 3);
+    g.fillStyle(0xf2c14e).fillCircle(2.8, -3.2, 1.5);
+    g.fillStyle(0x4caf50).fillCircle(3.6, -4.6, 1.2);
+  }
+}
 const STATUS_FONT_SIZE_PX = 10;
 
 const SPEECH_BASE_DURATION_MS = 4500;
@@ -151,6 +188,8 @@ export class Avatar extends Phaser.GameObjects.Container {
   private moving = false;
   private _seated = false;
   private status: Bubble | null = null;
+  /** The kitchen item in hand, with its baked texture and the timer that takes it away. */
+  private held: { item: HeldItem; image: Phaser.GameObjects.Image; key: string; timer: Phaser.Time.TimerEvent } | null = null;
   private speech: SpeechBubble | null = null;
   private speechTimer: Phaser.Time.TimerEvent | null = null;
   private speechTween: Phaser.Tweens.Tween | null = null;
@@ -232,6 +271,7 @@ export class Avatar extends Phaser.GameObjects.Container {
     if (seated === this._seated) return;
     this._seated = seated;
     this.shadow.setVisible(!seated);
+    this.placeHeld(this.direction);
     this.redraw();
   }
 
@@ -253,6 +293,7 @@ export class Avatar extends Phaser.GameObjects.Container {
   /** Call every frame with a known direction (other players, from the network). */
   animateAs(direction: Direction, moving: boolean, deltaMs: number) {
     if (this._seated) moving = false;
+    if (direction !== this.direction && this.held) this.placeHeld(direction);
     this.direction = direction;
     // Kept within one stride, so the walk reuses the same 8 frames.
     this.phase = moving ? (this.phase + deltaMs * WALK_PHASE_RATE) % (Math.PI * 2) : 0;
@@ -322,6 +363,33 @@ export class Avatar extends Phaser.GameObjects.Container {
     this.speech = null;
   }
 
+  /** Puts a kitchen item in hand for `ms` (null: empty hands). Unknown items are ignored. */
+  setHolding(item: string | null, ms = 0) {
+    if (this.held) {
+      this.held.timer.remove(false);
+      this.held.image.destroy();
+      releaseShape(this.scene.textures, this.held.key);
+      this.held = null;
+    }
+    if (!item || !HELD_ITEMS.includes(item as HeldItem) || ms <= 0) return;
+    const scale = shapeScale(this.textResolution);
+    const key = acquireShape(this.scene, `held:${item}`, HELD_BOUNDS, scale, (g) => drawHeld(g, item as HeldItem));
+    const image = shapeImage(this.scene, key, HELD_BOUNDS, scale);
+    this.add(image);
+    const timer = this.scene.time.delayedCall(ms, () => this.setHolding(null));
+    this.held = { item: item as HeldItem, image, key, timer };
+    this.placeHeld(this.direction);
+  }
+
+  /** The held item sits at the hand on the side the avatar faces, behind the body when facing away. */
+  private placeHeld(direction: Direction) {
+    if (!this.held) return;
+    const at = HELD_ANCHORS[direction];
+    this.held.image.setPosition(at.x, at.y + (this._seated ? HELD_SEATED_DY_PX : 0));
+    if (direction === 'up') this.moveBelow(this.held.image as never, this.figure as never);
+    else this.moveAbove(this.held.image as never, this.figure as never);
+  }
+
   /** Updates the avatar's character recipe and invalidates current frame textures. */
   setLook(recipe: Recipe) {
     const code = encode(recipe);
@@ -339,6 +407,9 @@ export class Avatar extends Phaser.GameObjects.Container {
   /** Cleans up avatar game objects, timers, tweens, and releases cached textures. */
   destroy(fromScene?: boolean) {
     const textures = this.scene?.textures ?? this.textures;
+    this.held?.timer.remove(false);
+    if (this.held && textures) releaseShape(textures, this.held.key);
+    this.held = null;
     this.speechTimer?.remove(false);
     this.speechTween?.stop();
     super.destroy(fromScene);

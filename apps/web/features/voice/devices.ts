@@ -16,11 +16,17 @@ export interface VoiceDevices {
 }
 
 /** Same processing for calls and the mic test: what the others hear is what the test shows. */
-const MIC_PROCESSING: MediaTrackConstraints = { echoCancellation: true, noiseSuppression: true, autoGainControl: true };
+const MIC_PROCESSING: MediaTrackConstraints = {
+  echoCancellation: true,
+  noiseSuppression: true,
+  autoGainControl: true,
+};
 
 export function loadDevices(): VoiceDevices {
   try {
-    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? 'null') as Partial<VoiceDevices> | null;
+    const saved = JSON.parse(
+      localStorage.getItem(STORAGE_KEY) ?? 'null',
+    ) as Partial<VoiceDevices> | null;
     return { input: saved?.input ?? null, output: saved?.output ?? null };
   } catch {
     return { input: null, output: null };
@@ -36,31 +42,52 @@ export function saveDevices(devices: VoiceDevices) {
 }
 
 /** Microphones and speakers the browser knows about (names stay empty until mic access is allowed). */
-export async function listDevices(): Promise<{ inputs: MediaDeviceInfo[]; outputs: MediaDeviceInfo[] }> {
+export async function listDevices(): Promise<{
+  inputs: MediaDeviceInfo[];
+  outputs: MediaDeviceInfo[];
+}> {
   const all = (await navigator.mediaDevices?.enumerateDevices?.().catch(() => [])) ?? [];
   // "default" / "communications" are aliases of real devices: the "System default" option covers them.
-  const real = (d: MediaDeviceInfo) => d.deviceId && d.deviceId !== 'default' && d.deviceId !== 'communications';
-  return { inputs: all.filter((d) => d.kind === 'audioinput' && real(d)), outputs: all.filter((d) => d.kind === 'audiooutput' && real(d)) };
+  const real = (d: MediaDeviceInfo) =>
+    d.deviceId && d.deviceId !== 'default' && d.deviceId !== 'communications';
+  return {
+    inputs: all.filter((d) => d.kind === 'audioinput' && real(d)),
+    outputs: all.filter((d) => d.kind === 'audiooutput' && real(d)),
+  };
 }
 
 /** The chosen device's current id if it is plugged in (matched by id, else by name), or undefined. */
-export function findDevice(choice: DeviceChoice | null, devices: MediaDeviceInfo[]): string | undefined {
+export function findDevice(
+  choice: DeviceChoice | null,
+  devices: MediaDeviceInfo[],
+): string | undefined {
   if (!choice) return undefined;
-  return (devices.find((d) => d.deviceId === choice.id) ?? devices.find((d) => d.label && d.label === choice.label))?.deviceId;
+  return (
+    devices.find((d) => d.deviceId === choice.id) ??
+    devices.find((d) => d.label && d.label === choice.label)
+  )?.deviceId;
 }
 
 /**
  * Opens the chosen microphone, or the system default when it is unplugged or refuses.
  * Throws the browser's error when no microphone can be opened at all.
  */
-export async function openMicrophone(choice: DeviceChoice | null = loadDevices().input): Promise<MediaStream> {
+export async function openMicrophone(
+  choice: DeviceChoice | null = loadDevices().input,
+): Promise<MediaStream> {
   const id = findDevice(choice, (await listDevices()).inputs) ?? choice?.id;
   if (id) {
     try {
-      return await navigator.mediaDevices.getUserMedia({ audio: { ...MIC_PROCESSING, deviceId: { exact: id } } });
+      return await navigator.mediaDevices.getUserMedia({
+        audio: { ...MIC_PROCESSING, deviceId: { exact: id } },
+      });
     } catch (error) {
       // Permission refused: asking again for another device would be refused too.
-      if (error instanceof DOMException && (error.name === 'NotAllowedError' || error.name === 'SecurityError')) throw error;
+      if (
+        error instanceof DOMException &&
+        (error.name === 'NotAllowedError' || error.name === 'SecurityError')
+      )
+        throw error;
     }
   }
   return navigator.mediaDevices.getUserMedia({ audio: MIC_PROCESSING });
@@ -72,11 +99,16 @@ export function canPickOutput(): boolean {
 }
 
 /** Plays a context through the chosen speakers (no-op where unsupported or unplugged). */
-export async function routeOutput(ctx: AudioContext, choice: DeviceChoice | null = loadDevices().output): Promise<void> {
+export async function routeOutput(
+  ctx: AudioContext,
+  choice: DeviceChoice | null = loadDevices().output,
+): Promise<void> {
   if (!canPickOutput()) return;
   const id = choice ? (findDevice(choice, (await listDevices()).outputs) ?? '') : '';
   // '' is the system default.
-  await (ctx as AudioContext & { setSinkId(id: string): Promise<void> }).setSinkId(id).catch(() => {});
+  await (ctx as AudioContext & { setSinkId(id: string): Promise<void> })
+    .setSinkId(id)
+    .catch(() => {});
 }
 
 /** Why a microphone could not be opened, for messages. */

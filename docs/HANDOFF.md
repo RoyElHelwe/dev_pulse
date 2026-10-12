@@ -38,6 +38,7 @@ person picks up next. Details live in **[PLAN.md](PLAN.md)** (who does what), **
 | Screen sharing in meeting rooms (Z4 extra) | ✅ | `docs/code/meeting-room.md` |
 | Shared whiteboard (Excalidraw) in meeting rooms | ✅ | `docs/code/meeting-room.md` |
 | Microphone / speaker selection and mic test (Settings → Voice) | ✅ | `docs/code/voice.md` |
+| Kitchen café on a blockchain (PulseCoin, module of choice) | ✅ | `docs/code/kitchen.md` |
 
 ## 2. Run it
 

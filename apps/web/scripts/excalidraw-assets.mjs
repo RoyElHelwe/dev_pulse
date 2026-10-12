@@ -7,7 +7,10 @@ import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 // The package's main entry is dist/prod/index.js; the fonts sit next to it.
-const from = join(dirname(createRequire(import.meta.url).resolve('@excalidraw/excalidraw')), 'fonts');
+const from = join(
+  dirname(createRequire(import.meta.url).resolve('@excalidraw/excalidraw')),
+  'fonts',
+);
 const to = join(root, 'public', 'excalidraw', 'fonts');
 
 if (!existsSync(from)) throw new Error(`Excalidraw fonts not found at ${from}`);

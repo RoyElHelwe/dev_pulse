@@ -38,13 +38,16 @@ const LEGO_TRIGGER_MARGIN_X_TILES = 0.5;
 const LEGO_TRIGGER_EXTRA_W_TILES = 1;
 const LEGO_TRIGGER_EXTRA_H_TILES = 2.4;
 
+/** The kitchen café opens from around its fridge and counter (the server accepts purchases within 2.5 tiles). */
+const KITCHEN_TRIGGER_MARGIN_TILES = 1.2;
+
 const HINT_HIT_MARGIN_X_PX = 6;
 const HINT_HIT_MARGIN_TOP_PX = 10;
 const HINT_HIT_MARGIN_BOTTOM_PX = 6;
 
 interface Target {
   /** `board` = a screen (tv), `kanban` = the task board on the wall, games = chill room games. */
-  type: 'desk' | 'board' | 'kanban' | 'foosball' | 'uno' | 'lego';
+  type: 'desk' | 'board' | 'kanban' | 'foosball' | 'uno' | 'lego' | 'kitchen';
   id: string;
   name: string;
   /** Where the player must stand (tiles). */
@@ -162,6 +165,24 @@ function registerLegoTargets(layout: OfficeLayout): Target[] {
     });
 }
 
+/** Registers the kitchen café (its fridge and counter): buy water, Pepsi or dinner with PulseCoin. */
+function registerKitchenTargets(layout: OfficeLayout): Target[] {
+  return layout.furniture
+    .filter((f) => f.kind === 'fridge' || f.kind === 'counter')
+    .map((f) => {
+      const b = itemBounds(f);
+      const m = KITCHEN_TRIGGER_MARGIN_TILES;
+      return {
+        type: 'kitchen',
+        id: f.id,
+        name: 'Kitchen café',
+        spot: { x: f.x, y: f.y },
+        area: { x: b.x - m, y: b.y - m, w: b.w + 2 * m, h: b.h + 2 * m },
+        anchor: { x: f.x * TILE, y: b.y * TILE - BADGE_ANCHOR_OFFSET_Y_PX },
+      };
+    });
+}
+
 /**
  * Things you can use: your desk (and others'), screens. Standing next to one
  * shows a hint; E (or tapping the hint) emits `object:interact`.
@@ -187,6 +208,7 @@ export class Interactions {
       ...registerFoosballTargets(layout),
       ...registerChillTargets(layout),
       ...registerLegoTargets(layout),
+      ...registerKitchenTargets(layout),
     ];
   }
 

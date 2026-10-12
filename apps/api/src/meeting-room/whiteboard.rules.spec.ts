@@ -1,13 +1,30 @@
 /** Unit tests for whiteboard rules: element validation, Excalidraw's merge order, and the board size cap. */
 import { describe, expect, it } from 'vitest';
-import { type BoardElement, isNewer, MAX_ELEMENT_BYTES, mergeElements, parseElements, purgeDeleted } from './whiteboard.rules';
+import {
+  type BoardElement,
+  isNewer,
+  MAX_ELEMENT_BYTES,
+  mergeElements,
+  parseElements,
+  purgeDeleted,
+} from './whiteboard.rules';
 
-const el = (id: string, version: number, versionNonce = 1, isDeleted = false): BoardElement => ({ id, version, versionNonce, isDeleted, type: 'rectangle' });
+const el = (id: string, version: number, versionNonce = 1, isDeleted = false): BoardElement => ({
+  id,
+  version,
+  versionNonce,
+  isDeleted,
+  type: 'rectangle',
+});
 
 describe('parseElements', () => {
   it('accepts Excalidraw elements and keeps their other fields', () => {
-    const parsed = parseElements([{ id: 'a1_B-2', version: 3, versionNonce: 42, type: 'ellipse', x: 10 }]);
-    expect(parsed).toEqual([{ id: 'a1_B-2', version: 3, versionNonce: 42, isDeleted: false, type: 'ellipse', x: 10 }]);
+    const parsed = parseElements([
+      { id: 'a1_B-2', version: 3, versionNonce: 42, type: 'ellipse', x: 10 },
+    ]);
+    expect(parsed).toEqual([
+      { id: 'a1_B-2', version: 3, versionNonce: 42, isDeleted: false, type: 'ellipse', x: 10 },
+    ]);
   });
 
   it('refuses anything malformed', () => {

@@ -31,6 +31,8 @@ export class RoomAccess {
 
   /** Fails closed: a database error treats the room as booked by nobody. */
   private booking(workspaceId: string, roomId: string) {
-    return this.meetings.activeBooking(workspaceId, roomId).catch(() => ({ attendeeIds: [] as string[] }));
+    return this.meetings
+      .activeBooking(workspaceId, roomId)
+      .catch(() => ({ attendeeIds: [] as string[] }));
   }
 }

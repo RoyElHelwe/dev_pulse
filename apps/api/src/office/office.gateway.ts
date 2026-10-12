@@ -21,8 +21,8 @@ import { TokensService } from '../auth/tokens.service';
 import { authenticateSocket } from '../common/auth/socket-auth';
 import { PrismaService } from '../prisma/prisma.service';
 import { type WorkspaceEvent, WorkspaceEvents } from '../workspace/workspace-events';
-import { TILE } from './layout/geometry';
-import type { OfficeLayout, Room } from './layout/types';
+import { distanceToItem, TILE } from './layout/geometry';
+import type { FurnitureKind, OfficeLayout, Room } from './layout/types';
 import { Budget, claimOffice, limitMove, TAB_ID, ZONE_ID } from './office.rules';
 
 /** 0 down, 1 up, 2 left, 3 right. */
@@ -43,6 +43,8 @@ interface Player {
   zone: string | null;
   /** When the last position was accepted (0: take the next one as is, e.g. after a reconnect). */
   movedAt: number;
+  /** Something bought in the kitchen, in their hand until `until` (ms timestamp). */
+  holding: { item: string; until: number } | null;
   sockets: Set<string>;
 }
 
@@ -161,6 +163,7 @@ export class OfficeGateway implements OnGatewayInit, OnGatewayConnection, OnGate
         status: member.status,
         zone: null,
         movedAt: 0,
+        holding: null,
         sockets: new Set(),
       };
       office.players.set(player.id, player);
@@ -283,6 +286,21 @@ export class OfficeGateway implements OnGatewayInit, OnGatewayConnection, OnGate
     return [...office.players.values()].filter((p) => roomAt(office.layout, p.x / TILE, p.y / TILE)?.id === roomId).map((p) => p.id);
   }
 
+  /** Whether someone stands within `reach` tiles of a piece of furniture of one of these kinds. */
+  isNear(workspaceId: string, userId: string, kinds: readonly FurnitureKind[], reach: number): boolean {
+    const office = this.offices.get(workspaceId);
+    const player = office?.players.get(userId);
+    if (!office || !player) return false;
+    return office.layout.furniture.some((f) => kinds.includes(f.kind) && distanceToItem(player.x / TILE, player.y / TILE, f) <= reach);
+  }
+
+  /** Puts a kitchen item in someone's hand for `ms`, shown to everyone (`office:holding`). */
+  setHolding(workspaceId: string, userId: string, item: string, ms: number) {
+    const player = this.offices.get(workspaceId)?.players.get(userId);
+    if (player) player.holding = { item, until: Date.now() + ms };
+    this.broadcast(workspaceId, 'office:holding', { id: userId, item, ms });
+  }
+
   /** Sends an event to everyone in the office. */
   broadcast(workspaceId: string, event: string, payload: unknown) {
     this.server.to(wsRoom(workspaceId)).emit(event, payload);
@@ -313,7 +331,10 @@ export class OfficeGateway implements OnGatewayInit, OnGatewayConnection, OnGate
   }
 
   private publicPlayer(p: Player) {
-    return { id: p.id, name: p.name, character: p.character, x: p.x, y: p.y, dir: p.dir, moving: p.moving, seated: p.seated, status: p.status, zone: p.zone };
+    // What they hold, as the time left (ms): clients' clocks may differ from ours.
+    const left = p.holding ? p.holding.until - Date.now() : 0;
+    const holding = p.holding && left > 0 ? { item: p.holding.item, ms: left } : null;
+    return { id: p.id, name: p.name, character: p.character, x: p.x, y: p.y, dir: p.dir, moving: p.moving, seated: p.seated, status: p.status, zone: p.zone, holding };
   }
 
   private onWorkspaceEvent(event: WorkspaceEvent) {

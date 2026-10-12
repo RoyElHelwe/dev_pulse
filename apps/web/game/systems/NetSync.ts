@@ -26,6 +26,8 @@ export interface PlayerState {
   status?: string | null;
   /** Zone they stand in (meeting room, lounge, desk id), or null. */
   zone?: string | null;
+  /** Kitchen item in hand and the time left (ms), or null. */
+  holding?: { item: string; ms: number } | null;
 }
 
 /** For the minimap and voice: positions in tiles, and the room each person stands in (null outside rooms). */
@@ -149,6 +151,7 @@ export class NetSync {
       this.depthOf,
     );
     remote.avatar.setStatus(p.status);
+    if (p.holding) remote.avatar.setHolding(p.holding.item, p.holding.ms);
     remote.push(p.x, p.y, DIRECTIONS[p.dir] ?? 'down', p.moving, !!p.seated);
     this.remotes.set(p.id, remote);
     this.setZone(p.id, p.zone ?? null);
@@ -171,6 +174,11 @@ export class NetSync {
   setZone(id: string, zone: string | null): void {
     this.remoteZones.set(id, zone);
     this.onBadgesDirty?.();
+  }
+
+  /** Puts a kitchen item in a remote player's hand for `ms`. */
+  setHolding(id: string, item: string | null, ms: number): void {
+    this.remotes.get(id)?.avatar.setHolding(item, ms);
   }
 
   /** Updates the status emoji or bubble displayed above a remote player. */

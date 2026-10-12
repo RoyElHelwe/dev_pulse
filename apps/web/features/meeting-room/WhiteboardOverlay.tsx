@@ -11,7 +11,11 @@ import { IconButton } from '@/components/ui/IconButton';
 
 const WhiteboardCanvas = dynamic(() => import('./WhiteboardCanvas'), {
   ssr: false,
-  loading: () => <p className="flex h-full items-center justify-center text-sm text-zinc-400">Loading whiteboard…</p>,
+  loading: () => (
+    <p className="flex h-full items-center justify-center text-sm text-zinc-400">
+      Loading whiteboard…
+    </p>
+  ),
 });
 
 interface WhiteboardOverlayProps {
@@ -24,7 +28,14 @@ interface WhiteboardOverlayProps {
 }
 
 /** Covers the office with the room's shared whiteboard until closed. */
-export function WhiteboardOverlay({ socket, roomId, roomName, nameOf, onClose, onLost }: WhiteboardOverlayProps) {
+export function WhiteboardOverlay({
+  socket,
+  roomId,
+  roomName,
+  nameOf,
+  onClose,
+  onLost,
+}: WhiteboardOverlayProps) {
   return createPortal(
     <div
       role="dialog"
@@ -35,10 +46,15 @@ export function WhiteboardOverlay({ socket, roomId, roomName, nameOf, onClose, o
       onKeyUp={(e) => e.stopPropagation()}
       className="fixed inset-0 z-[60] flex h-dvh flex-col bg-white"
     >
-      <header className="flex items-center gap-2 border-b border-zinc-200 py-2 pr-2 pl-4" style={{ paddingTop: 'max(0.5rem, env(safe-area-inset-top))' }}>
+      <header
+        className="flex items-center gap-2 border-b border-zinc-200 py-2 pr-2 pl-4"
+        style={{ paddingTop: 'max(0.5rem, env(safe-area-inset-top))' }}
+      >
         <PenLine className="size-4 shrink-0 text-emerald-600" />
         <h2 className="truncate font-semibold">Whiteboard · {roomName}</h2>
-        <p className="mr-auto hidden truncate text-xs text-zinc-500 sm:block">Everyone in the room sees and edits it live. It stays here for the next meeting.</p>
+        <p className="mr-auto hidden truncate text-xs text-zinc-500 sm:block">
+          Everyone in the room sees and edits it live. It stays here for the next meeting.
+        </p>
         <IconButton aria-label="Close whiteboard" onClick={onClose}>
           <X className="size-4" />
         </IconButton>

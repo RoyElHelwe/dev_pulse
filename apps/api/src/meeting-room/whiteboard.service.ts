@@ -30,7 +30,11 @@ export class WhiteboardService implements OnModuleDestroy {
   }
 
   /** Merges an edit into the board; returns the elements that changed, to pass on. */
-  async apply(workspaceId: string, roomId: string, incoming: BoardElement[]): Promise<BoardElement[]> {
+  async apply(
+    workspaceId: string,
+    roomId: string,
+    incoming: BoardElement[],
+  ): Promise<BoardElement[]> {
     const board = await this.board(workspaceId, roomId);
     const accepted = mergeElements(board.elements, incoming);
     if (accepted.length > 0) this.scheduleSave(workspaceId, roomId, board);
@@ -64,10 +68,13 @@ export class WhiteboardService implements OnModuleDestroy {
   }
 
   private async load(workspaceId: string, roomId: string): Promise<Board> {
-    const row = await this.prisma.whiteboard.findUnique({ where: { workspaceId_roomId: { workspaceId, roomId } } });
+    const row = await this.prisma.whiteboard.findUnique({
+      where: { workspaceId_roomId: { workspaceId, roomId } },
+    });
     const elements = new Map<string, BoardElement>();
     // Stored boards were validated on the way in; re-check in case the format changed.
-    for (const el of (row && parseElements(row.elements, Number.MAX_SAFE_INTEGER)) || []) elements.set(el.id, el);
+    for (const el of (row && parseElements(row.elements, Number.MAX_SAFE_INTEGER)) || [])
+      elements.set(el.id, el);
     // Deletions only matter to clients connected at the time: start fresh without them.
     purgeDeleted(elements);
     return { elements, saveTimer: null };
@@ -82,7 +89,9 @@ export class WhiteboardService implements OnModuleDestroy {
   }
 
   private async save(workspaceId: string, roomId: string, board: Board) {
-    const elements = [...board.elements.values()].filter((el) => !el.isDeleted) as unknown as Prisma.InputJsonValue;
+    const elements = [...board.elements.values()].filter(
+      (el) => !el.isDeleted,
+    ) as unknown as Prisma.InputJsonValue;
     try {
       await this.prisma.whiteboard.upsert({
         where: { workspaceId_roomId: { workspaceId, roomId } },
@@ -90,7 +99,9 @@ export class WhiteboardService implements OnModuleDestroy {
         update: { elements },
       });
     } catch (error) {
-      this.logger.error(`Failed to save whiteboard ${workspaceId}:${roomId}: ${(error as Error).message}`);
+      this.logger.error(
+        `Failed to save whiteboard ${workspaceId}:${roomId}: ${(error as Error).message}`,
+      );
     }
   }
 }

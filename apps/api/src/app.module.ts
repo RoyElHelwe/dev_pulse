@@ -14,6 +14,7 @@ import { GamesModule } from './games/games.module';
 import { TasksModule } from './tasks/tasks.module';
 import { HealthModule } from './health/health.module';
 import { InvitationsModule } from './invitations/invitations.module';
+import { KitchenModule } from './kitchen/kitchen.module';
 import { OfficeModule } from './office/office.module';
 import { MailModule } from './mail/mail.module';
 import { MeetingRoomModule } from './meeting-room/meeting-room.module';
@@ -41,6 +42,7 @@ const DEFAULT_THROTTLE_LIMIT = 300;
     MeetingsModule,
     VoiceModule,
     MeetingRoomModule,
+    KitchenModule,
     ChatModule,
     GamesModule,
     TasksModule,
