@@ -1,3 +1,8 @@
+/**
+ * Service managing workspace invitations, cryptographic token hashing, delivery, and onboarding acceptance.
+ * Ensures invitations are single-use, email-bound, and securely verified against database hashes.
+ */
+
 import { Injectable } from '@nestjs/common';
 import type { Invitation, Role } from '@prisma/client';
 import { randomToken, sha256 } from '../auth/crypto/secrets';
@@ -11,11 +16,10 @@ import { CAN_MANAGE, MembershipService } from '../workspace/membership.service';
 
 const VALID_DAYS = 7;
 const MAX_PENDING = 50;
+const DAY_MS = 86_400 * 1_000;
+const INVITATION_TTL_MS = VALID_DAYS * DAY_MS;
 
-/**
- * Invitations to join an office. The link only works for the invited email
- * address, once, for 7 days; only its hash is stored.
- */
+/** Service coordinating member invitations, cryptographic token validation, and workspace joining. */
 @Injectable()
 export class InvitationsService {
   constructor(
@@ -43,6 +47,7 @@ export class InvitationsService {
       where: { workspaceId: me.workspaceId, email, status: 'PENDING' },
       data: { status: 'REVOKED', answeredAt: new Date() },
     });
+    // Generate high-entropy secret; store only its SHA-256 hash so leaked DB dumps cannot claim invites.
     const token = randomToken();
     const invitation = await this.prisma.invitation.create({
       data: {
@@ -51,7 +56,7 @@ export class InvitationsService {
         role,
         tokenHash: sha256(token),
         invitedById: userId,
-        expiresAt: new Date(Date.now() + VALID_DAYS * 86400 * 1000),
+        expiresAt: new Date(Date.now() + INVITATION_TTL_MS),
       },
       include: { invitedBy: true },
     });
@@ -74,10 +79,11 @@ export class InvitationsService {
     const me = await this.membership.require(userId, CAN_MANAGE);
     const row = await this.prisma.invitation.findFirst({ where: { id, workspaceId: me.workspaceId, status: 'PENDING' } });
     if (!row) throw new FormError('NOT_FOUND', 'This invitation no longer exists.');
+    // Rotating the secret invalidates previously dispatched email links.
     const token = randomToken();
     const invitation = await this.prisma.invitation.update({
       where: { id },
-      data: { tokenHash: sha256(token), expiresAt: new Date(Date.now() + VALID_DAYS * 86400 * 1000) },
+      data: { tokenHash: sha256(token), expiresAt: new Date(Date.now() + INVITATION_TTL_MS) },
     });
     const sender = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
     const link = await this.sendEmail(invitation, token, me.workspace.name, sender.displayName);
@@ -94,6 +100,7 @@ export class InvitationsService {
 
   /** What the invitation page shows before accepting (anyone with the link). */
   async peek(token: string) {
+    // Lookup by hash prevents exposing secret tokens through database query logs.
     const row = await this.prisma.invitation.findUnique({
       where: { tokenHash: sha256(token) },
       include: { workspace: true, invitedBy: true },
@@ -118,6 +125,7 @@ export class InvitationsService {
       throw new FormError('INVALID_INVITATION', 'This invitation is no longer valid. Ask for a new one.');
     }
     const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId }, include: { membership: true } });
+    // Bind acceptance strictly to the recipient's authenticated email to prevent token hijacking.
     if (user.email !== row.email) {
       throw new FormError('WRONG_ACCOUNT', `This invitation is for ${row.email}. You are signed in as ${user.email}.`);
     }
@@ -129,7 +137,7 @@ export class InvitationsService {
           : 'You already belong to another office. Leave it first to join this one.',
       );
     }
-    // Both writes or none; and only one acceptance can win.
+    // Atomic status transition with count check guarantees exactly-once acceptance under concurrent submissions.
     await this.prisma.$transaction(async (tx) => {
       const { count } = await tx.invitation.updateMany({
         where: { id: row.id, status: 'PENDING' },
@@ -173,3 +181,4 @@ export class InvitationsService {
     return link;
   }
 }
+

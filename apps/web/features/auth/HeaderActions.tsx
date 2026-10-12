@@ -1,5 +1,7 @@
 'use client';
 
+// Header action controls rendering navigation links or the user menu based on authentication state.
+
 import Link from 'next/link';
 import { buttonStyles } from '@/components/ui/Button';
 import { useAuth } from './AuthProvider';

@@ -1,3 +1,5 @@
+// TypeScript type definitions for authentication payloads, user profiles, and session states.
+
 /** The signed-in user, as returned by GET /api/auth/me. */
 export interface User {
   id: string;
@@ -21,6 +23,7 @@ export type SignInResponse =
   /** Signed in correctly, but the account is in use on another device. */
   | { status: 'session-active'; device: ActiveDevice };
 
+/** Device label and last activity timestamp for a conflicting active session held elsewhere. */
 export interface ActiveDevice {
   name: string;
   lastActiveAt: string;

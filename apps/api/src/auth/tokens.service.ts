@@ -1,3 +1,7 @@
+/**
+ * Authentication tokens and device session lifecycle service.
+ * Signs and verifies JWT access/purpose tokens, enforces refresh-token rotation with reuse detection, and tracks live sessions.
+ */
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import type { AuthUser } from '../common/auth/auth-user';
@@ -7,6 +11,11 @@ import type { SessionTokens } from './cookies';
 import { randomToken, sha256 } from './crypto/secrets';
 import { type SessionEndReason, SessionEvents } from './session-events';
 
+const FAMILY_ID_BYTES = 16;
+const MAX_USER_AGENT_LENGTH = 300;
+const MS_PER_DAY = 24 * 3600 * 1000;
+
+/** Client environment metadata associated with an active session family. */
 export interface ClientInfo {
   userAgent?: string;
   ip?: string;
@@ -21,11 +30,12 @@ type PurposeToken = 'mfa' | 'trust' | 'oauth' | 'takeover';
  * A session counts as "in use" if it refreshed its tokens recently. An open
  * app refreshes every ~14 minutes, so 20 minutes means "someone is there".
  */
-export const ACTIVE_SESSION_WINDOW_MS = 20 * 60 * 1000;
+const ACTIVE_SESSION_WINDOW_MS = 20 * 60 * 1000;
 
 /** A refresh token reused within this window is a race between tabs, not theft. */
 const REUSE_GRACE_MS = 30_000;
 
+/** Core service handling JWT signing/verification and stateful refresh token families with replay detection. */
 @Injectable()
 export class TokensService {
   constructor(
@@ -74,7 +84,7 @@ export class TokensService {
 
   /** Starts a new device session: a new refresh-token family. */
   async createSession(userId: string, client: ClientInfo): Promise<SessionTokens> {
-    const familyId = randomToken(16);
+    const familyId = randomToken(FAMILY_ID_BYTES);
     const refreshToken = await this.storeRefreshToken(userId, familyId, client);
     return { accessToken: this.signAccessToken(userId, familyId), refreshToken };
   }
@@ -94,7 +104,7 @@ export class TokensService {
     if (row.revokedAt) {
       // Revoked without a replacement: signed out, or password changed.
       if (!row.replacedById) throw invalid('SESSION_ENDED');
-      // Already exchanged: either two tabs refreshed at once, or a copy is being replayed.
+      // If used again within 30 seconds, treat as harmless concurrent tab race; otherwise assume token replay theft.
       const raceBetweenTabs = Date.now() - row.revokedAt.getTime() < REUSE_GRACE_MS;
       if (!raceBetweenTabs) await this.revokeSession(row.userId, row.familyId, 'security_alert');
       throw invalid('REFRESH_TOKEN_REUSED');
@@ -103,7 +113,7 @@ export class TokensService {
 
     const newToken = randomToken();
     const rotated = await this.prisma.$transaction(async (tx) => {
-      // Only one request can revoke the row: protects against double use.
+      // Atomically revoke old token: prevents concurrent double rotation race conditions.
       const { count } = await tx.refreshToken.updateMany({
         where: { id: row.id, revokedAt: null },
         data: { revokedAt: new Date() },
@@ -207,9 +217,10 @@ export class TokensService {
       userId,
       familyId,
       tokenHash: sha256(token),
-      userAgent: client.userAgent?.slice(0, 300),
+      userAgent: client.userAgent?.slice(0, MAX_USER_AGENT_LENGTH),
       ip: client.ip,
-      expiresAt: new Date(Date.now() + this.config.refreshTokenTtlDays * 24 * 3600 * 1000),
+      expiresAt: new Date(Date.now() + this.config.refreshTokenTtlDays * MS_PER_DAY),
     };
   }
 }
+

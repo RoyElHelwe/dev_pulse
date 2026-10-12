@@ -1,3 +1,8 @@
+/**
+ * Procedural drawing recipes for office furniture objects.
+ * Coordinates inside drawing functions are design-tool pixel art centered at (0, 0) in local px:
+ * "north" (-y) is the back of the item, "south" (+y) is where the person sits or stands.
+ */
 import type * as Phaser from 'phaser';
 import type { FurnitureKind } from '../layout/types';
 import { circle, pick, type Random, rr, rrStroke, shade } from './draw';
@@ -21,8 +26,12 @@ interface FurnitureSpec {
 const WOOD_LIGHT = 0xf1ebe2;
 const WOOD_WALNUT = 0x6e5241;
 const METAL_DARK = 0x262a2e;
+const PITCH_GREEN = 0x2e7d32;
+const BASEPLATE_GREEN = 0x15803d;
+const STUD_GREEN = 0x22c55e;
 const BOOK_COLORS = [0xc0574a, 0x3f6e8c, 0xe3b55a, 0x4f7d5c, 0xd9d4cc, 0x2f3e4e, 0x8c6a9f];
 const MUG_COLORS = [0xffffff, 0x2f3e4e, 0xd9734e, 0x6b9080];
+const CARD_COLORS = [0xf4d35e, 0xee964b, 0x0ea5e9, 0x10b981, 0xf43f5e];
 
 const desk: DrawFn = (g, w, h, random) => {
   const x = -w / 2;
@@ -86,9 +95,68 @@ const meetingTable: DrawFn = (g, w, h, random) => {
 };
 
 const tv: DrawFn = (g, w, h) => {
+  // Dark bezel
   rr(g, -w / 2, -h / 2, w, h, 2, 0x111417);
-  g.fillStyle(0x3b4b58, 1);
-  g.fillRect(-w / 2 + 3, -h / 2 + 2, w - 6, 1.5);
+  // Slightly lighter screen
+  const sw = w - 4;
+  const sh = h - 4;
+  const sx = -w / 2 + 2;
+  const sy = -h / 2 + 2;
+  rr(g, sx, sy, sw, sh, 1, 0x1e232a);
+  // Soft diagonal gloss
+  g.fillStyle(0xffffff, 0.06);
+  g.fillTriangle(sx, sy, sx + sw * 0.65, sy, sx, sy + sh * 0.65);
+  // Tiny LED
+  circle(g, w / 2 - 5, h / 2 - 2, 0.8, 0x22c55e, 0.85);
+};
+
+const board: DrawFn = (g, w, h, random) => {
+  // Metal frame
+  rr(g, -w / 2, -h / 2, w, h, 2, METAL_DARK);
+
+  const frameW = 2;
+  const trayH = 3;
+  const bw = w - frameW * 2;
+  const bh = h - frameW * 2 - trayH;
+  const bx = -w / 2 + frameW;
+  const by = -h / 2 + frameW;
+
+  // Whiteboard surface
+  rr(g, bx, by, bw, bh, 1, 0xffffff);
+
+  // Marker tray strip at the bottom
+  const trayY = by + bh;
+  rr(g, -w / 2 + 1, trayY, w - 2, trayH, 1, 0x94a3b8);
+  g.fillStyle(0xd0d5dd, 1);
+  g.fillRect(-w / 2 + 2, trayY, w - 4, 1);
+  rr(g, -w / 2 + 10, trayY + 0.5, 6, 1.5, 0.5, 0xef4444);
+  rr(g, -w / 2 + 18, trayY + 0.5, 6, 1.5, 0.5, 0x2563eb);
+  rr(g, -w / 2 + 26, trayY + 0.5, 5, 1.5, 0.5, 0x1e293b);
+
+  // 3 kanban columns
+  const colW = bw / 3;
+  g.fillStyle(0xe4e7ec, 1);
+  g.fillRect(bx + colW, by + 1, 1, bh - 2);
+  g.fillRect(bx + colW * 2, by + 1, 1, bh - 2);
+
+  const cardW = Math.min(10, colW - 6);
+  const cardH = 7;
+  const maxNotes = Math.max(1, Math.floor((bh - 12) / (cardH + 3)));
+
+  for (let col = 0; col < 3; col++) {
+    const colLeft = bx + col * colW;
+    // Header strip
+    g.fillStyle(0xd0d5dd, 1);
+    g.fillRect(colLeft + 2, by + 2, colW - 4, 2.5);
+
+    // Sticky notes scaled to height
+    const count = 1 + Math.floor(random() * Math.min(3, maxNotes));
+    for (let i = 0; i < count; i++) {
+      const cx = colLeft + 3 + (i % 2) * (colW - cardW - 6);
+      const cy = by + 7 + i * (cardH + 3);
+      rr(g, cx, cy, cardW, cardH, 1, pick(random, CARD_COLORS));
+    }
+  }
 };
 
 const seat = (cushions: number): DrawFn => (g, w, h, _random, color = 0x5f7a6b) => {
@@ -217,12 +285,259 @@ const floorLamp: DrawFn = (g, w) => {
   circle(g, 0, 0, 2.5, 0x2b2b2b);
 };
 
+function drawFoosballField(g: G, w: number, h: number, rim: number, pw: number, ph: number) {
+  // Small corner feet / leg caps
+  const legS = 6;
+  rr(g, -w / 2 - 0.5, -h / 2 - 0.5, legS, legS, 1.5, 0x1e2227);
+  rr(g, w / 2 - legS + 0.5, -h / 2 - 0.5, legS, legS, 1.5, 0x1e2227);
+  rr(g, -w / 2 - 0.5, h / 2 - legS + 0.5, legS, legS, 1.5, 0x1e2227);
+  rr(g, w / 2 - legS + 0.5, h / 2 - legS + 0.5, legS, legS, 1.5, 0x1e2227);
+
+  // Wooden table rim
+  rr(g, -w / 2, -h / 2, w, h, 4, WOOD_WALNUT);
+  rrStroke(g, -w / 2 + 0.5, -h / 2 + 0.5, w - 1, h - 1, 4, shade(WOOD_WALNUT, -0.2));
+  // Bevel depth on front rim
+  g.fillStyle(0x000000, 0.25);
+  g.fillRect(-w / 2 + 3, h / 2 - 3, w - 6, 2);
+
+  // Playing pitch (green)
+  rr(g, -pw / 2, -ph / 2, pw, ph, 2, PITCH_GREEN);
+  // Pitch inner rim shadow
+  g.fillStyle(0x000000, 0.2);
+  g.fillRect(-pw / 2, -ph / 2, pw, 1.5);
+  g.fillRect(-pw / 2, -ph / 2, 1.5, ph);
+
+  // Goal cutouts at both short ends
+  const goalH = Math.min(16, ph * 0.45);
+  const goalW = rim + 2;
+  rr(g, -w / 2 - 1, -goalH / 2, goalW, goalH, 1, 0x181c20);
+  rr(g, w / 2 - goalW + 1, -goalH / 2, goalW, goalH, 1, 0x181c20);
+
+  // Pitch markings (white)
+  // Halfway line & center circle
+  g.fillStyle(0xffffff, 0.65);
+  g.fillRect(-0.5, -ph / 2 + 1, 1, ph - 2);
+  const cr = Math.min(9, ph * 0.25);
+  circle(g, 0, 0, cr, 0xffffff, 0.65);
+  circle(g, 0, 0, cr - 1, PITCH_GREEN);
+  circle(g, 0, 0, 1.2, 0xffffff, 0.7);
+
+  // Penalty / goal boxes
+  const pbH = ph * 0.55;
+  const pbW = pw * 0.12;
+  rrStroke(g, -pw / 2 + 0.5, -pbH / 2, pbW, pbH, 1, 0xffffff, 1, 0.5);
+  rrStroke(g, pw / 2 - pbW - 0.5, -pbH / 2, pbW, pbH, 1, 0xffffff, 1, 0.5);
+}
+
+function drawFoosballRods(g: G, h: number, pw: number, ph: number) {
+  // 8 rods (4 per team: Red handles south, Blue handles north)
+  const rodConfigs = [
+    { team: 0xef4444, south: true, ys: [0] },
+    { team: 0xef4444, south: true, ys: [-ph * 0.22, ph * 0.22] },
+    { team: 0x3b82f6, south: false, ys: [-ph * 0.28, 0, ph * 0.28] },
+    { team: 0xef4444, south: true, ys: [-ph * 0.32, -ph * 0.16, 0, ph * 0.16, ph * 0.32] },
+    { team: 0x3b82f6, south: false, ys: [-ph * 0.32, -ph * 0.16, 0, ph * 0.16, ph * 0.32] },
+    { team: 0xef4444, south: true, ys: [-ph * 0.28, 0, ph * 0.28] },
+    { team: 0x3b82f6, south: false, ys: [-ph * 0.22, ph * 0.22] },
+    { team: 0x3b82f6, south: false, ys: [0] },
+  ];
+
+  const rodSpan = pw - 14;
+  const rodStep = rodSpan / (rodConfigs.length - 1);
+  const rodStartX = -rodSpan / 2;
+
+  for (let i = 0; i < rodConfigs.length; i++) {
+    const rc = rodConfigs[i];
+    const rx = rodStartX + i * rodStep;
+
+    // Metal rod
+    g.fillStyle(0xd1d5db, 0.85);
+    g.fillRect(rx - 0.5, -h / 2, 1, h);
+
+    // Handle knobs & end caps sticking out of the long sides
+    if (rc.south) {
+      // South handle knob
+      rr(g, rx - 1.5, h / 2, 3, 4.5, 1, 0x1f2327);
+      // North end cap
+      rr(g, rx - 1, -h / 2 - 2, 2, 2, 0.5, 0x6b7280);
+    } else {
+      // North handle knob
+      rr(g, rx - 1.5, -h / 2 - 4.5, 3, 4.5, 1, 0x1f2327);
+      // South end cap
+      rr(g, rx - 1, h / 2, 2, 2, 0.5, 0x6b7280);
+    }
+
+    // Players on this rod
+    for (const py of rc.ys) {
+      rr(g, rx - 1.5, py - 2.5, 3, 5, 1, rc.team);
+      circle(g, rx, py - 0.8, 0.9, 0xffffff, 0.8);
+    }
+  }
+}
+
+const foosball: DrawFn = (g, w, h) => {
+  const rim = 5;
+  const pw = w - rim * 2;
+  const ph = h - rim * 2;
+
+  drawFoosballField(g, w, h, rim, pw, ph);
+  drawFoosballRods(g, h, pw, ph);
+
+  // Little white soccer ball on the pitch
+  circle(g, 2, 1, 2, 0xffffff);
+  circle(g, 2, 1, 1, 0x1f2937);
+};
+
+const cardTable: DrawFn = (g, w, h) => {
+  const r = Math.min(w, h) / 2 - 0.5;
+
+  // Wooden rim
+  circle(g, 0, 0, r, WOOD_WALNUT);
+  circle(g, 0, 1, r - 1, shade(WOOD_WALNUT, -0.15));
+  circle(g, 0, -0.5, r - 1, shade(WOOD_WALNUT, 0.1));
+  circle(g, 0, 0, r - 4, shade(WOOD_WALNUT, -0.25));
+
+  // Green felt surface
+  const feltR = r - 5;
+  circle(g, 0, 0, feltR, 0x24633d);
+  circle(g, 0, 0, feltR - 1, 0x2b7247);
+  // Subtle inner felt ring
+  circle(g, 0, 0, feltR * 0.68, 0x1f5734, 0.5);
+  circle(g, 0, 0, feltR * 0.68 - 1, 0x2b7247);
+
+  // Deck of Uno cards in the center
+  // Stack depth shadow
+  rr(g, -5, -7 + 2, 10, 14, 1.5, 0x1a452a);
+  // Stack white card edges
+  rr(g, -5, -7 + 1, 10, 14, 1.5, 0xdfe3e6);
+  rr(g, -5, -7 + 0.5, 10, 14, 1.5, 0xeeeff1);
+  // Top card of deck (red back)
+  rr(g, -5, -7, 10, 14, 1.5, 0xef4444);
+  g.fillStyle(0xffffff, 0.9);
+  g.fillEllipse(0, -0.5, 6, 4);
+  circle(g, 0, -0.5, 1, 0xef4444);
+
+  // Scattered Uno-style cards (red/yellow/green/blue backs with a white oval)
+  const cards: Array<{ x: number; y: number; angle: number; color: number }> = [
+    { x: -feltR * 0.45, y: -feltR * 0.3, angle: -0.5, color: 0x3b82f6 },
+    { x: feltR * 0.42, y: -feltR * 0.28, angle: 0.6, color: 0xf59e0b },
+    { x: feltR * 0.38, y: feltR * 0.35, angle: 1.4, color: 0x10b981 },
+    { x: -feltR * 0.35, y: feltR * 0.4, angle: -1.1, color: 0xef4444 },
+    { x: 7, y: 3, angle: 0.35, color: 0x3b82f6 },
+  ];
+
+  for (const c of cards) {
+    g.save();
+    g.translateCanvas(c.x, c.y);
+    g.rotateCanvas(c.angle);
+    rr(g, -4, -5.5, 8, 11, 1, c.color);
+    g.fillStyle(0xffffff, 0.9);
+    g.fillEllipse(0, 0, 5, 3.2);
+    circle(g, 0, 0, 0.8, c.color);
+    g.restore();
+  }
+
+  // Coffee mug on the rim
+  circle(g, feltR * 0.68, -feltR * 0.55, 3.5, 0xffffff);
+  circle(g, feltR * 0.68, -feltR * 0.55, 2.5, 0x5b3d2a);
+};
+
+function drawLegoBoardBase(g: G, w: number, h: number, bx: number, by: number, bw: number, bh: number) {
+  // Dark frame
+  rr(g, -w / 2, -h / 2, w, h, 2, METAL_DARK);
+  g.fillStyle(0x3e454f, 1);
+  g.fillRect(-w / 2 + 1, -h / 2, w - 2, 1);
+
+  // Green Lego baseplate
+  rr(g, bx, by, bw, bh, 1, BASEPLATE_GREEN);
+
+  // Stud grid across the baseplate
+  const studSpacing = 4;
+  const cols = Math.floor((bw - 4) / studSpacing);
+  const rows = Math.floor((bh - 4) / studSpacing);
+  const ox = bx + (bw - cols * studSpacing) / 2;
+  const oy = by + (bh - rows * studSpacing) / 2;
+  for (let c = 0; c <= cols; c++) {
+    for (let r = 0; r <= rows; r++) {
+      circle(g, ox + c * studSpacing, oy + r * studSpacing, 0.8, STUD_GREEN, 0.5);
+    }
+  }
+}
+
+function drawLegoBoardFigures(
+  g: G,
+  bx: number,
+  by: number,
+  bw: number,
+  bh: number,
+  sx: number,
+  sy: number,
+) {
+  // 1. Smiley face (yellow bricks, black eyes and smile)
+  const smX = bx + bw * 0.28;
+  const smY = by + bh * 0.5;
+  rr(g, smX - 4 * sx, smY - 4.5 * sy, 8 * sx, 9 * sy, 1.5, 0xfacc15);
+  g.fillStyle(0xffffff, 0.35);
+  g.fillRect(smX - 4 * sx, smY - 4.5 * sy, 8 * sx, 1 * sy);
+  circle(g, smX - 2 * sx, smY - 2 * sy, 0.8 * sx, 0x1e293b);
+  circle(g, smX + 2 * sx, smY - 2 * sy, 0.8 * sx, 0x1e293b);
+  g.fillStyle(0x1e293b, 1);
+  g.fillRect(smX - 2 * sx, smY + 1.5 * sy, 4 * sx, 1 * sy);
+  g.fillRect(smX - 3 * sx, smY + 0.5 * sy, 1 * sx, 1 * sy);
+  g.fillRect(smX + 2 * sx, smY + 0.5 * sy, 1 * sx, 1 * sy);
+
+  // 2. Tiny house (red roof, blue walls, white window, yellow door)
+  const hx = bx + bw * 0.52;
+  const hy = by + bh * 0.5;
+  rr(g, hx - 2 * sx, hy - 5 * sy, 4 * sx, 2 * sy, 0.5, 0xef4444);
+  rr(g, hx - 5 * sx, hy - 3.2 * sy, 10 * sx, 2 * sy, 0.5, 0xef4444);
+  rr(g, hx - 4 * sx, hy - 1.2 * sy, 8 * sx, 5.5 * sy, 0.5, 0x2563eb);
+  rr(g, hx - 3 * sx, hy, 2 * sx, 2 * sy, 0.5, 0xffffff);
+  rr(g, hx, hy + 0.5 * sy, 2.5 * sx, 3.8 * sy, 0.5, 0xfacc15);
+
+  // 3. Tiny heart (red bricks)
+  const htx = bx + bw * 0.74;
+  const hty = by + bh * 0.5;
+  rr(g, htx - 4 * sx, hty - 3.5 * sy, 3.5 * sx, 3 * sy, 1, 0xef4444);
+  rr(g, htx + 0.5 * sx, hty - 3.5 * sy, 3.5 * sx, 3 * sy, 1, 0xef4444);
+  rr(g, htx - 4.5 * sx, hty - 1.5 * sy, 9 * sx, 3.5 * sy, 1, 0xef4444);
+  rr(g, htx - 2.5 * sx, hty + 2 * sy, 5 * sx, 2.5 * sy, 1, 0xef4444);
+
+  // A few colorful loose bricks placed elsewhere on the grid
+  const b1x = bx + bw * 0.1;
+  const b1y = by + bh * 0.45;
+  rr(g, b1x - 3.5 * sx, b1y - 2.5 * sy, 7 * sx, 5 * sy, 0.8, 0x3b82f6);
+  circle(g, b1x - 1.5 * sx, b1y, 0.9 * sx, 0x60a5fa);
+  circle(g, b1x + 1.5 * sx, b1y, 0.9 * sx, 0x60a5fa);
+
+  const b2x = bx + bw * 0.9;
+  const b2y = by + bh * 0.45;
+  rr(g, b2x - 3 * sx, b2y - 2.5 * sy, 6 * sx, 5 * sy, 0.8, 0xf97316);
+  circle(g, b2x, b2y, 0.9 * sx, 0xfb923c);
+}
+
+const legoBoard: DrawFn = (g, w, h) => {
+  const bw = w - 4;
+  const bh = h - 3;
+  const bx = -bw / 2;
+  const by = -h / 2 + 1.5;
+
+  drawLegoBoardBase(g, w, h, bx, by, bw, bh);
+
+  // Tidy decorative bricks positioned by fractions of the baseplate
+  const sx = w / 128;
+  const sy = h / ((w * 2) / 3);
+  drawLegoBoardFigures(g, bx, by, bw, bh, sx, sy);
+};
+
+/** Registry of furniture physical specs and procedural draw recipes by furniture kind. */
 export const FURNITURE: Record<FurnitureKind, FurnitureSpec> = {
   desk: { solid: true, draw: desk },
   chair: { solid: false, draw: chair },
   divider: { solid: true, draw: divider },
   meetingTable: { solid: true, draw: meetingTable },
   tv: { solid: false, layer: 'wall', draw: tv },
+  board: { solid: true, layer: 'wall', draw: board },
   sofa: { solid: true, draw: seat(3) },
   armchair: { solid: true, draw: seat(1) },
   coffeeTable: { solid: true, draw: coffeeTable },
@@ -235,4 +550,7 @@ export const FURNITURE: Record<FurnitureKind, FurnitureSpec> = {
   stool: { solid: false, draw: stool },
   beanbag: { solid: true, round: true, draw: beanbag },
   floorLamp: { solid: false, layer: 'floor', draw: floorLamp },
+  foosball: { solid: true, draw: foosball },
+  cardTable: { solid: true, round: true, draw: cardTable },
+  legoBoard: { solid: true, layer: 'wall', draw: legoBoard },
 };

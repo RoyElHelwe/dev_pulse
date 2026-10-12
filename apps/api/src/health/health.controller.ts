@@ -1,7 +1,12 @@
+/**
+ * Health check controller.
+ * Exposes a public GET /api/health endpoint used by Docker health checks and monitoring to verify database connectivity.
+ */
 import { Controller, Get, ServiceUnavailableException } from '@nestjs/common';
 import { Public } from '../common/auth/public.decorator';
 import { PrismaService } from '../prisma/prisma.service';
 
+/** Exposes public liveness probes verifying database connectivity for container health checks. */
 @Controller('health')
 export class HealthController {
   constructor(private readonly prisma: PrismaService) {}
@@ -18,3 +23,4 @@ export class HealthController {
     return { status: 'ok', db: 'up', time: new Date().toISOString() };
   }
 }
+

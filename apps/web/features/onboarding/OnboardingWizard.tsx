@@ -1,40 +1,34 @@
+// Multi-step office creation flow for new organisers configuring workspace name, template, and avatar.
+// Rendered by OnboardingGate when a signed-in user has no associated workspace.
+
 'use client';
 
-import { ArrowLeft, ArrowRight, Building2, Check, MailOpen, Sparkles } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { z } from 'zod';
 import { Alert } from '@/components/ui/Alert';
-import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
-import { TextField } from '@/components/ui/TextField';
 import { useAuth } from '@/features/auth/AuthProvider';
-import { CharacterPreview } from '@/features/workspace/CharacterPreview';
-import { LayoutPreview } from '@/features/workspace/LayoutPreview';
-import type { OfficeLayout } from '@/game/layout/types';
-import { LOOK_KEYS, type LookKey } from '@/game/objects/looks';
 import { api, ApiError } from '@/lib/api';
 import { cn } from '@/lib/cn';
+import { CharacterStep } from './CharacterStep';
+import { NameStep } from './NameStep';
+import { TemplateStep, type OfficeTemplateOption } from './TemplateStep';
+import { WelcomeStep } from './WelcomeStep';
 
-interface Template {
-  id: string;
-  name: string;
-  description: string;
-  minTeam: number;
-  maxTeam: number;
-  desks: number;
-  meetingRooms: number;
-  layout: OfficeLayout;
-}
+/** Minimum length for the office name. */
+const MIN_OFFICE_NAME_LENGTH = 2;
 
-const STEPS = ['Name', 'Team', 'Office', 'You'] as const;
-const TEAM_SIZES = [
-  { label: 'Just me', size: 1 },
-  { label: '2–8', size: 6 },
-  { label: '9–24', size: 16 },
-  { label: '25–48', size: 36 },
-  { label: '49–100', size: 72 },
-];
+/** Maximum length for the office name. */
+const MAX_OFFICE_NAME_LENGTH = 40;
+
+/** Default team size when generating custom office templates. */
+const DEFAULT_GENERATED_TEAM_SIZE = 8;
+
+const GENERATED_ID = 'generated';
+const STEPS = ['Name', 'Office', 'You'] as const;
+
 const NOTICES: Record<string, string> = {
   removed: 'You were removed from your office. Create a new one or wait for an invitation.',
   deleted: 'Your office was deleted by its organiser.',
@@ -44,41 +38,51 @@ const NOTICES: Record<string, string> = {
 const nameSchema = z
   .string()
   .trim()
-  .min(2, 'Use at least 2 characters.')
-  .max(40, 'Use at most 40 characters.');
+  .min(MIN_OFFICE_NAME_LENGTH, `Use at least ${MIN_OFFICE_NAME_LENGTH} characters.`)
+  .max(MAX_OFFICE_NAME_LENGTH, `Use at most ${MAX_OFFICE_NAME_LENGTH} characters.`);
 
-/** Creating an office: name → team size → template → character. No AI, just good defaults. */
+function sortTemplates(list: OfficeTemplateOption[]): OfficeTemplateOption[] {
+  return [...list].sort((a, b) => {
+    if (a.id === 'loft') return -1;
+    if (b.id === 'loft') return 1;
+    if (a.id === GENERATED_ID) return 1;
+    if (b.id === GENERATED_ID) return -1;
+    return 0;
+  });
+}
+
+/** Multi-step wizard guiding new organizers through office creation and avatar selection. */
 export function OnboardingWizard() {
   const router = useRouter();
   const notice = NOTICES[useSearchParams().get('notice') ?? ''];
   const { user, reloadUser } = useAuth();
-  const [step, setStep] = useState(-1); // -1 = welcome
+  const [step, setStep] = useState(-1);
   const [name, setName] = useState('');
   const [nameError, setNameError] = useState('');
-  const [teamSize, setTeamSize] = useState<number | null>(null);
-  const [templates, setTemplates] = useState<Template[]>([]);
-  const [templateId, setTemplateId] = useState<string | null>(null);
-  const [character, setCharacter] = useState<LookKey>('maya');
+  const [generatedSize, setGeneratedSize] = useState<number>(DEFAULT_GENERATED_TEAM_SIZE);
+  const [templates, setTemplates] = useState<OfficeTemplateOption[]>([]);
+  const [templateId, setTemplateId] = useState<string | null>('loft');
+  const [character, setCharacter] = useState('maya');
   const [error, setError] = useState('');
   const [creating, setCreating] = useState(false);
 
   useEffect(() => {
-    api<Template[]>('/office/templates').then(setTemplates, () =>
-      setError('Could not load the office templates.'),
+    if (step < 1) return;
+    let live = true;
+    api<OfficeTemplateOption[]>(`/office/templates?team=${generatedSize}&seed=${encodeURIComponent(name.trim())}`).then(
+      (list) => {
+        if (!live) return;
+        setTemplates(sortTemplates(list));
+        setTemplateId((prev) => prev ?? 'loft');
+      },
+      () => {
+        if (live) setError('Could not load the office templates.');
+      },
     );
-  }, []);
-
-  // The template that fits the team best.
-  const recommended = useMemo(() => {
-    if (teamSize === null) return null;
-    return (
-      templates.find(
-        (t) => teamSize >= t.minTeam && teamSize <= t.maxTeam && teamSize <= t.maxTeam / 1.5,
-      ) ??
-      templates.find((t) => teamSize >= t.minTeam && teamSize <= t.maxTeam) ??
-      templates[templates.length - 1]
-    );
-  }, [teamSize, templates]);
+    return () => {
+      live = false;
+    };
+  }, [step >= 1, generatedSize, name]);
 
   function next() {
     setError('');
@@ -87,9 +91,7 @@ export function OnboardingWizard() {
       if (!parsed.success) return setNameError(parsed.error.issues[0].message);
       setNameError('');
     }
-    if (step === 1 && teamSize === null) return setError('Pick the size of your team.');
-    if (step === 1 && !templateId) setTemplateId(recommended?.id ?? null);
-    if (step === 2 && !templateId) return setError('Pick an office.');
+    if (step === 1 && !templateId) return setError('Pick an office.');
     setStep(step + 1);
   }
 
@@ -97,7 +99,14 @@ export function OnboardingWizard() {
     setCreating(true);
     setError('');
     try {
-      await api('/workspace', { body: { name: name.trim(), templateId, character } });
+      await api('/workspace', {
+        body: {
+          name: name.trim(),
+          templateId,
+          character,
+          ...(templateId === GENERATED_ID && { teamSize: generatedSize }),
+        },
+      });
       await reloadUser();
       router.replace('/office');
     } catch (err) {
@@ -108,46 +117,17 @@ export function OnboardingWizard() {
 
   if (step === -1) {
     return (
-      <div className="mx-auto max-w-2xl">
-        <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
-          Welcome, {user?.displayName.split(' ')[0]}
-        </h1>
-        <p className="mt-2 text-lg text-zinc-600">Let&apos;s get you into an office.</p>
-        {notice && <Alert className="mt-6">{notice}</Alert>}
-        <div className="mt-8 grid gap-4 sm:grid-cols-2">
-          <button
-            type="button"
-            onClick={() => setStep(0)}
-            className="group rounded-2xl bg-white p-6 text-left ring-1 ring-zinc-200 transition hover:-translate-y-0.5 hover:shadow-lg hover:ring-zinc-300 focus-visible:outline-2 focus-visible:outline-emerald-500"
-          >
-            <span className="flex size-11 items-center justify-center rounded-xl bg-zinc-900 text-white">
-              <Building2 className="size-5" aria-hidden="true" />
-            </span>
-            <h2 className="mt-4 font-semibold">Create an office</h2>
-            <p className="mt-1 text-sm text-zinc-600">
-              For organisers: set up the space, then invite your team.
-            </p>
-            <span className="mt-4 inline-flex items-center gap-1 text-sm font-medium">
-              Start <ArrowRight className="size-4 transition group-hover:translate-x-0.5" />
-            </span>
-          </button>
-          <div className="rounded-2xl bg-zinc-100/70 p-6 ring-1 ring-zinc-200/70">
-            <span className="flex size-11 items-center justify-center rounded-xl bg-white text-zinc-700 ring-1 ring-zinc-200">
-              <MailOpen className="size-5" aria-hidden="true" />
-            </span>
-            <h2 className="mt-4 font-semibold">Joining a team?</h2>
-            <p className="mt-1 text-sm text-zinc-600">
-              Ask your organiser to invite <b className="text-zinc-800">{user?.email}</b>, then open
-              the link in the email.
-            </p>
-          </div>
-        </div>
-      </div>
+      <WelcomeStep
+        displayName={user?.displayName}
+        email={user?.email}
+        notice={notice}
+        onCreateOffice={() => setStep(0)}
+      />
     );
   }
 
   return (
-    <div className="mx-auto max-w-3xl">
+    <div className={cn('mx-auto', step === 2 ? 'max-w-4xl' : 'max-w-3xl')}>
       <ol className="flex items-center gap-2" aria-label="Steps">
         {STEPS.map((label, i) => (
           <li key={label} className="flex flex-1 items-center gap-2">
@@ -179,141 +159,29 @@ export function OnboardingWizard() {
 
       <section className="mt-8 rounded-3xl bg-white p-6 ring-1 ring-zinc-200/80 sm:p-8">
         {step === 0 && (
-          <>
-            <h1 className="text-2xl font-semibold tracking-tight">Name your office</h1>
-            <p className="mt-1 text-zinc-600">
-              Usually the name of your team or company. You can change it later.
-            </p>
-            <form
-              className="mt-6 sm:max-w-md"
-              onSubmit={(e) => {
-                e.preventDefault();
-                next();
-              }}
-            >
-              <TextField
-                label="Office name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                autoFocus
-                maxLength={40}
-                error={nameError}
-                placeholder="e.g. Pixel Studio"
-              />
-            </form>
-          </>
+          <NameStep
+            name={name}
+            onChangeName={setName}
+            error={nameError}
+            onSubmit={next}
+          />
         )}
 
         {step === 1 && (
-          <>
-            <h1 className="text-2xl font-semibold tracking-tight">How big is your team?</h1>
-            <p className="mt-1 text-zinc-600">We&apos;ll suggest an office with enough desks.</p>
-            <div
-              className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-5"
-              role="radiogroup"
-              aria-label="Team size"
-            >
-              {TEAM_SIZES.map((t) => (
-                <button
-                  key={t.label}
-                  type="button"
-                  role="radio"
-                  aria-checked={teamSize === t.size}
-                  onClick={() => {
-                    setTeamSize(t.size);
-                    setTemplateId(null);
-                  }}
-                  className={cn(
-                    'rounded-2xl px-4 py-5 text-center ring-1 transition',
-                    teamSize === t.size
-                      ? 'bg-zinc-900 text-white ring-zinc-900'
-                      : 'bg-white ring-zinc-200 hover:ring-zinc-400',
-                  )}
-                >
-                  <span className="block text-lg font-semibold">{t.label}</span>
-                  <span
-                    className={cn(
-                      'text-xs',
-                      teamSize === t.size ? 'text-zinc-300' : 'text-zinc-500',
-                    )}
-                  >
-                    {t.size === 1 ? 'person' : 'people'}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </>
+          <TemplateStep
+            templates={templates}
+            templateId={templateId}
+            onSelectTemplate={setTemplateId}
+            generatedSize={generatedSize}
+            onChangeGeneratedSize={setGeneratedSize}
+          />
         )}
 
         {step === 2 && (
-          <>
-            <h1 className="text-2xl font-semibold tracking-tight">Pick your office</h1>
-            <p className="mt-1 text-zinc-600">You can move, add and remove furniture any time.</p>
-            <div className="mt-6 grid gap-4 sm:grid-cols-2" role="radiogroup" aria-label="Office">
-              {templates.map((t) => (
-                <button
-                  key={t.id}
-                  type="button"
-                  role="radio"
-                  aria-checked={templateId === t.id}
-                  onClick={() => setTemplateId(t.id)}
-                  className={cn(
-                    'flex flex-col overflow-hidden rounded-2xl bg-white text-left ring-2 transition',
-                    templateId === t.id ? 'ring-zinc-900' : 'ring-zinc-200 hover:ring-zinc-300',
-                  )}
-                >
-                  <div className="bg-zinc-100 p-3">
-                    <LayoutPreview layout={t.layout} />
-                  </div>
-                  <div className="flex flex-1 flex-col gap-1.5 p-4">
-                    <span className="flex items-center justify-between gap-2 font-semibold">
-                      {t.name}
-                      {recommended?.id === t.id && (
-                        <Badge tone="success">
-                          <Sparkles className="size-3" /> Best fit
-                        </Badge>
-                      )}
-                    </span>
-                    <span className="text-sm text-zinc-600">{t.description}</span>
-                    <span className="mt-auto pt-2 text-xs text-zinc-500">
-                      {t.desks} desks · {t.meetingRooms} meeting room{t.meetingRooms > 1 ? 's' : ''}
-                    </span>
-                  </div>
-                </button>
-              ))}
-            </div>
-          </>
-        )}
-
-        {step === 3 && (
-          <>
-            <h1 className="text-2xl font-semibold tracking-tight">Choose your character</h1>
-            <p className="mt-1 text-zinc-600">This is how your team sees you in the office.</p>
-            <div
-              className="mt-6 grid grid-cols-4 gap-3 sm:grid-cols-8"
-              role="radiogroup"
-              aria-label="Character"
-            >
-              {LOOK_KEYS.map((key) => (
-                <button
-                  key={key}
-                  type="button"
-                  role="radio"
-                  aria-checked={character === key}
-                  aria-label={key}
-                  onClick={() => setCharacter(key)}
-                  className={cn(
-                    'rounded-2xl bg-zinc-50 p-2 ring-2 transition',
-                    character === key
-                      ? 'bg-emerald-50 ring-emerald-500'
-                      : 'ring-transparent hover:ring-zinc-300',
-                  )}
-                >
-                  <CharacterPreview character={key} className="mx-auto h-20" />
-                </button>
-              ))}
-            </div>
-          </>
+          <CharacterStep
+            character={character}
+            onChangeCharacter={setCharacter}
+          />
         )}
 
         {error && (

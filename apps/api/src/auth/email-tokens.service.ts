@@ -1,16 +1,27 @@
+/**
+ * Email action token lifecycle management.
+ * Generates, hashes, checks, and consumes single-use tokens for email verification, password reset, and session takeover.
+ */
 import { Injectable } from '@nestjs/common';
 import type { AuthTokenType } from '@prisma/client';
 import { FormError } from '../common/form-error';
 import { PrismaService } from '../prisma/prisma.service';
 import { randomToken, sha256 } from './crypto/secrets';
 
+// 24 hours gives sufficient time for email delivery and account onboarding.
+const VERIFY_EMAIL_TTL_MS = 24 * 3600 * 1000;
+// 1 hour limits the exposure window if an email reset link is intercepted.
+const RESET_PASSWORD_TTL_MS = 3600 * 1000;
+// 15 minutes enforces prompt completion during an urgent security takeover intervention.
+const CLOSE_SESSIONS_TTL_MS = 15 * 60 * 1000;
+
 const LIFETIME_MS: Record<AuthTokenType, number> = {
-  VERIFY_EMAIL: 24 * 3600 * 1000,
-  RESET_PASSWORD: 3600 * 1000,
-  CLOSE_SESSIONS: 15 * 60 * 1000,
+  VERIFY_EMAIL: VERIFY_EMAIL_TTL_MS,
+  RESET_PASSWORD: RESET_PASSWORD_TTL_MS,
+  CLOSE_SESSIONS: CLOSE_SESSIONS_TTL_MS,
 };
 
-/** One-time links sent by email. Only the hash is stored. */
+/** Service managing cryptographically hashed, single-use action tokens sent via email links. */
 @Injectable()
 export class EmailTokensService {
   constructor(private readonly prisma: PrismaService) {}
@@ -18,6 +29,7 @@ export class EmailTokensService {
   /** Creates a token and cancels older unused ones of the same type. */
   async create(userId: string, type: AuthTokenType, bindingHash?: string): Promise<string> {
     const token = randomToken();
+    // Invalidate any previously issued pending tokens of the same type to enforce single active link invariant.
     await this.prisma.$transaction([
       this.prisma.authToken.deleteMany({ where: { userId, type, usedAt: null } }),
       this.prisma.authToken.create({
@@ -66,3 +78,4 @@ export class EmailTokensService {
 function invalidLink() {
   return new FormError('INVALID_LINK', 'This link is invalid or has expired. Please ask for a new one.');
 }
+

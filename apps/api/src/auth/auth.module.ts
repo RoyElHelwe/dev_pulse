@@ -1,3 +1,7 @@
+/**
+ * Authentication and authorization root module.
+ * Wires JWT cryptography, credential controllers, OAuth providers, guards, and session event emitters.
+ */
 import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { JwtModule } from '@nestjs/jwt';
@@ -17,12 +21,13 @@ import { TokensService } from './tokens.service';
 import { TwoFactorService } from './two-factor.service';
 import { VerificationService } from './verification.service';
 
+/** Wires JWT cryptography, credential controllers, OAuth providers, and session guards. */
 @Module({
   imports: [
     JwtModule.registerAsync({
       inject: [AppConfig],
       useFactory: (config: AppConfig) => ({
-        // A key derived for JWTs only; other features derive their own keys.
+        // Derives an independent subkey strictly for JWT signing via HKDF to prevent cross-protocol key leakage.
         secret: deriveKey(config.jwtSecret, 'jwt').toString('base64'),
         signOptions: { algorithm: 'HS256', issuer: 'dev-pulse' },
         verifyOptions: { algorithms: ['HS256'], issuer: 'dev-pulse' },
@@ -41,8 +46,11 @@ import { VerificationService } from './verification.service';
     SessionEvents,
     SessionTakeoverService,
     SessionGateway,
+    // Secure by default: every endpoint requires valid authentication unless explicitly decorated with @Public().
     { provide: APP_GUARD, useClass: AuthGuard },
   ],
-  exports: [TokensService, SessionEvents],
+  // AuthService is exported for the dev sign-in in DevModule (dev/dev.service.ts).
+  exports: [AuthService, TokensService, SessionEvents],
 })
 export class AuthModule {}
+

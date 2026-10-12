@@ -1,5 +1,7 @@
 'use client';
 
+// Card managing two-factor authentication setup, QR code generation, and backup codes.
+
 import { Copy, Download } from 'lucide-react';
 import { useState } from 'react';
 import QRCode from 'react-qr-code';
@@ -12,11 +14,16 @@ import { useAuth } from '@/features/auth/AuthProvider';
 import type { User } from '@/features/auth/types';
 import { api, ApiError } from '@/lib/api';
 
+const QR_CODE_SIZE_PX = 168;
+const TOTP_CODE_LENGTH = 6;
+const BACKUP_OR_TOTP_CODE_MAX_LENGTH = 20;
+
 type Step =
   | { name: 'idle' }
   | { name: 'scan'; secret: string; otpauthUrl: string }
   | { name: 'codes'; codes: string[] };
 
+/** Settings card for enabling, configuring, and disabling two-factor authentication. */
 export function TwoFactorCard({ user }: { user: User }) {
   const { reloadUser } = useAuth();
   const [step, setStep] = useState<Step>({ name: 'idle' });
@@ -72,7 +79,7 @@ export function TwoFactorCard({ user }: { user: User }) {
         <div className="grid gap-6 sm:grid-cols-[auto_1fr] sm:items-start">
           <div className="justify-self-start rounded-2xl bg-white p-3 ring-1 ring-zinc-200">
             {/* Drawn in the browser: the link contains the secret, it never leaves this page. */}
-            <QRCode value={step.otpauthUrl} size={168} />
+            <QRCode value={step.otpauthUrl} size={QR_CODE_SIZE_PX} />
           </div>
           <div className="flex flex-col gap-4">
             <p className="text-sm text-zinc-600">
@@ -86,7 +93,7 @@ export function TwoFactorCard({ user }: { user: User }) {
               onChange={(e) => setField(e.target.value)}
               inputMode="numeric"
               autoComplete="one-time-code"
-              maxLength={6}
+              maxLength={TOTP_CODE_LENGTH}
               className="sm:max-w-56"
             />
             <div className="flex gap-2">
@@ -139,7 +146,7 @@ export function TwoFactorCard({ user }: { user: User }) {
           value={field}
           onChange={(e) => setField(e.target.value)}
           autoComplete="one-time-code"
-          maxLength={20}
+          maxLength={BACKUP_OR_TOTP_CODE_MAX_LENGTH}
         />
         <div className="flex flex-wrap gap-2">
           <Button variant="secondary" loading={loading === 'regenerate'} onClick={regenerate}>

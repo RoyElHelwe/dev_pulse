@@ -1,10 +1,12 @@
 'use client';
 
+// Banner notification alerting that the account is active on another device, with a one-click session termination link.
+
 import { MonitorSmartphone } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { api, ApiError } from '@/lib/api';
-import { timeAgo } from '@/lib/user-agent';
+import { timeAgo } from '@/lib/userAgent';
 import type { ActiveDevice } from './types';
 
 /**

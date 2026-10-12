@@ -1,5 +1,8 @@
+// User avatar displaying profile image or fallback initials with deterministic background colors.
+
 import { cn } from '@/lib/cn';
 
+const MAX_INITIALS_LENGTH = 2;
 const COLORS = ['bg-emerald-600', 'bg-sky-600', 'bg-violet-600', 'bg-amber-600', 'bg-rose-600', 'bg-teal-600'];
 
 /** Profile picture, or initials on a colour picked from the name. */
@@ -8,7 +11,7 @@ export function Avatar({ name, src, className }: { name: string; src?: string | 
     .split(' ')
     .map((part) => part[0])
     .join('')
-    .slice(0, 2)
+    .slice(0, MAX_INITIALS_LENGTH)
     .toUpperCase();
   const color = COLORS[[...name].reduce((sum, c) => sum + c.charCodeAt(0), 0) % COLORS.length];
 

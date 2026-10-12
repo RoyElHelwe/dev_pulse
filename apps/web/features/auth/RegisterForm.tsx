@@ -1,5 +1,7 @@
 'use client';
 
+// Registration form for creating accounts with name, email, and password validation.
+
 import { MailCheck } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -15,6 +17,9 @@ import { OAuthButtons } from './OAuthButtons';
 import { fieldErrors, registerSchema } from './schemas';
 import type { SignInResponse } from './types';
 
+const MAX_DISPLAY_NAME_LENGTH = 50;
+
+/** Form component for creating a new user account with client-side schema validation. */
 export function RegisterForm() {
   const router = useRouter();
   const params = useSearchParams();
@@ -81,7 +86,7 @@ export function RegisterForm() {
       <OAuthButtons redirect={redirect} />
       <form onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
         {formError && <Alert tone="error">{formError}</Alert>}
-        <TextField label="Your name" name="displayName" autoComplete="name" maxLength={50} error={errors.displayName} />
+        <TextField label="Your name" name="displayName" autoComplete="name" maxLength={MAX_DISPLAY_NAME_LENGTH} error={errors.displayName} />
         <TextField
           label="Email"
           name="email"

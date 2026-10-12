@@ -1,8 +1,12 @@
+// Mirror of apps/web/game/layout/geometry.ts (itemBounds, seatPoint, numberedDesks, overlaps, Rect) and
+// apps/web/game/constants.ts (TILE) plus apps/web/game/render/furniture.ts (solid flags = SOLID): change both together.
+// They cannot share a package because the Docker build contexts are per app (see docs/code/layout.md).
+
 import type { Furniture, FurnitureKind, OfficeLayout, Wall } from './types';
 
-// Same numbers as the game (apps/web/game): keep in sync.
+/** Size of a single grid tile in pixels. */
 export const TILE = 32;
-const WALL = { solid: { thickness: 10, face: 34 }, glass: { thickness: 6, face: 18 } };
+const WALL = { solid: { thickness: 10 }, glass: { thickness: 6 } };
 
 /** Furniture you can't walk through (rugs, chairs, lamps... you can). */
 export const SOLID: Record<FurnitureKind, boolean> = {
@@ -11,6 +15,7 @@ export const SOLID: Record<FurnitureKind, boolean> = {
   divider: true,
   meetingTable: true,
   tv: false,
+  board: true,
   sofa: true,
   armchair: true,
   coffeeTable: true,
@@ -23,8 +28,12 @@ export const SOLID: Record<FurnitureKind, boolean> = {
   stool: false,
   beanbag: true,
   floorLamp: false,
+  foosball: true,
+  cardTable: true,
+  legoBoard: true,
 };
 
+/** Axis-aligned rectangle with position and dimensions. */
 export interface Rect {
   x: number;
   y: number;
@@ -40,15 +49,15 @@ export function itemBounds(item: Furniture): Rect {
   return { x: item.x - w / 2, y: item.y - h / 2, w, h };
 }
 
-/** What blocks the player for a wall, in pixels (the wall and its visible face). */
+/** What blocks the player for a wall, in pixels: its footprint (the tall face is only drawn). */
 export function wallRect(wall: Wall): Rect {
-  const { thickness, face } = WALL[wall.kind];
+  const { thickness } = WALL[wall.kind];
   if (wall.y1 === wall.y2) {
     return {
       x: Math.min(wall.x1, wall.x2) * TILE,
       y: wall.y1 * TILE - thickness / 2,
       w: Math.abs(wall.x2 - wall.x1) * TILE,
-      h: thickness + (wall.face === false ? 0 : face),
+      h: thickness,
     };
   }
   return {
@@ -67,10 +76,12 @@ export function seatPoint(desk: Furniture) {
   return { x: desk.x - Math.sin(angle) * distance, y: desk.y + Math.cos(angle) * distance };
 }
 
+/** Tests whether two axis-aligned rectangles intersect, with an optional inner margin tolerance. */
 export function overlaps(a: Rect, b: Rect, margin = 0) {
   return a.x + margin < b.x + b.w && b.x + margin < a.x + a.w && a.y + margin < b.y + b.h && b.y + margin < a.y + a.h;
 }
 
+/** Converts a rectangle with tile-based coordinates and dimensions into pixel units. */
 export function toPixels(r: Rect): Rect {
   return { x: r.x * TILE, y: r.y * TILE, w: r.w * TILE, h: r.h * TILE };
 }

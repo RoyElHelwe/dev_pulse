@@ -1,11 +1,11 @@
-// The office layout, loaded from the API (GET /api/workspace). Same shape as
-// apps/api/src/office/layout/types.ts (keep both in sync). Units are tiles.
+// Mirror of apps/api/src/office/layout/types.ts (plus web-only Zone types): change both together.
 
-export type FloorKind = 'oak' | 'carpet' | 'terrazzo';
+type FloorKind = 'oak' | 'carpet' | 'terrazzo';
 
 /** Meeting rooms and lounges become zones (voice calls, chill room...). */
-export type RoomKind = 'open' | 'meeting' | 'lounge';
+export type RoomKind = 'open' | 'meeting' | 'lounge' | 'chill';
 
+/** A distinct room boundary with floor type, color tint, and room role. */
 export interface Room {
   id: string;
   name: string;
@@ -30,12 +30,14 @@ export interface Wall {
   face?: boolean;
 }
 
+/** Supported furniture item classifications available for office layouts. */
 export type FurnitureKind =
   | 'desk'
   | 'chair'
   | 'divider'
   | 'meetingTable'
   | 'tv'
+  | 'board'
   | 'sofa'
   | 'armchair'
   | 'coffeeTable'
@@ -47,7 +49,10 @@ export type FurnitureKind =
   | 'barTable'
   | 'stool'
   | 'beanbag'
-  | 'floorLamp';
+  | 'floorLamp'
+  | 'foosball'
+  | 'cardTable'
+  | 'legoBoard';
 
 /**
  * A piece of furniture, centred on (x, y), with its unrotated size w × h.
@@ -64,6 +69,7 @@ export interface Furniture {
   color?: number;
 }
 
+/** Complete office layout definition including dimensions, rooms, walls, furniture, and spawn. */
 export interface OfficeLayout {
   width: number;
   height: number;
@@ -71,11 +77,14 @@ export interface OfficeLayout {
   walls: Wall[];
   furniture: Furniture[];
   spawn: { x: number; y: number };
+  /** Generated offices: what to build the same office again from (reset in the editor). */
+  generated?: { teamSize: number; seed: string };
 }
 
 /** Areas the game reports to the features (meeting call, chill room, desk). */
 export type ZoneType = 'meeting' | 'chill' | 'desk';
 
+/** Rectangular trigger area reported to engine features (e.g., proximity voice, desk ownership). */
 export interface Zone {
   type: ZoneType;
   id: string;

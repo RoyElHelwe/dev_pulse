@@ -1,12 +1,16 @@
 'use client';
 
+// Checks every layer of the stack: browser -> nginx (HTTPS) -> api -> postgres,
+// plus the websocket path used by the game and voice features.
+
 import { useEffect, useState } from 'react';
 import { io } from 'socket.io-client';
 
+const WS_PING_TIMEOUT_MS = 3000;
+
 type Status = 'checking' | 'ok' | 'error';
 
-// Checks every layer of the stack: browser -> nginx (HTTPS) -> api -> postgres,
-// plus the websocket path used by the game and voice features.
+/** Live system status monitor testing API, database, and WebSocket connectivity. */
 export function StackStatus() {
   const [api, setApi] = useState<Status>('checking');
   const [db, setDb] = useState<Status>('checking');
@@ -27,7 +31,7 @@ export function StackStatus() {
     // Default transports: a quick HTTP handshake, then an upgrade to WebSocket.
     const socket = io();
     socket.on('connect', async () => {
-      const reply = await socket.timeout(3000).emitWithAck('ping').catch(() => null);
+      const reply = await socket.timeout(WS_PING_TIMEOUT_MS).emitWithAck('ping').catch(() => null);
       setWs(reply === 'pong' ? 'ok' : 'error');
     });
     socket.on('connect_error', () => setWs('error'));

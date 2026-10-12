@@ -1,3 +1,8 @@
+/**
+ * Service managing desk assignment, member movements, and automatic
+ * seat synchronization following layout changes.
+ */
+
 import { Injectable, Logger } from '@nestjs/common';
 import { FormError } from '../common/form-error';
 import { numberedDesks } from '../office/layout/geometry';
@@ -6,18 +11,18 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CAN_MANAGE, MembershipService } from './membership.service';
 import { WorkspaceEvents } from './workspace-events';
 
+const MAX_SYNC_RETRIES = 2;
+
 /** Who sits where: shown as name plates on the desks. */
 export interface DeskOwner {
   deskId: string;
   userId: string;
   name: string;
+  /** Their character: desks decorate themselves for their owner. */
+  character: string;
 }
 
-/**
- * One desk per member. Everyone gets a free desk when they join (first come,
- * first served, in desk order). Desks follow the office: after an edit, people
- * keep their desk if it still exists, the others get a free one.
- */
+/** Manages desk reservations, automatic member allocations, and desk state sync. */
 @Injectable()
 export class DesksService {
   private readonly logger = new Logger(DesksService.name);
@@ -28,12 +33,13 @@ export class DesksService {
     private readonly events: WorkspaceEvents,
   ) {}
 
+  /** Lists all assigned desks and their occupying members in the workspace. */
   async list(workspaceId: string): Promise<DeskOwner[]> {
     const members = await this.prisma.workspaceMember.findMany({
       where: { workspaceId, deskId: { not: null } },
       include: { user: { select: { displayName: true } } },
     });
-    return members.map((m) => ({ deskId: m.deskId!, userId: m.userId, name: m.user.displayName }));
+    return members.map((m) => ({ deskId: m.deskId!, userId: m.userId, name: m.user.displayName, character: m.character }));
   }
 
   /** Gives every member a desk that exists (call after joins, removals and layout changes). */
@@ -66,7 +72,7 @@ export class DesksService {
       if (changed) this.publish(workspaceId);
     } catch (error) {
       // Two joins at the same moment can pick the same desk: try again once.
-      if (attempt < 2) return this.sync(workspaceId, attempt + 1);
+      if (attempt < MAX_SYNC_RETRIES) return this.sync(workspaceId, attempt + 1);
       this.logger.warn(`desk sync failed for ${workspaceId}: ${String(error)}`);
     }
   }
@@ -92,7 +98,41 @@ export class DesksService {
     await this.publish(me.workspaceId);
   }
 
+  /** Moves the calling member to the specified vacant desk in their workspace. */
+  async move(userId: string, deskId: string): Promise<void> {
+    const member = await this.membership.require(userId);
+    const layout = member.workspace.layout as unknown as OfficeLayout;
+    if (!numberedDesks(layout).some((d) => d.desk.id === deskId)) {
+      throw new FormError('NO_SUCH_DESK', 'This desk no longer exists.', 'deskId');
+    }
+    if (member.deskId === deskId) return;
+
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        const sitter = await tx.workspaceMember.findFirst({
+          where: { workspaceId: member.workspaceId, deskId },
+        });
+        if (sitter && sitter.userId !== userId) {
+          throw new FormError('DESK_TAKEN', 'Someone already sits at this desk.', 'deskId');
+        }
+        await tx.workspaceMember.update({
+          where: { userId },
+          data: { deskId },
+        });
+      });
+    } catch (error) {
+      // WHY: Prisma code P2002 indicates a unique constraint violation if two members claim the same desk concurrently
+      if ((error as { code?: string })?.code === 'P2002') {
+        throw new FormError('DESK_TAKEN', 'Someone already sits at this desk.', 'deskId');
+      }
+      throw error;
+    }
+
+    await this.publish(member.workspaceId);
+  }
+
   private async publish(workspaceId: string) {
     this.events.emit({ type: 'desks', workspaceId, desks: await this.list(workspaceId) });
   }
 }
+

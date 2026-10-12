@@ -1,5 +1,7 @@
 'use client';
 
+// Card allowing users to change their password or set an initial password for OAuth accounts.
+
 import { useState } from 'react';
 import { Alert } from '@/components/ui/Alert';
 import { Button } from '@/components/ui/Button';

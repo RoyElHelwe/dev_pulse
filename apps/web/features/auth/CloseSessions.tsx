@@ -1,5 +1,7 @@
 'use client';
 
+// Emergency security page for revoking all active account sessions using an emailed link.
+
 import { CircleX, LogOut } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';

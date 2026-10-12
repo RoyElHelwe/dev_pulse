@@ -1,5 +1,7 @@
 'use client';
 
+// Form for setting a new password using a reset token received by email.
+
 import { CircleCheck } from 'lucide-react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
@@ -11,6 +13,7 @@ import { api, ApiError } from '@/lib/api';
 import { AuthShell } from './AuthShell';
 import { fieldErrors, newPasswordSchema } from './schemas';
 
+/** Form for completing password recovery by submitting a new password with a reset token. */
 export function ResetPasswordForm() {
   const token = useSearchParams().get('token');
   const [errors, setErrors] = useState<Record<string, string>>({});

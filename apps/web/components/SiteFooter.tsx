@@ -1,3 +1,5 @@
+// Global footer displaying copyright notice and required legal/status links.
+
 import Link from 'next/link';
 import { cn } from '@/lib/cn';
 

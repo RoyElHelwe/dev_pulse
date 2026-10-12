@@ -1,3 +1,7 @@
+/**
+ * Health check WebSocket gateway.
+ * Verifies WebSocket upgrade and transport proxying through reverse proxies without requiring authentication.
+ */
 import { type OnGatewayConnection, SubscribeMessage, WebSocketGateway } from '@nestjs/websockets';
 import type { Socket } from 'socket.io';
 import { TokensService } from '../auth/tokens.service';
@@ -6,6 +10,7 @@ import { authenticateSocket } from '../common/auth/socket-auth';
 // Smallest possible Socket.IO gateway: proves websockets work through nginx.
 // Feature gateways should use their own namespace, e.g.
 // @WebSocketGateway({ namespace: '/office' }), and disconnect anonymous users.
+/** Minimal gateway testing WebSocket upgrade and reverse-proxy transport connectivity. */
 @WebSocketGateway()
 export class HealthGateway implements OnGatewayConnection {
   constructor(private readonly tokens: TokensService) {}
@@ -27,3 +32,4 @@ export class HealthGateway implements OnGatewayConnection {
     return { userId: (socket.data.user?.id as string | undefined) ?? null };
   }
 }
+

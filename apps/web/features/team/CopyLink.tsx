@@ -1,11 +1,18 @@
+// Utility component displaying a read-only link alongside a clipboard copy button.
+// Used in team invitation flows and shareable links.
+
 'use client';
 
 import { Check, Copy } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/Button';
 
-/** A link with a copy button (invitation links work even without email set up). */
-export function CopyLink({ link }: { link: string }) {
+interface CopyLinkProps {
+  link: string;
+}
+
+/** Displays a URL in a styled container with a one-click copy button. */
+export function CopyLink({ link }: CopyLinkProps) {
   const [copied, setCopied] = useState(false);
   return (
     <div className="flex items-center gap-2 rounded-xl bg-zinc-50 p-1.5 pl-3 ring-1 ring-zinc-200">

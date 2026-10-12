@@ -1,24 +1,33 @@
+/**
+ * REST controller exposing endpoints for workspace configuration, layout
+ * management, member settings, and desk assignments.
+ */
+
 import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Put } from '@nestjs/common';
 import { IsIn, IsString, MaxLength } from 'class-validator';
 import type { AuthUser } from '../common/auth/auth-user';
 import { CurrentUser } from '../common/auth/current-user.decorator';
-import { CreateWorkspaceDto, DeskDto, RenameWorkspaceDto, SwitchTemplateDto, UpdateLayoutDto, UpdateMeDto } from './dto';
+import { CreateWorkspaceDto, DeskDto, MyDeskDto, RenameWorkspaceDto, SwitchTemplateDto, UpdateLayoutDto, UpdateMeDto, WingDto } from './workspace.dto';
 import { DesksService } from './desks.service';
 import { MembersService } from './members.service';
 import { WorkspaceService } from './workspace.service';
 
+const MAX_CONFIRM_NAME_LENGTH = 60;
+
+/** Payload specifying an updated member role. */
 class RoleDto {
   @IsIn(['ADMIN', 'MEMBER'])
   role: 'ADMIN' | 'MEMBER';
 }
 
+/** Confirmation payload requiring the exact office name before deletion. */
 class DeleteWorkspaceDto {
   @IsString()
-  @MaxLength(60)
+  @MaxLength(MAX_CONFIRM_NAME_LENGTH)
   confirmName: string;
 }
 
-/** "My workspace": every user belongs to at most one. */
+/** Exposes HTTP endpoints for managing workspace resources, layouts, and members. */
 @Controller('workspace')
 export class WorkspaceController {
   constructor(
@@ -51,6 +60,22 @@ export class WorkspaceController {
   @Patch('me')
   updateMe(@CurrentUser() user: AuthUser, @Body() dto: UpdateMeDto) {
     return this.workspaces.updateMe(user.id, dto);
+  }
+
+  @Put('me/desk')
+  @HttpCode(204)
+  moveDesk(@CurrentUser() user: AuthUser, @Body() dto: MyDeskDto) {
+    return this.desks.move(user.id, dto.deskId);
+  }
+
+  @Post('wings')
+  addWing(@CurrentUser() user: AuthUser, @Body() dto: WingDto) {
+    return this.workspaces.addWing(user.id, dto);
+  }
+
+  @Post('wings/chill')
+  addChillWing(@CurrentUser() user: AuthUser, @Body() dto: WingDto) {
+    return this.workspaces.addChillWing(user.id, dto);
   }
 
   @Put('template')
@@ -86,3 +111,4 @@ export class WorkspaceController {
     return this.members.remove(user.id, target);
   }
 }
+

@@ -1,3 +1,5 @@
+// Landing page highlighting virtual office features and entry links.
+
 import { ArrowRight, Headphones, KanbanSquare, Users } from 'lucide-react';
 import Link from 'next/link';
 import { SiteFooter } from '@/components/SiteFooter';
@@ -11,6 +13,7 @@ const FEATURES = [
   { icon: KanbanSquare, title: 'Work from your desk', text: 'Your tasks live at your desk, updated live for the whole team.' },
 ];
 
+/** Landing page displaying product highlights and navigation into the office. */
 export default function HomePage() {
   return (
     <div className="relative min-h-dvh overflow-hidden">

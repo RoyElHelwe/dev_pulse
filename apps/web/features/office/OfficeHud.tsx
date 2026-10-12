@@ -1,6 +1,11 @@
+/**
+ * Heads-up display (HUD) overlay for the office canvas.
+ * Houses workspace branding, location banner, navigation controls, and help hints.
+ */
+
 'use client';
 
-import { LocateFixed, MapPin, Minus, PencilRuler, Plus, UserPlus, WifiOff } from 'lucide-react';
+import { KanbanSquare, LocateFixed, MapPin, Minus, PencilRuler, Plus, UserPlus } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { IconButton } from '@/components/ui/IconButton';
@@ -10,16 +15,19 @@ import { Panel } from '@/components/ui/Panel';
 import { UserMenu } from '@/features/auth/UserMenu';
 import { buttonStyles } from '@/components/ui/Button';
 import { useAuth } from '@/features/auth/AuthProvider';
+import { useOpenTaskCounts } from '@/features/tasks/taskStore';
 import { canManage, type MyWorkspace } from '@/features/workspace/types';
 import type { OfficeController } from '@/game/createGame';
 import { deriveZones } from '@/game/layout/derive';
 import { cn } from '@/lib/cn';
-import { CharacterSwitcher } from './CharacterSwitcher';
+import { useKeyName } from '@/features/settings/keybindStore';
 import type { Presence } from './connection';
 import { officeEvents, type ZoneEvent } from './events';
 import { Joystick } from './Joystick';
 import { Minimap } from './Minimap';
 import { PresenceList } from './PresenceList';
+
+const HELP_HINT_TIMEOUT_MS = 8000;
 
 const ZONE_LABEL: Record<ZoneEvent['type'], string> = {
   meeting: 'Meeting room',
@@ -31,19 +39,23 @@ interface OfficeHudProps {
   controller: OfficeController | null;
   workspace: MyWorkspace | null;
   people: Presence[];
-  toast: string;
-  /** False while the live connection is lost (it reconnects by itself). */
-  online: boolean;
   /** The office editor is open (it brings its own panels). */
   editing: boolean;
   onEdit(): void;
+  /** The task board is open (it floats in from the right and pushes this whole HUD off to the left). */
+  boardOpen: boolean;
+  onBoard(): void;
 }
 
-export function OfficeHud({ controller, workspace, people, toast, online, editing, onEdit }: OfficeHudProps) {
+/** Renders workspace controls, minimap, joystick, and status badges around the office. */
+export function OfficeHud({ controller, workspace, people, editing, onEdit, boardOpen, onBoard }: OfficeHudProps) {
   const zone = useCurrentZone();
+  const openCounts = useOpenTaskCounts();
+  const myOpen = openCounts.get(useAuth().user?.id ?? '') ?? 0;
   const nearby = useNearby();
   const { user } = useAuth();
   const manager = canManage(workspace?.role);
+  const interactKey = useKeyName('interact');
   const [showHelp, setShowHelp] = useState(true);
   const [touch, setTouch] = useState(false);
   useEffect(() => setTouch(window.matchMedia('(pointer: coarse)').matches), []);
@@ -66,7 +78,7 @@ export function OfficeHud({ controller, workspace, people, toast, online, editin
 
   // The controls hint fades out after a few seconds.
   useEffect(() => {
-    const timer = setTimeout(() => setShowHelp(false), 8000);
+    const timer = setTimeout(() => setShowHelp(false), HELP_HINT_TIMEOUT_MS);
     return () => clearTimeout(timer);
   }, []);
 
@@ -81,7 +93,6 @@ export function OfficeHud({ controller, workspace, people, toast, online, editin
             <Plus className="size-4" />
           </IconButton>
         </Panel>
-        {toast && <Toast text={toast} />}
       </>
     );
   }
@@ -118,6 +129,21 @@ export function OfficeHud({ controller, workspace, people, toast, online, editin
             </Link>
           </Panel>
         )}
+        <Panel className="p-1">
+          <button
+            type="button"
+            onClick={onBoard}
+            aria-expanded={boardOpen}
+            className={buttonStyles('ghost', 'sm', cn('h-9', boardOpen && 'bg-zinc-900/5 text-zinc-900'))}
+          >
+            <KanbanSquare className="size-4" /> Board
+            {myOpen > 0 && (
+              <span className="rounded-full bg-emerald-100 px-1.5 text-xs font-semibold text-emerald-800" title="Your open issues">
+                {myOpen}
+              </span>
+            )}
+          </button>
+        </Panel>
         <PresenceList people={people} placeOf={placeOf} myZone={zone?.id ?? null} myStatus={workspace?.status ?? null} nearby={nearby} />
         <Panel className="flex items-center gap-0.5 p-1">
           <IconButton
@@ -143,15 +169,15 @@ export function OfficeHud({ controller, workspace, people, toast, online, editin
             <LocateFixed className="size-4" />
           </IconButton>
         </Panel>
-        <Panel className="hidden p-1 sm:block">
-          <UserMenu />
+        <Panel className="p-1">
+          <UserMenu compact profile={workspace ? { character: workspace.character, status: workspace.status } : undefined} />
         </Panel>
       </div>
 
       {/* Bottom: how to move. */}
       <Panel
         className={cn(
-          'absolute bottom-5 left-1/2 hidden -translate-x-1/2 items-center gap-4 px-4 py-2.5 text-sm text-zinc-600 transition duration-700',
+          'absolute bottom-20 left-1/2 hidden -translate-x-1/2 items-center gap-4 px-4 py-2.5 text-sm text-zinc-600 transition duration-700',
           !touch && 'sm:flex',
           showHelp ? 'opacity-100' : 'pointer-events-none translate-y-2 opacity-0',
         )}
@@ -170,7 +196,7 @@ export function OfficeHud({ controller, workspace, people, toast, online, editin
         </span>
         <span className="h-4 w-px bg-zinc-200" />
         <span className="flex items-center gap-1.5">
-          <Kbd>E</Kbd> to use
+          <Kbd>{interactKey}</Kbd> to use
         </span>
         <span className="h-4 w-px bg-zinc-200" />
         <span className="flex items-center gap-1.5">
@@ -178,21 +204,8 @@ export function OfficeHud({ controller, workspace, people, toast, online, editin
         </span>
       </Panel>
 
-      {workspace && user && (
-        <CharacterSwitcher name={user.displayName} character={workspace.character} status={workspace.status} />
-      )}
       {workspace && !touch && <Minimap controller={controller} layout={workspace.layout} />}
       <Joystick controller={controller} />
-
-      {!online && (
-        <Panel role="status" className="absolute top-20 left-1/2 flex -translate-x-1/2 items-center gap-2 px-4 py-2.5 text-sm font-medium text-amber-800">
-          <WifiOff className="size-4" aria-hidden="true" />
-          Connection lost. Reconnecting…
-          <span className="size-3.5 animate-spin rounded-full border-2 border-amber-200 border-t-amber-600" />
-        </Panel>
-      )}
-
-      {toast && <Toast text={toast} />}
 
       {/* Loading state. */}
       {!controller && (
@@ -204,14 +217,6 @@ export function OfficeHud({ controller, workspace, people, toast, online, editin
         </div>
       )}
     </>
-  );
-}
-
-function Toast({ text }: { text: string }) {
-  return (
-    <Panel role="status" className="absolute bottom-20 left-1/2 -translate-x-1/2 px-4 py-2.5 text-sm font-medium text-zinc-700">
-      {text}
-    </Panel>
   );
 }
 

@@ -1,7 +1,18 @@
+// SVG floor plan renderer depicting office rooms, walls, and furniture.
+// Used in office template previews, minimaps, and layout cards.
+
 import { memo } from 'react';
-import { itemBounds } from '@/game/layout/derive';
+import { itemBounds } from '@/game/layout/geometry';
 import type { FurnitureKind, OfficeLayout } from '@/game/layout/types';
 import { cn } from '@/lib/cn';
+import { hexColor } from '@/lib/color';
+
+const FLOOR_CORNER_RADIUS_GRID = 1.2;
+const MAX_FURNITURE_CORNER_RADIUS_GRID = 0.3;
+const RUG_OPACITY = 0.9;
+const DESK_BORDER_STROKE_WIDTH = 0.08;
+const GLASS_WALL_STROKE_WIDTH = 0.25;
+const SOLID_WALL_STROKE_WIDTH = 0.4;
 
 const FLOOR: Record<string, string> = { oak: '#dcc29e', terrazzo: '#ebe6de' };
 
@@ -20,9 +31,7 @@ const FURNITURE_COLOR: Partial<Record<FurnitureKind, string>> = {
   tv: '#111417',
 };
 
-const hex = (c?: number) => (c === undefined ? undefined : `#${c.toString(16).padStart(6, '0')}`);
-
-/** A small floor plan of an office (rooms, walls, furniture), as SVG. */
+/** Renders a miniature SVG architectural floor plan of an office layout. */
 export const LayoutPreview = memo(function LayoutPreview({ layout, className }: { layout: OfficeLayout; className?: string }) {
   const items = [...layout.furniture].sort((a, b) => Number(a.kind !== 'rug') - Number(b.kind !== 'rug'));
   return (
@@ -32,14 +41,14 @@ export const LayoutPreview = memo(function LayoutPreview({ layout, className }: 
       role="img"
       aria-label="Floor plan"
     >
-      <rect x="-0.5" y="-0.5" width={layout.width + 1} height={layout.height + 1} rx="1.2" fill="#d6d1c9" />
+      <rect x="-0.5" y="-0.5" width={layout.width + 1} height={layout.height + 1} rx={FLOOR_CORNER_RADIUS_GRID} fill="#d6d1c9" />
       {layout.rooms.map((r) => (
-        <rect key={r.id} x={r.x} y={r.y} width={r.w} height={r.h} fill={hex(r.color) ?? FLOOR[r.floor]} />
+        <rect key={r.id} x={r.x} y={r.y} width={r.w} height={r.h} fill={hexColor(r.color) ?? FLOOR[r.floor]} />
       ))}
       {items.map((f) => {
         const b = itemBounds(f);
         const round = f.kind === 'plant' || f.kind === 'stool' || f.kind === 'beanbag';
-        const fill = FURNITURE_COLOR[f.kind] ?? hex(f.color) ?? '#9ca3af';
+        const fill = FURNITURE_COLOR[f.kind] ?? hexColor(f.color) ?? '#9ca3af';
         if (f.kind === 'floorLamp') return null;
         return round ? (
           <circle key={f.id} cx={f.x} cy={f.y} r={Math.min(b.w, b.h) / 2} fill={fill} />
@@ -50,11 +59,11 @@ export const LayoutPreview = memo(function LayoutPreview({ layout, className }: 
             y={b.y}
             width={b.w}
             height={b.h}
-            rx={Math.min(0.3, b.w / 3, b.h / 3)}
+            rx={Math.min(MAX_FURNITURE_CORNER_RADIUS_GRID, b.w / 3, b.h / 3)}
             fill={fill}
-            opacity={f.kind === 'rug' ? 0.9 : 1}
+            opacity={f.kind === 'rug' ? RUG_OPACITY : 1}
             stroke={f.kind === 'desk' ? '#d8d0c4' : undefined}
-            strokeWidth={0.08}
+            strokeWidth={DESK_BORDER_STROKE_WIDTH}
           />
         );
       })}
@@ -66,7 +75,7 @@ export const LayoutPreview = memo(function LayoutPreview({ layout, className }: 
           x2={w.x2}
           y2={w.y2}
           stroke={w.kind === 'glass' ? '#8fc5d6' : '#2d3236'}
-          strokeWidth={w.kind === 'glass' ? 0.25 : 0.4}
+          strokeWidth={w.kind === 'glass' ? GLASS_WALL_STROKE_WIDTH : SOLID_WALL_STROKE_WIDTH}
           strokeLinecap="square"
         />
       ))}

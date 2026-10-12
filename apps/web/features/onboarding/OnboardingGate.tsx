@@ -1,3 +1,6 @@
+// Routing gate ensuring only signed-in users without a workspace view onboarding.
+// Mounted at the /onboarding route.
+
 'use client';
 
 import { useRouter } from 'next/navigation';
@@ -5,7 +8,7 @@ import { useEffect } from 'react';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { OnboardingWizard } from './OnboardingWizard';
 
-/** Only for signed-in people without an office; everyone else goes where they belong. */
+/** Route guard redirecting signed-out or already-assigned users away from onboarding. */
 export function OnboardingGate() {
   const { status, user } = useAuth();
   const router = useRouter();

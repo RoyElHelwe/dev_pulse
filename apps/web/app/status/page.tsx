@@ -1,11 +1,15 @@
+// Public system status route displaying live infrastructure diagnostics.
+
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { SiteFooter } from '@/components/SiteFooter';
 import { StackStatus } from '@/components/StackStatus';
 import { Logo } from '@/components/ui/Logo';
 
+/** Sets the browser tab title for the public system health and status page. */
 export const metadata: Metadata = { title: 'Status · Dev Pulse' };
 
+/** Public system status page checking API, database, and real-time connectivity. */
 export default function StatusPage() {
   return (
     <div className="mx-auto flex min-h-dvh max-w-xl flex-col px-4 sm:px-6">

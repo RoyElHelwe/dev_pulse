@@ -1,3 +1,6 @@
+// Landing page component for users accepting or declining workspace invitation tokens.
+// Mounted at the /invite/[token] route.
+
 'use client';
 
 import { CircleX, PartyPopper } from 'lucide-react';
@@ -7,9 +10,9 @@ import { useEffect, useState } from 'react';
 import { Alert } from '@/components/ui/Alert';
 import { Button, buttonStyles } from '@/components/ui/Button';
 import { useAuth } from '@/features/auth/AuthProvider';
-import { CharacterPreview } from '@/features/workspace/CharacterPreview';
+import { CharacterStudio } from '@/features/workspace/CharacterStudio';
 import { ROLE_LABEL, type Role } from '@/features/workspace/types';
-import { LOOK_KEYS } from '@/game/objects/looks';
+import { PRESET_KEYS } from '@/game/art/recipe';
 import { api, ApiError } from '@/lib/api';
 import { cn } from '@/lib/cn';
 
@@ -23,6 +26,10 @@ interface Invitation {
   accountExists: boolean;
 }
 
+interface InvitationViewProps {
+  token: string;
+}
+
 const CLOSED: Record<Exclude<Invitation['status'], 'pending'>, string> = {
   expired: 'This invitation has expired. Ask the organiser to send a new one.',
   accepted: 'This invitation was already used.',
@@ -30,17 +37,17 @@ const CLOSED: Record<Exclude<Invitation['status'], 'pending'>, string> = {
   revoked: 'This invitation was cancelled by the organiser.',
 };
 
-/** The page an invitation email links to. */
-export function InvitationView({ token }: { token: string }) {
+/** View displaying workspace invitation details and handling user acceptance or decline. */
+export function InvitationView({ token }: InvitationViewProps) {
   const { status, user, reloadUser, signOut } = useAuth();
   const router = useRouter();
   const [invitation, setInvitation] = useState<Invitation | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState<'accept' | 'decline' | null>(null);
   const [declined, setDeclined] = useState(false);
-  const [character, setCharacter] = useState<string>(LOOK_KEYS[0]);
+  const [character, setCharacter] = useState<string>(PRESET_KEYS[0]);
   // A random suggestion, chosen after mounting (no server/client mismatch).
-  useEffect(() => setCharacter(LOOK_KEYS[Math.floor(Math.random() * LOOK_KEYS.length)]), []);
+  useEffect(() => setCharacter(PRESET_KEYS[Math.floor(Math.random() * PRESET_KEYS.length)]), []);
 
   useEffect(() => {
     api<Invitation>(`/invitations/${encodeURIComponent(token)}`).then(setInvitation, (err) =>
@@ -54,7 +61,7 @@ export function InvitationView({ token }: { token: string }) {
     try {
       await api(`/invitations/${encodeURIComponent(token)}/accept`, { body: { character } });
       await reloadUser();
-      router.replace('/office'); // straight into the office
+      router.replace('/office');
     } catch (err) {
       setBusy(null);
       setError(err instanceof ApiError ? err.message : 'Could not reach the server.');
@@ -76,9 +83,10 @@ export function InvitationView({ token }: { token: string }) {
 
   const here = `/invite/${token}`;
   const sameAccount = user?.email === invitation.email;
+  const showPicker = status === 'signed-in' && sameAccount && !user?.workspace;
 
   return (
-    <div className="mx-auto max-w-md text-center">
+    <div className={cn('mx-auto text-center', showPicker ? 'max-w-2xl' : 'max-w-md')}>
       <span className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-700">
         <PartyPopper className="size-7" aria-hidden="true" />
       </span>
@@ -129,28 +137,11 @@ export function InvitationView({ token }: { token: string }) {
           </Alert>
         )}
 
-        {status === 'signed-in' && sameAccount && !user?.workspace && (
+        {showPicker && (
           <>
             <div className="text-left">
               <p className="mb-2 text-sm font-medium text-zinc-700">Pick your character</p>
-              <div className="grid grid-cols-4 gap-2" role="radiogroup" aria-label="Character">
-                {LOOK_KEYS.map((key) => (
-                  <button
-                    key={key}
-                    type="button"
-                    role="radio"
-                    aria-checked={character === key}
-                    aria-label={key}
-                    onClick={() => setCharacter(key)}
-                    className={cn(
-                      'rounded-xl bg-zinc-50 p-1.5 ring-2 transition',
-                      character === key ? 'bg-emerald-50 ring-emerald-500' : 'ring-transparent hover:ring-zinc-300',
-                    )}
-                  >
-                    <CharacterPreview character={key} className="mx-auto h-12" />
-                  </button>
-                ))}
-              </div>
+              <CharacterStudio value={character} onChange={setCharacter} disabled={busy !== null} />
             </div>
             <Button size="lg" className="rounded-xl" loading={busy === 'accept'} disabled={busy !== null} onClick={accept}>
               Join {invitation.workspaceName}

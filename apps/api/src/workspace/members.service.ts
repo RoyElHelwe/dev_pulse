@@ -1,3 +1,7 @@
+/**
+ * Service managing workspace memberships, role transitions, and member removals.
+ */
+
 import { Injectable } from '@nestjs/common';
 import { FormError } from '../common/form-error';
 import { PrismaService } from '../prisma/prisma.service';
@@ -5,6 +9,7 @@ import { DesksService } from './desks.service';
 import { MembershipService } from './membership.service';
 import { WorkspaceEvents } from './workspace-events';
 
+/** Handles member querying, role elevation, and workspace departure logic. */
 @Injectable()
 export class MembersService {
   constructor(
@@ -14,6 +19,7 @@ export class MembersService {
     private readonly desks: DesksService,
   ) {}
 
+  /** Lists all members belonging to the caller's workspace ordered by role and join date. */
   async list(userId: string) {
     const me = await this.membership.require(userId);
     const members = await this.prisma.workspaceMember.findMany({
@@ -62,3 +68,4 @@ export class MembersService {
     return target;
   }
 }
+
