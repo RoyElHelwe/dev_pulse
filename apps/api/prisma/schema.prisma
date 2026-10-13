@@ -458,5 +458,7 @@ model ChainDeployment {
   chainId     Int      @id
   coinAddress String
   shopAddress String
+  /// Version of the contracts' code (compile-contracts.mjs); a new version is deployed again.
+  codeHash    String?
   deployedAt  DateTime @default(now())
 }

@@ -6,6 +6,7 @@
 import { Injectable } from '@nestjs/common';
 import { CoinTxKind, Role } from '@prisma/client';
 import { ChainService } from '../chain/chain.service';
+import { build } from '../chain/contracts';
 import { WalletsService } from '../chain/wallets.service';
 import { FormError } from '../common/form-error';
 import { OfficeGateway } from '../office/office.gateway';
@@ -51,6 +52,55 @@ export class KitchenService {
       menu,
       wallet: await this.coins.wallet(userId),
       canGrant: me.role === Role.OWNER || me.role === Role.ADMIN,
+    };
+  }
+
+  /**
+   * The two contracts as they are on-chain right now: address, live state read from the chain,
+   * and their Solidity source (for the café's Contracts tab).
+   */
+  async contracts(userId: string) {
+    await this.membership.require(userId);
+    const { chainId, provider, coin, shop, relayerAddress } = this.chain.get();
+    const { sources, compiler } = build();
+    const items = await Promise.all(
+      MENU.map(async (m) => {
+        const [name, price, active] = (await shop.items(m.id)) as [string, bigint, boolean];
+        return { id: m.id, name, price: fromUnits(price), active };
+      }),
+    );
+    return {
+      chainId,
+      block: await provider.getBlockNumber(),
+      compiler,
+      relayer: relayerAddress,
+      coin: {
+        address: await coin.getAddress(),
+        source: sources['PulseCoin.sol'],
+        state: {
+          name: (await coin.name()) as string,
+          symbol: (await coin.symbol()) as string,
+          decimals: Number((await coin.decimals()) as bigint),
+          totalSupply: fromUnits((await coin.totalSupply()) as bigint),
+          dailyAllowance: fromUnits((await coin.DAILY_ALLOWANCE()) as bigint),
+          dailyPeriodSeconds: Number((await coin.dailyPeriod()) as bigint),
+          relayerIsMinter: (await coin.hasRole(
+            await coin.MINTER_ROLE(),
+            relayerAddress,
+          )) as boolean,
+        },
+      },
+      shop: {
+        address: await shop.getAddress(),
+        source: sources['KitchenShop.sol'],
+        state: {
+          owner: (await shop.owner()) as string,
+          till: (await shop.till()) as string,
+          coin: (await shop.coin()) as string,
+          purchaseCount: Number((await shop.purchaseCount()) as bigint),
+          items,
+        },
+      },
     };
   }
 

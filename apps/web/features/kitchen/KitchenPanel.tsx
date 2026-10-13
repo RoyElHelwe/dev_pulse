@@ -13,6 +13,7 @@ import type { OfficeFeatureProps } from '@/features/office/types';
 import { api, ApiError } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { useEscape } from '@/lib/escape';
+import { KitchenContracts } from './KitchenContracts';
 import { KitchenLedger } from './KitchenLedger';
 import { KitchenMenu } from './KitchenMenu';
 import { KitchenWallet } from './KitchenWallet';
@@ -23,14 +24,16 @@ import {
   type Ledger,
   type MenuEntry,
   type Receipt,
+  type ContractsView,
   type TxProof,
 } from './types';
 
-type Tab = 'menu' | 'wallet' | 'ledger';
+type Tab = 'menu' | 'wallet' | 'ledger' | 'contracts';
 const TABS: { id: Tab; label: string }[] = [
   { id: 'menu', label: 'Menu' },
   { id: 'wallet', label: 'Wallet' },
   { id: 'ledger', label: 'Ledger' },
+  { id: 'contracts', label: 'Contracts' },
 ];
 
 const errorText = (err: unknown, fallback: string) =>
@@ -40,9 +43,12 @@ const errorText = (err: unknown, fallback: string) =>
 export function KitchenPanel({ socket, myId, onToast, editing }: OfficeFeatureProps) {
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<Tab>('menu');
+  const tabRef = useRef(tab);
+  tabRef.current = tab;
   const [view, setView] = useState<KitchenView | null>(null);
   const [history, setHistory] = useState<CoinTx[]>([]);
   const [ledger, setLedger] = useState<Ledger | null>(null);
+  const [contracts, setContracts] = useState<ContractsView | null>(null);
   const [members, setMembers] = useState<{ userId: string; displayName: string }[]>([]);
   const [receipt, setReceipt] = useState<Receipt | null>(null);
   const [proof, setProof] = useState<TxProof | null>(null);
@@ -64,6 +70,9 @@ export function KitchenPanel({ socket, myId, onToast, editing }: OfficeFeaturePr
       setView(v);
       setHistory(h);
       setLedger(l);
+      // The contracts' live state too, once the tab has been opened.
+      if (tabRef.current === 'contracts')
+        api<ContractsView>('/kitchen/contracts').then(setContracts, () => undefined);
       setError('');
       if (v.canGrant)
         api<{ userId: string; displayName: string }[]>('/workspace/members').then(
@@ -210,6 +219,11 @@ export function KitchenPanel({ socket, myId, onToast, editing }: OfficeFeaturePr
               setTab(t.id);
               setProof(null);
               setProofError('');
+              if (t.id === 'contracts') {
+                api<ContractsView>('/kitchen/contracts').then(setContracts, (err: unknown) =>
+                  setError(errorText(err, 'Could not read the contracts from the chain.')),
+                );
+              }
             }}
             className={cn(
               'rounded-full px-3 py-1.5 text-sm font-medium transition',
@@ -250,6 +264,8 @@ export function KitchenPanel({ socket, myId, onToast, editing }: OfficeFeaturePr
             onGrant={grant}
             onProof={showProof}
           />
+        ) : tab === 'contracts' ? (
+          <KitchenContracts contracts={contracts} wallet={view.wallet.address} />
         ) : (
           <KitchenLedger
             ledger={ledger}

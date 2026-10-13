@@ -75,7 +75,7 @@ When `DEV_LOGIN=true` is configured in `.env`, the `/login` screen displays a on
 
 ### Optional settings
 
-`make` creates `.env` with random secrets; the app works without changing anything. Emails (confirmation, password reset, invitations) are printed in `make logs s=api` until you configure `SMTP_*`. Google / GitHub / 42 sign-in buttons appear when their respective credentials are set. See [docs/AUTH.md §5](docs/AUTH.md#5-configuration-env).
+`make` creates `.env` with random secrets; the app works without changing anything. To test the kitchen café's daily coins every minute instead of every 24 h, set `CHAIN_DAILY_PERIOD_SECONDS=60` and run `make` again; the evaluation walkthrough for the café is in [docs/code/kitchen.md](docs/code/kitchen.md#how-to-evaluate-it-about-10-minutes). Emails (confirmation, password reset, invitations) are printed in `make logs s=api` until you configure `SMTP_*`. Google / GitHub / 42 sign-in buttons appear when their respective credentials are set. See [docs/AUTH.md §5](docs/AUTH.md#5-configuration-env).
 
 ### Access from other machines (LAN)
 

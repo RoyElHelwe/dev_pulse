@@ -4,22 +4,23 @@
 // and (owners / admins) giving coins to a member.
 
 import { CalendarCheck, Gift } from 'lucide-react';
-import { type FormEvent, useState } from 'react';
+import { type FormEvent, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
 import { TextField } from '@/components/ui/TextField';
 import { cn } from '@/lib/cn';
 import { Hash } from './Hash';
-import { type CoinTx, describeTx, signed, timeUntil, type WalletView } from './types';
+import { type CoinTx, describeTx, formatPeriod, signed, timeUntil, type WalletView } from './types';
 
 /** Coins for each way of earning (same values as the API's kitchen.rules.ts). */
-const EARN = [
-  ['Welcome grant', '20, once'],
-  ['Daily allowance', '5, every 24 h'],
-  ['Closing a task', '3'],
-  ['Winning a game', '2'],
-  ['From an owner or admin', 'up to 50'],
-] as const;
+const earnings = (wallet: WalletView) =>
+  [
+    ['Welcome grant', '20, once'],
+    ['Daily allowance', `${wallet.dailyAmount}, every ${formatPeriod(wallet.dailyPeriodSeconds)}`],
+    ['Closing a task', '3'],
+    ['Winning a game', '2'],
+    ['From an owner or admin', 'up to 50'],
+  ] as const;
 const DAILY_EARN_CAP = 30;
 const MAX_GRANT = 50;
 
@@ -57,6 +58,14 @@ export function KitchenWallet({
   const [amount, setAmount] = useState('5');
   const [note, setNote] = useState('');
   const [giving, setGiving] = useState(false);
+  // The countdown ticks, and the claim button comes back by itself when the period is over.
+  const [now, setNow] = useState(() => Date.now());
+  const waiting = !!wallet.nextDailyAt && Date.parse(wallet.nextDailyAt) > now;
+  useEffect(() => {
+    if (!wallet.nextDailyAt) return;
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [wallet.nextDailyAt]);
 
   const give = async (e: FormEvent) => {
     e.preventDefault();
@@ -77,18 +86,13 @@ export function KitchenWallet({
           <Hash value={wallet.address} />
         </div>
         <div className="flex flex-col items-start gap-1">
-          <Button
-            variant="secondary"
-            onClick={onClaim}
-            loading={claiming}
-            disabled={!!wallet.nextDailyAt}
-          >
+          <Button variant="secondary" onClick={onClaim} loading={claiming} disabled={waiting}>
             <CalendarCheck className="size-4" />{' '}
-            {wallet.nextDailyAt ? 'Daily coins claimed' : `Claim ${wallet.dailyAmount} daily coins`}
+            {waiting ? 'Daily coins claimed' : `Claim ${wallet.dailyAmount} daily coins`}
           </Button>
-          {wallet.nextDailyAt && (
+          {waiting && wallet.nextDailyAt && (
             <span className="text-xs text-zinc-500">
-              Next claim in {timeUntil(wallet.nextDailyAt)}
+              Next claim in {timeUntil(wallet.nextDailyAt, now)}
             </span>
           )}
         </div>
@@ -97,7 +101,7 @@ export function KitchenWallet({
       <section className="rounded-xl bg-zinc-50 p-4 ring-1 ring-zinc-200/80">
         <h3 className="text-sm font-semibold">Ways to earn PulseCoin</h3>
         <ul className="mt-2 grid gap-x-6 gap-y-1 text-sm sm:grid-cols-2">
-          {EARN.map(([what, coins]) => (
+          {earnings(wallet).map(([what, coins]) => (
             <li key={what} className="flex justify-between gap-3">
               <span className="text-zinc-600">{what}</span>
               <span className="font-medium tabular-nums">{coins}</span>

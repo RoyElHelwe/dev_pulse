@@ -108,10 +108,12 @@ export class CoinsService {
       balance: await this.balanceOf(address),
       nextDailyAt: next > Date.now() ? new Date(next).toISOString() : null,
       dailyAmount: REWARD.DAILY,
+      /** Seconds between two claims, as the contract has it (CHAIN_DAILY_PERIOD_SECONDS). */
+      dailyPeriodSeconds: Number((await coin.dailyPeriod()) as bigint),
     };
   }
 
-  /** Pays the daily allowance (once per 24 h, enforced by the PulseCoin contract). */
+  /** Pays the daily allowance (once per period, enforced by the PulseCoin contract). */
   async claimDaily(userId: string) {
     const me = await this.membership.require(userId);
     return this.exclusive(async () => {
@@ -121,7 +123,7 @@ export class CoinsService {
       if (next > Date.now())
         throw new FormError(
           'DAILY_CLAIMED',
-          'You already claimed your daily coins. Come back tomorrow.',
+          `You already claimed your daily coins. Come back in ${waitText(next - Date.now())}.`,
           undefined,
           { nextDailyAt: new Date(next).toISOString() },
         );
@@ -379,4 +381,12 @@ export class CoinsService {
       createdAt: r.createdAt.toISOString(),
     }));
   }
+}
+
+/** "3 h 5 min", "42 s": how long until the next daily claim. */
+function waitText(ms: number): string {
+  const s = Math.max(1, Math.ceil(ms / 1000));
+  if (s < 60) return `${s} s`;
+  const min = Math.ceil(s / 60);
+  return min < 60 ? `${min} min` : `${Math.floor(min / 60)} h ${min % 60} min`;
 }

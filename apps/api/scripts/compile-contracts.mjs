@@ -1,5 +1,7 @@
 // Compiles the Solidity contracts in contracts/ with solc-js into contracts/build/contracts.json
-// (ABI + bytecode per contract), read by src/chain at runtime. Run before `nest build` / `nest start`.
+// (ABI + bytecode per contract, the sources, a code hash), read by src/chain at runtime.
+// Run before `nest build` / `nest start`.
+import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
@@ -50,8 +52,18 @@ for (const file of Object.keys(sources)) {
     contracts[name] = { abi: c.abi, bytecode: `0x${c.evm.bytecode.object}` };
 }
 mkdirSync(join(dir, 'build'), { recursive: true });
+// codeHash identifies this version of the contracts: the API redeploys when it changes.
+const codeHash = createHash('sha256')
+  .update(
+    Object.values(contracts)
+      .map((c) => c.bytecode)
+      .join(''),
+  )
+  .digest('hex');
+// The sources travel with the build so the app can show them (Kitchen café → Contracts).
+const files = Object.fromEntries(Object.entries(sources).map(([f, s]) => [f, s.content]));
 writeFileSync(
   join(dir, 'build', 'contracts.json'),
-  JSON.stringify({ compiler: solc.version(), contracts }),
+  JSON.stringify({ compiler: solc.version(), codeHash, sources: files, contracts }),
 );
 console.log(`Compiled ${Object.keys(contracts).join(', ')} with solc ${solc.version()}`);

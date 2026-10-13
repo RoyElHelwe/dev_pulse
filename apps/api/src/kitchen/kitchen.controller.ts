@@ -52,6 +52,12 @@ export class KitchenController {
     return this.coins.ledger(user.id);
   }
 
+  /** The PulseCoin and KitchenShop contracts: addresses, live on-chain state, Solidity source. */
+  @Get('contracts')
+  contracts(@CurrentUser() user: AuthUser) {
+    return this.kitchen.contracts(user.id);
+  }
+
   /** On-chain receipt and decoded events of one of the office's transactions. */
   @Get('tx/:hash')
   proof(@CurrentUser() user: AuthUser, @Param('hash') hash: string) {

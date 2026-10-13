@@ -78,7 +78,7 @@ describe.skipIf(!RPC)('PulseCoin and KitchenShop on-chain', () => {
     const c = artifact('PulseCoin');
     const s = artifact('KitchenShop');
     coin = (await (
-      await new ContractFactory(c.abi, c.bytecode, admin).deploy(adminAddress)
+      await new ContractFactory(c.abi, c.bytecode, admin).deploy(adminAddress, 24 * 3600)
     ).waitForDeployment()) as unknown as Contract;
     shop = (await (
       await new ContractFactory(s.abi, s.bytecode, admin).deploy(
@@ -154,6 +154,23 @@ describe.skipIf(!RPC)('PulseCoin and KitchenShop on-chain', () => {
       /NotOnTheMenu|reverted/,
     );
     expect(await coin.balanceOf(poor.address)).toBe(toUnits(2));
+  });
+
+  it('lets the admin shorten the daily period (60 s to test), and nobody else', async () => {
+    const stranger = Wallet.createRandom().connect(provider);
+    await provider.send('anvil_setBalance', [stranger.address, '0xDE0B6B3A7640000']);
+    await expect((coin.connect(stranger) as Contract).setDailyPeriod(60)).rejects.toThrow();
+    await refused(coin.setDailyPeriod(0), /InvalidDailyPeriod|reverted/);
+    await send(coin.setDailyPeriod(60));
+    expect(await coin.dailyPeriod()).toBe(60n);
+    const member = Wallet.createRandom();
+    await send(coin.claimDaily(member.address));
+    await refused(coin.claimDaily(member.address), /DailyAlreadyClaimed|reverted/);
+    await provider.send('evm_increaseTime', [61]);
+    await provider.send('evm_mine', []);
+    await send(coin.claimDaily(member.address));
+    expect(await coin.balanceOf(member.address)).toBe(toUnits(10));
+    await send(coin.setDailyPeriod(24 * 3600));
   });
 
   it('lets only the owner change the menu', async () => {

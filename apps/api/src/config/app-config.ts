@@ -26,10 +26,16 @@ export interface ChainConfig {
   rpcUrl: string;
   /** Private key of the account that deploys the contracts and pays the gas; null = derived from JWT_SECRET. */
   relayerKey: string | null;
+  /** Time between two daily PulseCoin claims, set on-chain at startup (60 to test, 86400 normally). */
+  dailyPeriodSeconds: number;
 }
 
 const MIN_JWT_SECRET_LENGTH = 32;
 const PRIVATE_KEY = /^0x[0-9a-fA-F]{64}$/;
+const DEFAULT_DAILY_PERIOD_S = 24 * 3600;
+const MIN_DAILY_PERIOD_S = 10;
+/** Same upper bound as PulseCoin.setDailyPeriod. */
+const MAX_DAILY_PERIOD_S = 7 * 24 * 3600;
 // 15-minute access token limits the blast radius of stolen tokens without requiring server-side revocation checks on every call.
 const DEFAULT_ACCESS_TOKEN_TTL_S = 15 * 60;
 // 30-day refresh token balances convenience with regular session lifecycle expiration.
@@ -40,7 +46,8 @@ const DEFAULT_SMTP_PORT = 587;
  * Whether dev-only features (dev sign-in, dev:teleport) are active.
  * Gated by both DEV_LOGIN=true and NODE_ENV !== 'production' to prevent accidental exposure in production.
  */
-export const isDevLoginEnabled = (env: NodeJS.ProcessEnv): boolean => env.DEV_LOGIN === 'true' && env.NODE_ENV !== 'production';
+export const isDevLoginEnabled = (env: NodeJS.ProcessEnv): boolean =>
+  env.DEV_LOGIN === 'true' && env.NODE_ENV !== 'production';
 
 /**
  * Validated environment configuration parsed once at process startup.
@@ -94,8 +101,20 @@ export class AppConfig {
     };
 
     const relayerKey = env.CHAIN_RELAYER_KEY || null;
-    if (relayerKey && !PRIVATE_KEY.test(relayerKey)) throw new Error('CHAIN_RELAYER_KEY must be a 0x-prefixed 32-byte hex private key.');
-    this.chain = { rpcUrl: env.CHAIN_RPC_URL || 'http://chain:8545', relayerKey };
+    if (relayerKey && !PRIVATE_KEY.test(relayerKey))
+      throw new Error('CHAIN_RELAYER_KEY must be a 0x-prefixed 32-byte hex private key.');
+    const period = env.CHAIN_DAILY_PERIOD_SECONDS
+      ? Number(env.CHAIN_DAILY_PERIOD_SECONDS)
+      : DEFAULT_DAILY_PERIOD_S;
+    if (!Number.isInteger(period) || period < MIN_DAILY_PERIOD_S || period > MAX_DAILY_PERIOD_S) {
+      throw new Error(
+        `CHAIN_DAILY_PERIOD_SECONDS must be a whole number of seconds between ${MIN_DAILY_PERIOD_S} and ${MAX_DAILY_PERIOD_S}.`,
+      );
+    }
+    this.chain = {
+      rpcUrl: env.CHAIN_RPC_URL || 'http://chain:8545',
+      relayerKey,
+      dailyPeriodSeconds: period,
+    };
   }
 }
-

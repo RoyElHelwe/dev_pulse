@@ -24,7 +24,7 @@ import { deriveKey } from '../auth/crypto/secrets';
 import { AppConfig } from '../config/app-config';
 import { MENU, toUnits } from '../kitchen/kitchen.rules';
 import { PrismaService } from '../prisma/prisma.service';
-import { artifact } from './contracts';
+import { artifact, build } from './contracts';
 
 /** Anvil's chain id: a local development chain, where the relayer can fund itself. */
 const LOCAL_CHAIN_ID = 31337;
@@ -144,17 +144,27 @@ export class ChainService implements OnModuleInit, OnModuleDestroy {
 
     const coinArt = artifact('PulseCoin');
     const shopArt = artifact('KitchenShop');
+    const { codeHash } = build();
+    const { dailyPeriodSeconds } = this.config.chain;
     let deployment = await this.prisma.chainDeployment.findUnique({ where: { chainId } });
     // A deployment whose code is gone (the local chain was reset) is deployed again.
-    if (deployment && (await provider.getCode(deployment.coinAddress)) === '0x') {
+    const gone = !!deployment && (await provider.getCode(deployment.coinAddress)) === '0x';
+    if (gone)
       this.logger.warn(
         `Contracts on chain ${chainId} are gone (chain reset?): deploying them again`,
       );
-      deployment = null;
-    }
-    if (!deployment) {
+    // New contract code (e.g. a new function): deploy it, and carry members' balances over below.
+    const outdated = !!deployment && !gone && deployment.codeHash !== codeHash;
+    if (outdated)
+      this.logger.warn(
+        `Contracts changed (code ${codeHash.slice(0, 12)}): deploying the new version`,
+      );
+
+    if (!deployment || gone || outdated) {
+      const previousCoin = outdated ? deployment!.coinAddress : null;
       const coin = await new ContractFactory(coinArt.abi, coinArt.bytecode, relayer).deploy(
         wallet.address,
+        dailyPeriodSeconds,
       );
       await coin.waitForDeployment();
       // The till is the relayer's own address: coins spent in the kitchen go back to the office's account.
@@ -164,24 +174,28 @@ export class ChainService implements OnModuleInit, OnModuleDestroy {
         wallet.address,
       );
       await shop.waitForDeployment();
+      if (previousCoin)
+        await this.migrateBalances(provider, previousCoin, coin as unknown as Contract);
+      const addresses = {
+        coinAddress: await coin.getAddress(),
+        shopAddress: await shop.getAddress(),
+        codeHash,
+      };
       deployment = await this.prisma.chainDeployment.upsert({
         where: { chainId },
-        create: {
-          chainId,
-          coinAddress: await coin.getAddress(),
-          shopAddress: await shop.getAddress(),
-        },
-        update: {
-          coinAddress: await coin.getAddress(),
-          shopAddress: await shop.getAddress(),
-          deployedAt: new Date(),
-        },
+        create: { chainId, ...addresses },
+        update: { ...addresses, deployedAt: new Date() },
       });
     }
     const coin = new Contract(deployment.coinAddress, coinArt.abi, relayer);
     const shop = new Contract(deployment.shopAddress, shopArt.abi, relayer);
 
-    // The menu in the code is the source of truth: list new items and fix changed prices on-chain.
+    // The configuration is the source of truth for the daily period (CHAIN_DAILY_PERIOD_SECONDS)...
+    if (((await coin.dailyPeriod()) as bigint) !== BigInt(dailyPeriodSeconds)) {
+      await (await coin.setDailyPeriod(dailyPeriodSeconds)).wait();
+      this.logger.log(`Daily allowance period set to ${dailyPeriodSeconds} s on-chain`);
+    }
+    // ...and the code for the menu: list new items and fix changed prices on-chain.
     for (const item of MENU) {
       const [name, price, active] = (await shop.items(item.id)) as [string, bigint, boolean];
       if (name !== item.name || price !== toUnits(item.price) || !active) {
@@ -189,5 +203,23 @@ export class ChainService implements OnModuleInit, OnModuleDestroy {
       }
     }
     return { chainId, provider, relayer, relayerAddress: wallet.address, coin, shop };
+  }
+
+  /** Mints on the new coin what each member's wallet held on the previous version of the contract. */
+  private async migrateBalances(provider: JsonRpcProvider, previous: string, next: Contract) {
+    const old = new Contract(
+      previous,
+      ['function balanceOf(address) view returns (uint256)'],
+      provider,
+    );
+    const wallets = await this.prisma.wallet.findMany({ select: { address: true } });
+    let moved = 0;
+    for (const { address } of wallets) {
+      const balance = (await old.balanceOf(address)) as bigint;
+      if (balance === 0n) continue;
+      await (await next.reward(address, balance, 'migration')).wait();
+      moved++;
+    }
+    this.logger.log(`Carried ${moved} wallet balance(s) over to the new PulseCoin contract`);
   }
 }

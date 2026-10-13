@@ -7,13 +7,14 @@ The office kitchen sells **water (1 PULSE), Pepsi (2) and dinner (6)** for **Pul
 - **Menu**: prices read from the `KitchenShop` contract, Buy, and a receipt (transaction hash, block, purchase number, gas, new balance). The item then shows in your avatar's hand for 3 minutes, for everyone.
 - **Wallet**: your address and balance, the daily allowance, ways to earn, your history; owners and admins can give coins.
 - **Ledger**: the chain (id, block height, contracts, coins in circulation, kitchen till, purchases), every PulseCoin transaction of the office, and for any of them an on-chain proof read back from the chain (receipt and decoded events).
+- **Contracts**: how the two smart contracts work (a purchase step by step, each function and who may call it, events), their live on-chain state, their Solidity source, and `cast` commands to check them on the chain without the app.
 
 ### Earning coins
 
 | Source | Coins | Rule (where it is enforced) |
 | --- | --- | --- |
 | Welcome grant | 20 | Once, when the wallet is created (`rewardKey` unique in the database) |
-| Daily allowance | 5 | Once per 24 h: **`PulseCoin.claimDaily` reverts otherwise (on-chain)** |
+| Daily allowance | 5 | Once per `dailyPeriod` (24 h by default, see below): **`PulseCoin.claimDaily` reverts otherwise (on-chain)** |
 | Closing a task | 3 | First move to Done, to the assignee (or the closer); once per task |
 | Winning a game | 2 | Each winner of a baby foot / Uno match; once per result |
 | Owner / admin grant | 1–50 | With an optional note; not to yourself |
@@ -74,6 +75,43 @@ Browser            API (NestJS)                                       Chain (Anv
 
 ---
 
+## Changing the daily period (e.g. every minute, to test)
+
+The period lives in the contract (`PulseCoin.dailyPeriod`) and only its admin (the server) can change it (`setDailyPeriod`). The server sets it from `.env` at startup:
+
+```bash
+# .env
+CHAIN_DAILY_PERIOD_SECONDS=60      # every minute (testing); 86400 or empty = every 24 h
+make                               # restarts the api, which sends setDailyPeriod(60) to the contract
+```
+
+Balances are kept; the change is itself an on-chain transaction (`DailyPeriodChanged` event). Accepted range: 10 s to 7 days.
+
+## Contract upgrades
+
+`compile-contracts.mjs` writes a hash of the contracts' bytecode. When it differs from the deployed version's (`ChainDeployment.codeHash`), the API deploys the new contracts on startup and mints every member's balance from the previous PulseCoin onto the new one (`Rewarded(…, "migration")`), so nobody loses coins.
+
+---
+
+## How to evaluate it (about 10 minutes)
+
+Prepare: `make`, open `https://<SERVER_NAME>:8443`, sign up two accounts (two browsers, or one private window): **A** creates the office, **B** joins with an invitation link (Invite button). For a quick demo, set `CHAIN_DAILY_PERIOD_SECONDS=60` first.
+
+1. **The contracts exist and are deployed by `make`**: `docker compose ps` shows the `chain` service; `docker compose logs api | grep ChainService` shows the deployed addresses.
+2. **Open the café**: A walks to the kitchen (the counter and fridge in the Lounge) and presses **E**. Balance 20 PULSE (welcome grant). Pressing E elsewhere does nothing; buying from elsewhere is refused by the server.
+3. **Buy**: Pepsi → receipt with purchase number, block, gas and transaction hash; balance 18. B sees A holding a can for 3 minutes.
+4. **Not enough coins**: buy dinners until "Need 6 more" appears: the contract would refuse it anyway (permit for more than the balance).
+5. **Daily allowance (rule on-chain)**: Wallet → Claim 5 daily coins; the button counts down until the next period; with 60 s it comes back after a minute.
+6. **Earn by working**: B closes a task on the board (move it to Done) → toast "+3 PulseCoin"; moving it back and to Done again pays nothing. Win a baby foot or Uno match → +2.
+7. **Admin grant**: A (owner) → Wallet → Give coins to B with a note → B's toast. B (member) has no such form, and the API refuses (403).
+8. **Ledger and proof**: Ledger tab → every transaction with its block and hash; click a hash → "Confirmed on-chain" with the decoded events (Transfer, Purchased, Rewarded, DailyClaimed) read from the chain.
+9. **How the contracts work**: Contracts tab → the purchase in 5 steps, functions and roles, live state, Solidity source.
+10. **Check without the app**: copy a command from the Contracts tab and run it in a terminal, e.g.
+    `docker compose exec chain cast call <PulseCoin address> "balanceOf(address)(uint256)" <wallet address>` → the same balance (in wei, 18 decimals), and `docker compose exec chain cast receipt <tx hash>` for a ledger line.
+11. **Tests**: `cd apps/api && pnpm test` (rules), and the contract tests on a throwaway chain (see Tests below).
+
+---
+
 ## Running on Avalanche Fuji instead
 
 The contracts are plain EVM, compiled for `cancun`. In `.env`:
@@ -90,7 +128,7 @@ The API deploys the contracts there on start (one `ChainDeployment` row per chai
 ## Tests
 
 - `apps/api/src/kitchen/kitchen.rules.spec.ts`: menu, caps, units, earning day, kitchen reach (in CI).
-- `apps/api/src/chain/contracts.chain.spec.ts`: the contracts on a real chain. Only minters mint, the daily allowance once per 24 h (clock moved with `evm_increaseTime`), a purchase for exactly the price with the buyer's permit, forged / replayed / under-priced permits refused, poor buyers and items off the menu refused, menu owner-only. Needs a throwaway Anvil:
+- `apps/api/src/chain/contracts.chain.spec.ts`: the contracts on a real chain. Only minters mint, the daily allowance once per period (clock moved with `evm_increaseTime`), only the admin changes the period (60 s works, 0 is refused), a purchase for exactly the price with the buyer's permit, forged / replayed / under-priced permits refused, poor buyers and items off the menu refused, menu owner-only. Needs a throwaway Anvil:
 
 ```bash
 docker run -d --rm --name anvil-test -p 8546:8545 ghcr.io/foundry-rs/foundry:v1.5.1 "anvil --host 0.0.0.0"

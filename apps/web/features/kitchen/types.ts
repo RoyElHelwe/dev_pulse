@@ -20,6 +20,8 @@ export interface WalletView {
   /** ISO time of the next daily claim, or null when it can be claimed now. */
   nextDailyAt: string | null;
   dailyAmount: number;
+  /** Seconds between two daily claims, as the PulseCoin contract has it. */
+  dailyPeriodSeconds: number;
 }
 
 /** GET /kitchen */
@@ -115,10 +117,51 @@ export function describeTx(tx: CoinTx): string {
 /** "+3" / "−2" */
 export const signed = (amount: number) => (amount > 0 ? `+${amount}` : `−${Math.abs(amount)}`);
 
-/** "5 h 12 min" until `iso` (or "now"). */
+/** "5 h 12 min" / "42 s" until `iso` (or "now"). */
 export function timeUntil(iso: string, now = Date.now()): string {
-  const minutes = Math.max(0, Math.ceil((Date.parse(iso) - now) / 60_000));
-  if (minutes === 0) return 'now';
+  const seconds = Math.max(0, Math.ceil((Date.parse(iso) - now) / 1000));
+  if (seconds === 0) return 'now';
+  if (seconds < 60) return `${seconds} s`;
+  const minutes = Math.ceil(seconds / 60);
   const h = Math.floor(minutes / 60);
   return h > 0 ? `${h} h ${minutes % 60} min` : `${minutes} min`;
+}
+
+/** A period in words: "24 h", "1 min", "90 s". */
+export function formatPeriod(seconds: number): string {
+  if (seconds % 3600 === 0) return `${seconds / 3600} h`;
+  if (seconds % 60 === 0) return `${seconds / 60} min`;
+  return `${seconds} s`;
+}
+
+/** GET /kitchen/contracts */
+export interface ContractsView {
+  chainId: number;
+  block: number;
+  compiler: string;
+  relayer: string;
+  coin: {
+    address: string;
+    source: string;
+    state: {
+      name: string;
+      symbol: string;
+      decimals: number;
+      totalSupply: number;
+      dailyAllowance: number;
+      dailyPeriodSeconds: number;
+      relayerIsMinter: boolean;
+    };
+  };
+  shop: {
+    address: string;
+    source: string;
+    state: {
+      owner: string;
+      till: string;
+      coin: string;
+      purchaseCount: number;
+      items: { id: number; name: string; price: number; active: boolean }[];
+    };
+  };
 }
