@@ -114,6 +114,10 @@ services:
       ALLOWED_SENDER_DOMAINS: gmail.com
       POSTFIX_smtp_tls_security_level: encrypt
       POSTFIX_myhostname: email-relay
+      # The api and email-api reach this relay over the private compose network only (no published port),
+      # so offering STARTTLS here just makes clients fail on its self-signed certificate. Keep plain SMTP
+      # inside the network; the TLS encryption that matters is the relay-to-Gmail leg above.
+      POSTFIX_smtpd_tls_security_level: none
       # Gmail rejects messages over ~25 MB; fail fast instead of queueing them.
       POSTFIX_message_size_limit: '26214400'
     volumes:
