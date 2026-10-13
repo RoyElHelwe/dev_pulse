@@ -50,7 +50,7 @@ Each person mostly works in their own folders, which keeps merge conflicts rare.
 | Office / game    | `office/` (Socket.IO `/office`)          | `app/office/`, `game/` (Phaser), `features/office/`       | **Roy**        |
 | Task manager     | `tasks/` (Socket.IO `/office`)           | `features/tasks/`                                         | **Zakaria**    |
 | Voice + meeting  | `voice/` (Socket.IO `/office`), `meetings/` | `features/voice/`, `features/meetings/`                | **Zakaria**    |
-| Chill room, chat | `chat/` (Socket.IO `/office`), `workspace/` | `features/chat/`, `features/games/`                   | **Zakaria · Claude** |
+| Chill room, chat | `chat/` (Socket.IO `/office`), `workspace/` | `features/chat/`, `features/games/`                   | **Zakaria** |
 | Games (extra)    | `games/` (Foosball, Uno, Lego)           | `features/games/`                                         | **Zakaria**    |
 | Dev tooling      | `dev/` (auth/dev, teleport)              | `features/dev/`                                           | **Zakaria**    |
 | E2E testing      | —                                        | `e2e/` (Playwright suite)                                 | **Zakaria · Roy** |
@@ -147,8 +147,8 @@ meeting room, lounge, and chill room. Templates: `apps/api/src/office/templates`
 | `/office`  | Zakaria | ✅ voice: `rtc:signal {to, data}` → `rtc:signal {from, data}` (offer, answer, ICE), `rtc:refused {to}`; `voice:state`, `voice:leave`, `voice:states` → `office:voice` |
 | `/office`  | Zakaria | ✅ tasks: `task:created`, `task:updated`, `task:deleted` broadcast across workspace members   |
 | `/office`  | Zakaria | ✅ minigames: `game:join`, `game:leave`, `game:action` → `game:state`, `game:event`, `game:left`, `game:ended`, `game:error`, `lego:art` |
-| `/office`  | Claude / Helper | ✅ chat: `chat:send {channel, text}` → `chat:message` broadcast                       |
-| `/office`  | Claude / Roy | ✅ bookings: `office:bookings {changed: true}` broadcast                                 |
+| `/office`  | Zakaria / Helper | ✅ chat: `chat:send {channel, text}` → `chat:message` broadcast                       |
+| `/office`  | Zakaria / Roy | ✅ bookings: `office:bookings {changed: true}` broadcast                                 |
 | `/office`  | Zakaria | ✅ dev teleport: `dev:teleport [x, y]` (pixels) (dev/test only, gated)                              |
 | `/session` | Roy     | ✅ `session:ended` (instant sign-out on remote session closure)                                |
 
