@@ -56,7 +56,8 @@ const DEFAULT_THROTTLE_LIMIT = 300;
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
     // CSRF protection: verify Origin header on state-changing requests across all API routes.
-    consumer.apply(OriginMiddleware).forRoutes('*');
+    // `*path` is Nest 11's named wildcard (a bare `*` is legacy syntax and logs a warning).
+    consumer.apply(OriginMiddleware).forRoutes('*path');
   }
 }
 

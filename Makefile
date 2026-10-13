@@ -1,6 +1,7 @@
 # Dev Pulse project management Makefile.
 # Used for build, startup, development, log inspection, and teardown workflows.
-# Wires db (PostgreSQL), api (NestJS), web (Next.js), and proxy (nginx) via Docker Compose.
+# Wires db (PostgreSQL), api (NestJS), web (Next.js), proxy (nginx), and the email service
+# (postfix + email-api) via Docker Compose.
 COMPOSE     = docker compose
 COMPOSE_DEV = docker compose -f docker-compose.yml -f docker-compose.dev.yml
 
@@ -19,13 +20,15 @@ all: up
 	cp .env.example .env
 	@sed -i.bak "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$$(head -c 24 /dev/urandom | base64 | tr -d '\n/+=')|" .env
 	@sed -i.bak "s|^JWT_SECRET=.*|JWT_SECRET=$$(head -c 48 /dev/urandom | base64 | tr -d '\n/+=')|" .env
+	@sed -i.bak "s|^EMAIL_API_KEY=.*|EMAIL_API_KEY=$$(head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n')|" .env
 	@rm -f .env.bak
 	@echo "Created .env with random secrets."
 
 ## up: build and start the production-like stack (single command for evaluation)
 up: .env
 	$(COMPOSE) up --build -d
-	@printf "\n  Dev Pulse is running at $(URL)\n\n"
+	@printf "\n  Dev Pulse is running at $(URL)\n"
+	@printf "  Email API is running at http://127.0.0.1:$(or $(EMAIL_API_PORT),8025)\n\n"
 
 ## dev: start with hot reload (code changes apply without rebuilding)
 dev: .env

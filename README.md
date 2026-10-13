@@ -114,6 +114,7 @@ apps/
     features/        domain feature components (auth, office, tasks, voice, meetings, meeting-room, kitchen, games, chat, team)
     game/            Phaser 3 office scene, avatar art, systems, layout & editor
     lib/             API client, WebSocket client, escape stack, utilities
+  email-service/     Gmail relay (postfix) + FastAPI email HTTP API, see its README
 docs/                project documentation (PLAN.md, HANDOFF.md, OFFICE.md, AUTH.md)
 docs/code/           in-depth code architecture guides
 e2e/                 Playwright browser test suite & fixtures

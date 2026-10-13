@@ -1,6 +1,7 @@
 # Production-like stack (what evaluators run):  make   or   docker compose up --build
 # Development with hot reload:                   make dev
-# Wires postgres db, NestJS api, Next.js web frontend, and nginx reverse proxy on a shared network.
+# Wires postgres db, local blockchain (chain), NestJS api, Next.js web frontend, nginx reverse proxy,
+# and the email service (postfix Gmail relay + email-api) on a shared network.
 name: dev_pulse
 
 services:
@@ -87,6 +88,51 @@ services:
       - api
       - web
 
+  # Postfix SMTP relay that forwards all mail through Gmail (smtp.gmail.com:587, STARTTLS required).
+  # Logs in with GMAIL_USER + App Password or OAuth2 (see apps/email-service/README.md).
+  # Never publish its port: it is reachable only on the compose network, otherwise it is an open relay.
+  # Queued mail is kept in the postfix_queue volume across restarts.
+  postfix:
+    image: boky/postfix:latest
+    restart: unless-stopped
+    environment:
+      RELAYHOST: '[smtp.gmail.com]:587'
+      RELAYHOST_USERNAME: ${GMAIL_USER:-}
+      RELAYHOST_PASSWORD: ${GMAIL_APP_PASSWORD:-}
+      # OAuth2 replaces the App Password, but only once GMAIL_OAUTH_REFRESH_TOKEN is set
+      # (the image switches to OAuth as soon as a client id is present).
+      XOAUTH2_CLIENT_ID: ${GMAIL_OAUTH_REFRESH_TOKEN:+${GMAIL_OAUTH_CLIENT_ID}}
+      XOAUTH2_SECRET: ${GMAIL_OAUTH_REFRESH_TOKEN:+${GMAIL_OAUTH_CLIENT_SECRET}}
+      XOAUTH2_INITIAL_REFRESH_TOKEN: ${GMAIL_OAUTH_REFRESH_TOKEN:-}
+      # Placeholder; marked expired so Postfix fetches a fresh one on first send.
+      XOAUTH2_INITIAL_ACCESS_TOKEN: expired
+      ALLOWED_SENDER_DOMAINS: gmail.com
+      POSTFIX_smtp_tls_security_level: encrypt
+      POSTFIX_myhostname: email-relay
+      # Gmail rejects messages over ~25 MB; fail fast instead of queueing them.
+      POSTFIX_message_size_limit: '26214400'
+    volumes:
+      - postfix_queue:/var/spool/postfix
+
+  # FastAPI HTTP API for sending email (POST /send with X-API-Key, GET /health) through the postfix relay.
+  # Refuses to start without EMAIL_API_KEY (`make` generates one); /send returns 503 until GMAIL_USER is set.
+  # Published on localhost only. To let other machines call it use '0.0.0.0:${EMAIL_API_PORT:-8025}:8025'
+  # and also open the port in the host / cloud firewall (preferably behind HTTPS).
+  email-api:
+    build: ./apps/email-service
+    restart: unless-stopped
+    environment:
+      SMTP_HOST: postfix
+      SMTP_PORT: 587
+      FROM_ADDRESS: ${GMAIL_USER:-}
+      FROM_NAME: ${EMAIL_API_FROM_NAME:-}
+      EMAIL_API_KEY: ${EMAIL_API_KEY:-}
+      RATE_LIMIT_PER_MIN: ${EMAIL_API_RATE_LIMIT_PER_MIN:-30}
+    ports:
+      - '127.0.0.1:${EMAIL_API_PORT:-8025}:8025'
+    depends_on:
+      - postfix
+
 # Named volumes for data persistence across container restarts and rebuilds.
 volumes:
   # Named volume for persistent PostgreSQL database files.
@@ -95,3 +141,5 @@ volumes:
   certs:
   # Named volume holding the local blockchain's state (PulseCoin balances, kitchen purchases).
   chain_data:
+  # Named volume holding the postfix mail queue (and OAuth tokens).
+  postfix_queue:
