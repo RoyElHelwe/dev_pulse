@@ -50,6 +50,8 @@ jobs:
       JWT_SECRET: e2e-only-secret-not-used-anywhere-else-0123456789
       APP_URL: http://localhost:8080
       PORT: '4100'
+      # The specs create users through /api/auth/dev/* (throwaway CI server only).
+      DEV_LOGIN: 'true'
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
