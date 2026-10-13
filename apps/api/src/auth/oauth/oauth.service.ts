@@ -106,7 +106,10 @@ export class OAuthService {
   }
 
   private callbackUrl(provider: OAuthProvider) {
-    return `${this.config.appUrl}/api/auth/oauth/${provider}/callback`;
+    return (
+      this.config.oauth[provider]?.redirectUri ??
+      `${this.config.appUrl}/api/auth/oauth/${provider}/callback`
+    );
   }
 
   private async exchangeCode(provider: OAuthProvider, code: string, verifier: string): Promise<string> {

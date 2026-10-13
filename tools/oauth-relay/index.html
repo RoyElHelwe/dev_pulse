@@ -1,0 +1,25 @@
+<!doctype html>
+<!--
+  Google sign-in relay for LAN demos.
+  Google refuses raw IPs (https://10.11.1.7:8443) as redirect URIs, so Google
+  redirects here instead (a public https page, e.g. on GitHub Pages) and this
+  page forwards ?code&state to the app on the LAN. The code is useless without
+  the PKCE verifier and client secret, which never leave the API.
+  Set GOOGLE_REDIRECT_URI in .env to this page's URL, and APP_URL below to
+  https://SERVER_NAME:HTTPS_PORT.
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>Dev Pulse sign-in</title>
+  <script>
+    const APP_URL = 'https://10.11.1.7:8443';
+    location.replace(APP_URL + '/api/auth/oauth/google/callback' + location.search);
+  </script>
+</head>
+<body style="font-family: system-ui, sans-serif; padding: 16px">
+  Returning to Dev Pulse…
+</body>
+</html>

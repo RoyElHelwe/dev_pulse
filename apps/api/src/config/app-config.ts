@@ -9,6 +9,8 @@ export type OAuthProvider = 'google' | 'github' | '42';
 export interface OAuthClient {
   clientId: string;
   clientSecret: string;
+  /** Overrides APP_URL/api/auth/oauth/<provider>/callback, e.g. a public relay page (Google rejects IPs). */
+  redirectUri?: string;
 }
 
 /** Outgoing SMTP mail server connection settings. */
@@ -92,10 +94,12 @@ export class AppConfig {
       : null;
     this.emailFrom = env.EMAIL_FROM || 'Dev Pulse <no-reply@devpulse.local>';
 
-    const client = (id?: string, secretValue?: string) =>
-      id && secretValue ? { clientId: id, clientSecret: secretValue } : undefined;
+    const client = (id?: string, secretValue?: string, redirectUri?: string) =>
+      id && secretValue
+        ? { clientId: id, clientSecret: secretValue, redirectUri: redirectUri || undefined }
+        : undefined;
     this.oauth = {
-      google: client(env.GOOGLE_CLIENT_ID, env.GOOGLE_CLIENT_SECRET),
+      google: client(env.GOOGLE_CLIENT_ID, env.GOOGLE_CLIENT_SECRET, env.GOOGLE_REDIRECT_URI),
       github: client(env.GITHUB_CLIENT_ID, env.GITHUB_CLIENT_SECRET),
       '42': client(env.FORTYTWO_CLIENT_ID, env.FORTYTWO_CLIENT_SECRET),
     };

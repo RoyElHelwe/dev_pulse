@@ -83,6 +83,8 @@ OAuth callback URLs to configure with identity providers (adjust host and port a
 - `https://localhost:8443/api/auth/oauth/github/callback`
 - `https://localhost:8443/api/auth/oauth/42/callback`
 
+**Google on a LAN IP** (`SERVER_NAME=10.x.x.x`): Google rejects IP addresses in redirect URIs. Publish [tools/oauth-relay/index.html](../tools/oauth-relay/index.html) on any public HTTPS host (e.g. GitHub Pages) with its `APP_URL` set to `https://SERVER_NAME:HTTPS_PORT`, register that page's URL in Google, and set `GOOGLE_REDIRECT_URI` to it. Google sends the browser to the relay page, which forwards it to the app.
+
 ---
 
 ## 5. Dev Identity Switcher (`DEV_LOGIN`)
