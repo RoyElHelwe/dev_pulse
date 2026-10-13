@@ -548,7 +548,7 @@
       </li>
       <li class="nav-item" onclick="goToSlide(5)">
         <span class="nav-num">06</span>
-        <span>Roy's Auth & Social Engine</span>
+        <span>Auth & Social Engine</span>
         <span class="nav-tag badge-blue">Security</span>
       </li>
       <li class="nav-item" onclick="goToSlide(6)">
@@ -676,12 +676,6 @@
                   <td>Technical Lead / Architect</td>
                   <td>Phaser 3 game engine, 20Hz movement sync, onboarding wizard, live layout editor, wings generator</td>
                   <td><code>apps/web/game</code>, <code>apps/api/src/office</code></td>
-                </tr>
-                <tr>
-                  <td><strong>Roy</strong></td>
-                  <td>Project Manager / Scrum Master</td>
-                  <td>Authentication (JWT, 2FA, OAuth, Sessions), User Profile, Avatar Uploads, Friends & Invitations</td>
-                  <td><code>apps/api/src/auth</code>, <code>apps/web/features/auth</code>, <code>users/</code></td>
                 </tr>
                 <tr>
                   <td><strong>Zakaria</strong></td>
@@ -1048,11 +1042,11 @@ export class UpdateSettingsDto {
       </section>
 
       <!-- ============================================================== -->
-      <!-- SLIDE 6: Roy's Auth & Social Engine -->
+      <!-- SLIDE 6: Auth & Social Engine -->
       <!-- ============================================================== -->
-      <section class="slide" data-title="Roy's Auth & Social Engine">
+      <section class="slide" data-title="Auth & Social Engine">
         <div class="eyebrow"><span class="eyebrow-dot"></span> Security Architecture</div>
-        <h1 class="title">Roy's Authentication, 2FA & Social Engine</h1>
+        <h1 class="title">Authentication, 2FA & Social Engine</h1>
         <p class="subtitle">
           Originally prototyped as a standalone Better-Auth module on <code>origin/transcn-changes</code>, then re-engineered
           into an enterprise-grade stateless JWT + rotating refresh token system with universal 2FA and remote session eviction.
@@ -1124,7 +1118,7 @@ export class UpdateSettingsDto {
         <h1 class="title">Prisma 6 Database Schema & Relational Integrity</h1>
         <p class="subtitle">
           The database schema (<code>apps/api/prisma/schema.prisma</code>) defines 13 strongly-typed models partitioned
-          across Core, Roy, Roy, and Zakaria functional modules with cascade rules and PostgreSQL advisory locks.
+          across Core, Security, Roy, and Zakaria functional modules with cascade rules and PostgreSQL advisory locks.
         </p>
 
         <div class="grid-3">
@@ -1140,7 +1134,7 @@ export class UpdateSettingsDto {
           </div>
 
           <div class="card">
-            <div class="card-header"><span class="card-title">Security & Sessions (Roy)</span></div>
+            <div class="card-header"><span class="card-title">Security & Sessions</span></div>
             <div class="card-body">
               <ul>
                 <li><strong><code>RefreshToken</code>:</strong> SHA-256 hash, family ID, device user agent, IP, replaced-by ID, revocation timestamp.</li>

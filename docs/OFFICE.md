@@ -1,7 +1,7 @@
 # Office, onboarding and invitations
 
 **Internals:** see [docs/code/README.md](code/README.md)  
-**Owners:** Roy (office, onboarding, editor) · Zakaria (games, tasks, wings, testing) · Roy (invitations, members)  
+**Owners:** Roy (office, onboarding, editor, invitations, members) · Zakaria (games, tasks, wings, testing)  
 **Code:** `apps/api/src/{office,workspace,invitations,games,tasks,voice,meetings,chat,settings,dev}`, `apps/web/game`, `apps/web/features/{office,onboarding,team,workspace,games,tasks,voice,meetings,chat,settings,dev}`, `e2e`
 
 Same idea as the first version on `main`, without AI: the organiser picks a ready-made office
@@ -130,7 +130,7 @@ Web: `apps/web/features/office/connection.ts`, `apps/web/features/office/tabLock
 | **Your desk** | Each member gets a free desk on joining (joining order), with their name on it (yours in green). Desks follow the office: after an edit people keep their desk if it still exists. Owners and admins move people from the Team page (swaps with whoever sat there). | `workspace/desks.service.ts`, `game/objects/DeskPlates.ts` |
 | **Moving desks** | Any member can move to another free desk (`PUT /api/workspace/me/desk`). Desk art follows the owner. Refused if taken (`DESK_TAKEN`). Emits `office:desks`. | `workspace/desks.service.ts` |
 | **E to use** | At a desk, screen, task board, or games piece (Baby foot table, Uno card table, Lego wall), a hint appears ("Your desk", "Play Baby foot", "Play Uno", "Build with Lego"); **E** (or tapping the hint) emits `object:interact`. | `game/systems/Interactions.ts` |
-| **Who is where** | The game reports its zone; the server shares it (`office:zone`), for display only (access uses positions). The people list shows "Atlas · Meeting room", "At Roy’s desk"; meeting rooms with people inside show "In use · 2". | `office.gateway.ts`, `game/objects/RoomBadges.ts` |
+| **Who is where** | The game reports its zone; the server shares it (`office:zone`), for display only (access uses positions). The people list shows "Atlas · Meeting room", "At Ines’s desk"; meeting rooms with people inside show "In use · 2". | `office.gateway.ts`, `game/objects/RoomBadges.ts` |
 | **Status** | A short status in a bubble over the avatar ("Focusing", "On break ☕" or your own text), set from the user menu (top right → Status), stored on the membership. | `UserMenu.tsx`, `StatusSection.tsx` |
 | **Map** | Floor plan in the corner with everyone, and the part of the office on screen. | `Minimap.tsx` |
 | **Phones and tablets** | A joystick (bottom right) instead of the keyboard; the hints say "Tap". | `Joystick.tsx` |
@@ -405,7 +405,7 @@ details; its creator, or an owner / admin, can cancel it.
 | Room | a meeting room of the current layout |
 | Time | start before end, 15-minute steps, 4 hours at most, not in the past (the slot running now is fine), up to 30 days ahead |
 | People | members of the office, 30 at most; the creator is always one of them |
-| No double booking | refused with "Atlas is booked 14:00–15:00 by Roy". Race-free: each booking takes a Postgres advisory lock for its room (`pg_advisory_xact_lock`) inside the transaction that checks and inserts |
+| No double booking | refused with "Atlas is booked 14:00–15:00 by Ines". Race-free: each booking takes a Postgres advisory lock for its room (`pg_advisory_xact_lock`) inside the transaction that checks and inserts |
 
 **The kitchen café**: press E at the kitchen's fridge or counter to buy water, Pepsi or dinner with PulseCoin (a token on the office blockchain), earned by closing tasks, winning games, a daily allowance or admin grants. What you buy stays in your avatar's hand for 3 minutes. Details: [docs/code/kitchen.md](code/kitchen.md).
 

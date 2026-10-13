@@ -29,8 +29,8 @@ person picks up next. Details live in **[PLAN.md](PLAN.md)** (who does what), **
 | Office expansion wings (Loft desks) and dedicated chill room lounge wings | ✅ | OFFICE.md §4, `docs/code/layout.md` |
 | 2.5D walls, wall faces, and wall-mounted items (TV, board, Lego wall) | ✅ | `docs/code/layout.md` |
 | Readability pass and subsystem architecture documentation (`docs/code/`) | ✅ | `docs/code/` |
-| Profile page & avatar upload (Roy M3) | ⬜ not started | PLAN.md |
-| Friends & online status (Roy M7) | ⬜ not started | PLAN.md |
+| Profile page & avatar upload (M3) | ⬜ not started | PLAN.md |
+| Friends & online status (M7) | ⬜ not started | PLAN.md |
 | Direct messages (DMs) & typing indicators in chat | ⬜ not started | PLAN.md |
 | Notifications system & file upload | ⬜ not started | PLAN.md |
 | Transfer of workspace ownership (owner handoff) | ⬜ not started | PLAN.md |
@@ -67,7 +67,7 @@ R1–R6 are done, along with the extras: multi-select and reset in the editor, m
 office to another template, a 100-desk headquarters template, and browser tests in CI.
 Zakaria's tasks and minigames are integrated. What remains is support for remaining gaps and final polish:
 
-- **Avatars from Roy's profile** (M3): display avatar images in the people list and on desk plates once profile avatar upload is built.
+- **Avatars from the profile** (M3): display avatar images in the people list and on desk plates once profile avatar upload is built.
 - **Before the evaluation**: run the full browser test suite against Docker (`E2E_BASE_URL=https://localhost:8443`), verify clean console on every page, and help finalize team README markers (PLAN.md §8).
 - Ideas if there's time: sound effects (footsteps, proximity arrival chimes), player emotes, a "follow" camera button in the people roster.
 
@@ -82,7 +82,7 @@ Zakaria's tasks and minigames are integrated. What remains is support for remain
 - Keyboard shortcuts: global `window` listeners in `apps/web/features/settings/keybindStore.ts` avoid Phaser duplicate key events.
 - Single office tab lock: `apps/web/features/office/TabLock.tsx` and `tabLockStore.ts` ensure each user has only one live office tab.
 
-## 4. Roy: what's next
+## 4. Auth, profile & social: what's next
 
 - **M3 Profile**: display name editing, avatar upload (with default avatar fallback), public profile `/u/[id]`. The office displays `displayName`: broadcast name updates via `office:updated`.
 - **Transfer ownership**: owners currently cannot leave the office without deleting it; implement owner transfer to an admin (atomic transaction: old owner → ADMIN, new → OWNER).

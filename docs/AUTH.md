@@ -1,6 +1,6 @@
 # Authentication
 
-**Owner:** Roy · **Implementation details:** see [docs/code/auth.md](code/auth.md)
+**Owners:** Roy, Zakaria · **Implementation details:** see [docs/code/auth.md](code/auth.md)
 
 Rebuilt on our NestJS API with secure access tokens and rotating refresh tokens, featuring password reset, social sign-in (Google, GitHub, 42), two-factor authentication (2FA) for all sign-in methods, full validation, rate limits, HTTPS, and single-device session enforcement.
 

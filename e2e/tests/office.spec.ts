@@ -252,12 +252,12 @@ test('on a phone, the joystick walks', async ({ team, browser }, testInfo) => {
     hasTouch: true,
     isMobile: true,
   });
-  await devUser(phone, 'Roy', org);
+  await devUser(phone, 'Ines', org);
   await gotoOffice(phone);
   const stick = phone.getByRole('application', { name: /Joystick/ });
   await expect(stick).toBeVisible();
 
-  // Watch Roy from the organiser's minimap while she walks up.
+  // Watch Ines from the organiser's minimap while they walk up.
   await org.goto('/office');
   await inOffice(org);
   // Sum of the others' rows on the map: goes down when someone walks up.

@@ -2,7 +2,7 @@
 
 # Dev Pulse — Team Plan
 
-**Team:** Roy · Roy · Zakaria
+**Team:** Roy · Zakaria
 **Goal:** a 2D virtual office where a team walks around, talks by proximity voice, meets in
 meeting rooms, relaxes in the chill room and manages tasks from their desks.
 
@@ -43,9 +43,9 @@ Each person mostly works in their own folders, which keeps merge conflicts rare.
 
 | Area             | Backend (`apps/api/src/…`)               | Frontend (`apps/web/…`)                                   | Owner          |
 | ---------------- | ---------------------------------------- | --------------------------------------------------------- | -------------- |
-| Auth             | `auth/`, `common/auth/`                  | `features/auth/`, `app/(auth)/`                           | **Roy**       |
-| Profile, friends | *(not built)*                            | *(not built)*                                             | **Roy**       |
-| Invitations & team | `invitations/`, `workspace/`           | `app/invite/[token]`, `features/team/`                    | **Roy**       |
+| Auth             | `auth/`, `common/auth/`                  | `features/auth/`, `app/(auth)/`                           | **Roy + Zakaria** |
+| Profile, friends | *(not built)*                            | *(not built)*                                             | **Roy + Zakaria** |
+| Invitations & team | `invitations/`, `workspace/`           | `app/invite/[token]`, `features/team/`                    | **Roy + Zakaria** |
 | Onboarding & workspace | `workspace/`                       | `app/onboarding/`, `features/onboarding/`, `features/workspace/` | **Roy**  |
 | Office / game    | `office/` (Socket.IO `/office`)          | `app/office/`, `game/` (Phaser), `features/office/`       | **Roy**        |
 | Task manager     | `tasks/` (Socket.IO `/office`)           | `features/tasks/`                                         | **Zakaria**    |
@@ -99,7 +99,7 @@ model WorkspaceMember {
 
 Full schema (with invitations): `apps/api/prisma/schema.prisma`. ✅ done
 
-### C2 — Auth contract (Roy provides it, everyone uses it) ✅ done
+### C2 — Auth contract (provided once, everyone uses it) ✅ done
 
 Details and examples: **[docs/AUTH.md](AUTH.md)**.
 
@@ -150,7 +150,7 @@ meeting room, lounge, and chill room. Templates: `apps/api/src/office/templates`
 | `/office`  | Claude / Helper | ✅ chat: `chat:send {channel, text}` → `chat:message` broadcast                       |
 | `/office`  | Claude / Roy | ✅ bookings: `office:bookings {changed: true}` broadcast                                 |
 | `/office`  | Zakaria | ✅ dev teleport: `dev:teleport [x, y]` (pixels) (dev/test only, gated)                              |
-| `/session` | Roy    | ✅ `session:ended` (instant sign-out on remote session closure)                                |
+| `/session` | Roy     | ✅ `session:ended` (instant sign-out on remote session closure)                                |
 
 REST:
 - `/api/auth/*` ✅ (`/register`, `/login`, `/2fa/*`, `/email/*`, `/password/*`, `/sessions/*`, `/refresh`, `/logout*`, `/me`, `/providers`, `/oauth/*`)
@@ -174,7 +174,7 @@ The server finds the workspace from the signed-in user, so feature routes don't 
 
 `→` means "unblocks". Tasks with no dependency can start on day 1.
 
-### Roy — authentication, profile, invitations (then Helper track)
+### Roy + Zakaria — authentication, profile, invitations (then Helper track)
 
 | #  | Week  | Task | Depends | Unblocks |
 | -- | ----- | ---- | ------- | -------- |
@@ -218,18 +218,16 @@ plugged into Roy's events.
 
 ### The helper for Zakaria's track
 
-Zakaria's list is the longest, so **Roy takes the Helper track (H1 chill room, H2 chat) from
-W5**, once her own scope is done. That fits well: chat + profile + friends together make one
-module ("User interaction", 2 pts) entirely in her hands.
+Zakaria's list is the longest, so the Helper track (H1 chill room, H2 chat) is picked up from
+**W5** by whoever has finished their own scope first.
 
-If a 4th teammate joins (the subject asks for 4–5 people), give them H1 + H2 from W2 instead,
-and Roy keeps M6/M7 plus the optional 2FA.
+If another teammate joins (the subject asks for 4–5 people), give them H1 + H2 from W2 instead.
 
 ---
 
 ## 5. Week-by-week timeline
 
-| Week | Roy          | Roy        | Zakaria         | Demo at end of week (everyone shows their part) |
+| Week | Auth track    | Roy        | Zakaria         | Demo at end of week (everyone shows their part) |
 | ---- | ------------- | ---------- | --------------- | ----------------------------------------------- |
 | W0   | C1–C4 together, M1 started | C1–C4 together | C1–C4 together | `make dev` works on every laptop, contracts written |
 | W1   | M1, M2        | R1         | Z1, Z2 start    | Sign up/log in; walk alone in the office; create tasks via API |
@@ -250,14 +248,14 @@ the team helps on it first.
 | ------ | ---- | --- | -------- | ------ |
 | Web: frameworks for frontend (Next.js) + backend (NestJS) | Major | 2 | all | ✅ Built |
 | Web: real-time features with WebSockets | Major | 2 | Roy, Zakaria | ✅ Built |
-| Web: user interaction (chat + profile + friends) | Major | 2 | Roy | 🟡 Partially built (chat built; profile + friends not built) |
-| User Mgmt: standard user management (profile, avatar, friends + online status) | Major | 2 | Roy | ⬜ Not built |
-| User Mgmt: organization system (workspaces, add/remove members) | Major | 2 | Roy + Roy | ✅ Built |
+| Web: user interaction (chat + profile + friends) | Major | 2 | Roy + Zakaria | 🟡 Partially built (chat built; profile + friends not built) |
+| User Mgmt: standard user management (profile, avatar, friends + online status) | Major | 2 | Roy + Zakaria | ⬜ Not built |
+| User Mgmt: organization system (workspaces, add/remove members) | Major | 2 | Roy + Zakaria | ✅ Built |
 | Module of choice: proximity voice + meeting rooms in a 2D office (needs justification in README) | Major | 2 | Zakaria | ✅ Built |
 | Web: ORM (Prisma) | Minor | 1 | all | ✅ Built |
 | Web: real-time collaborative features (live shared Kanban / workspace) | Minor | 1 | Zakaria | ✅ Built |
-| User Mgmt: OAuth 2.0 | Minor | 1 | Roy | ✅ Built |
-| User Mgmt: Two-factor authentication (2FA / TOTP) *(from buffer)* | Minor | 1 | Roy | ✅ Built |
+| User Mgmt: OAuth 2.0 | Minor | 1 | Roy + Zakaria | ✅ Built |
+| User Mgmt: Two-factor authentication (2FA / TOTP) *(from buffer)* | Minor | 1 | Roy + Zakaria | ✅ Built |
 | Web: minigames framework (Foosball, Uno, Lego wall & leaderboard) *(extra)* | Major | 2 | Zakaria | ✅ Built |
 | **Total (built modules only)** | | **14** | | |
 | *Buffer / not built:* Profile/avatar/friends (2+2 pts), direct messages & typing indicators, notification system, advanced permissions | | | | |
@@ -270,14 +268,13 @@ Aim for the buffer: modules that aren't fully working during evaluation count fo
 
 - **Board:** GitHub Projects, one card per task ID above (`M2`, `R4`…). Columns: Todo / Doing / Review / Done.
 - **Branches:** `main` is protected. Work on `<name>/<task-id>-short-name`
-  (e.g. `roy/M2-login`), open a small PR, and get **1 review** from someone else before merging.
+  (e.g. `roy/R1-office`), open a small PR, and get **1 review** from someone else before merging.
 - **Commits:** clear messages (`feat(tasks): add kanban drag and drop`). The subject checks that
   everyone has commits, so commit your own work yourself.
 - **Sync:** 15-min check-in twice a week, plus a demo at the end of each week (table above).
 - **Roles (required in the README):** suggestion: **Roy** = Tech Lead (owns the game core and
-  the contracts), **Roy** = Project Manager (smallest critical scope, finishes early),
-  **Zakaria** = Product Owner (owns most user-facing features). Change it if you prefer;
-  all three are also Developers.
+  the contracts), **Zakaria** = Product Owner (owns most user-facing features). Change it if
+  you prefer; both are also Developers.
 - **Definition of done:** works in Chrome through `https://…` with no console errors, inputs
   validated on front and back, reviewed, and merged.
 

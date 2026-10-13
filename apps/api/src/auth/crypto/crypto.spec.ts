@@ -35,8 +35,8 @@ describe('totp', () => {
   });
 
   it('builds an otpauth link', () => {
-    expect(otpauthUrl('Dev Pulse', 'roy@example.com', 'ABC')).toBe(
-      'otpauth://totp/Dev%20Pulse%3Aroy%40example.com?secret=ABC&issuer=Dev+Pulse&algorithm=SHA1&digits=6&period=30',
+    expect(otpauthUrl('Dev Pulse', 'ines@example.com', 'ABC')).toBe(
+      'otpauth://totp/Dev%20Pulse%3Aines%40example.com?secret=ABC&issuer=Dev+Pulse&algorithm=SHA1&digits=6&period=30',
     );
   });
 });

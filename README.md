@@ -130,10 +130,9 @@ docker-compose.yml   multi-container orchestration (proxy, web, api, db)
 | Member | Role | Responsibilities |
 | :--- | :--- | :--- |
 | **Roy** | Tech Lead & Developer | Game engine (Phaser 3), 2D office scene & movement, onboarding wizard, office layout templates & live editor, desk management & plates, initial infrastructure & auth foundations |
-| **Roy** | Project Manager & Developer | Authentication architecture, email invitations & member management, role-based guards (`OWNER`, `ADMIN`, `MEMBER`), 2FA (TOTP), OAuth 2.0 (Google, GitHub, 42) |
 | **Zakaria** | Product Owner & Developer | Kanban task manager (backend & live UI), WebRTC proximity voice & spatial audio, meeting rooms & bookings, chill room mini-games (foosball, Uno, Lego) & leaderboards, E2E test suite & architecture documentation |
 
-<!-- FILL: confirm roles (Roy: Tech Lead, Roy: Project Manager, Zakaria: Product Owner) -->
+<!-- FILL: confirm roles (Roy: Tech Lead, Zakaria: Product Owner) -->
 <!-- FILL: git history on other branches includes commits by Ahmad Mansour (voice call prototype, TLS proxy, earlier iteration): decide whether to credit -->
 
 ## Project Management
@@ -142,7 +141,7 @@ docker-compose.yml   multi-container orchestration (proxy, web, api, db)
   - <!-- FILL: GitHub Projects board link: <url> -->
   - <!-- FILL: communication channels (e.g. Discord server, Slack workspace, in-person campus sync) -->
   - <!-- FILL: confirm whether branch naming and PR review practice was strictly followed during development -->
-- **Branching & Peer Review Workflow:** The `main` branch was designated as protected. Contributors worked on isolated feature branches formatted as `<name>/<task-id>-short-name` (e.g. `roy/R1-office`, `zakaria/Z1-tasks`, `roy/M2-login`). Pull requests required at least one review from another teammate prior to merging. Twice-weekly 15-minute check-ins and end-of-week milestone demos ensured integration across boundaries.
+- **Branching & Peer Review Workflow:** The `main` branch was designated as protected. Contributors worked on isolated feature branches formatted as `<name>/<task-id>-short-name` (e.g. `roy/R1-office`, `zakaria/Z1-tasks`). Pull requests required at least one review from another teammate prior to merging. Twice-weekly 15-minute check-ins and end-of-week milestone demos ensured integration across boundaries.
 - **Continuous Integration (CI):** Automated through GitHub Actions (`.github/workflows/ci.yml`) on pull requests and pushes to `main`.
   - Matrix job across `apps/api` and `apps/web`: checks lockfile integrity (`pnpm install --frozen-lockfile`), compiles TypeScript (`pnpm typecheck`), executes Vitest unit tests (`pnpm test`), and builds production artifacts.
   - End-to-end testing job (`e2e`): Provisions a live PostgreSQL 16 service, runs Prisma migrations (`prisma db push`), starts the backend API and Next.js frontend behind a local reverse proxy (`serve.mjs`), and executes the complete Playwright browser suite.
@@ -371,24 +370,24 @@ erDiagram
 
 | Feature | What it does | Built by (Plan vs. Git) |
 | :--- | :--- | :--- |
-| **Authentication & Sessions** | Email/password signup and login, scrypt password hashing, rotating JWT access/refresh tokens in httpOnly cookies, single-device session lock with remote revocation, email verification, and password reset. | Plan: Roy (M1, M2); Git: Roy (backend auth, JWT, token rotation) + Zakaria (auth refactoring) |
-| **OAuth 2.0 Integration** | Single sign-on authentication and account linking via Google, GitHub, and 42 school OAuth API. | Plan: Roy (M6); Git: Roy + Zakaria (on `zakaria/dev`; Roy on earlier branches) |
-| **Two-Factor Authentication (2FA)** | TOTP authenticator setup (QR code / secret), login verification challenge, hashed emergency backup codes, and enable/disable toggle. | Plan: Roy (M6); Git: Roy + Zakaria (on `zakaria/dev`; Roy on earlier branches) |
+| **Authentication & Sessions** | Email/password signup and login, scrypt password hashing, rotating JWT access/refresh tokens in httpOnly cookies, single-device session lock with remote revocation, email verification, and password reset. | Plan: M1, M2; Git: Roy (backend auth, JWT, token rotation) + Zakaria (auth refactoring) |
+| **OAuth 2.0 Integration** | Single sign-on authentication and account linking via Google, GitHub, and 42 school OAuth API. | Plan: M6; Git: Roy + Zakaria |
+| **Two-Factor Authentication (2FA)** | TOTP authenticator setup (QR code / secret), login verification challenge, hashed emergency backup codes, and enable/disable toggle. | Plan: M6; Git: Roy + Zakaria |
 | **Onboarding Wizard** | First-login flow: create workspace name, preview recommended office template based on team size, customize character avatar, and enter office. | Plan: Roy (R3); Git: Roy |
 | **Office Templates & Wings** | Pre-designed templates (Loft 8, Studio 24, Campus 48, Headquarters 100) and procedural generation sized to team (1–100); dynamic wing expansion (left, right, bottom) with door cuts and dedicated chill room wings. | Plan: Roy (R5); Git: Roy + Claude (generation) + Zakaria (wing steps & golden snapshots) |
 | **Real-Time Multiplayer Office** | 2D virtual office in Phaser 3 with 20 Hz volatile position sync, interpolation of remote players, obstacle collisions, character walk cycles, chair sitting, and minimap. | Plan: Roy (R1, R2); Git: Roy + Zakaria (engine polish) |
 | **One-Office-Tab Lock** | Socket handshake tab lock rejecting secondary tabs for the same account with `ALREADY_OPEN` error, offering an instant "Use here" takeover prompt. | Plan: Roy; Git: Roy |
 | **Desks, Name Plates & Statuses** | Automatic desk allocation on join, customizable desk plates, interactive desk swapping (`PUT /api/workspace/me/desk`), paper stacks showing open task count, and status bubbles ("Focusing", "On break ☕"). | Plan: Roy (R4, R6) / Zakaria (Z5); Git: Roy + Zakaria |
-| **Workspace Invitations & Roles** | Token-based email invitations (7-day validity), acceptance flow for new/existing accounts, member list, and role permission enforcement (`OWNER`, `ADMIN`, `MEMBER`). | Plan: Roy (M4, M5); Git: Roy + Zakaria (on `zakaria/dev`; Roy on earlier branches) |
+| **Workspace Invitations & Roles** | Token-based email invitations (7-day validity), acceptance flow for new/existing accounts, member list, and role permission enforcement (`OWNER`, `ADMIN`, `MEMBER`). | Plan: M4, M5; Git: Roy + Zakaria |
 | **Character Studio** | 18-attribute DNA recipe system (body, hairstyle, colors, outfit, accessories) generating 19-char codes or presets, with live 4-direction and desk preview in onboarding and user menu. | Plan: Roy; Git: Roy |
 | **Proximity Voice Chat** | Automatic WebRTC peer-to-peer audio calling when within 3 tiles in the same room, 3D spatial audio with HRTF directional panning and distance attenuation, mute/deafen, and push-to-talk. | Plan: Zakaria (Z3); Git: Claude + Zakaria |
 | **Meeting Room Screen Sharing & Whiteboard** | One presenter per meeting room shares their screen peer to peer (tab audio included, watchable on phones and tablets), and a live Excalidraw whiteboard with named cursors is shared by everyone in the room and saved per room. Same access rule as room voice: in the room, and invited when booked. | Git: Claude |
 | **Meeting Rooms & Timetable Bookings** | Acoustically isolated meeting rooms, day timetable (00:00–24:00) with drag-to-book slots, attendee isolation, and race-free reservation with PostgreSQL advisory locks. | Plan: Zakaria (Z4); Git: Claude + Zakaria |
-| **Text Chat (Office & Room Channels)** | Real-time chat panel with persistent history, global workspace channel `office` and room-scoped channels, message rate-limiting, and avatar speech bubbles. | Plan: Helper / Roy (H2); Git: Claude + Zakaria |
+| **Text Chat (Office & Room Channels)** | Real-time chat panel with persistent history, global workspace channel `office` and room-scoped channels, message rate-limiting, and avatar speech bubbles. | Plan: Helper (H2); Git: Claude + Zakaria |
 | **Jira-Style Kanban Task Board** | Global issue tracker with To Do / In Progress / In Review / Done columns, HTML5 drag-and-drop with float ranking, task creation/edit dialogs, filtering by assignee, and live WebSocket synchronization. | Plan: Zakaria (Z1, Z2); Git: Zakaria |
 | **Chill Room & Mini-Games** | Dedicated break lounge with Baby foot (server-authoritative 30 Hz physics foosball), Uno card game engine, persistent Lego wall art board, and competitive weekly win/loss leaderboards. | Plan: Helper / Zakaria (H1); Git: Zakaria |
 | **User Menu, Keybinds & Settings** | Top-right user menu modal for character customization, status updates, security settings, and rebindable keyboard shortcuts with conflict detection. | Plan: Zakaria / Roy; Git: Roy + Zakaria |
-| **Legal Pages** | Dedicated Privacy Policy (`/privacy`) and Terms of Service (`/terms`) compliance pages. | Plan: Roy (F1); Git: Roy + Zakaria |
+| **Legal Pages** | Dedicated Privacy Policy (`/privacy`) and Terms of Service (`/terms`) compliance pages. | Plan: F1; Git: Roy + Zakaria |
 | **End-to-End Test Suite & CI** | Playwright test suite covering multi-user onboarding, movement, office editor, bookings, tasks, and games; automated GitHub Actions CI pipeline. | Plan: Roy / Zakaria; Git: Roy + Zakaria |
 
 ### Confirmed Not Implemented
@@ -397,24 +396,24 @@ erDiagram
 - **Friends System & Online Social Status:** No friend requests, friend lists, or friend presence indicators. Planned M7, not built.
 - **Direct Messaging (DMs) & Typing Indicators:** Chat only supports workspace channel `office` and layout room IDs; no private 1-on-1 messaging or typing events. Planned H2, not built.
 
-> **Note on Branch Authorship:** On the current evaluation branch (`zakaria/dev`, 133 commits: Zakaria 67, Roy 50, Claude AI 16), there are no commits authored directly by Roy. Her 10 commits (covering Better Auth integration, 42 OAuth, 2FA, workspace member guards, and invitation UI) were authored on earlier branches and incorporated during the architecture consolidation.
+> **Note on Branch Authorship:** The current evaluation branch is `zakaria/dev` (133 commits: Zakaria 67, Roy 50, Claude AI 16).
 <!-- FILL: confirm who built what; make sure every team member has commits on the evaluated branch -->
 
 ## Modules
 
 | Module | Type | Pts | Status | Justification & Implementation | Built by |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Frameworks (Next.js + NestJS)** | Major | 2 | Implemented | Next.js 16 (React 19) for frontend UI and game canvas; NestJS 11 modular monolith backend architecture (`apps/web`, `apps/api`). | Roy, Zakaria, Roy |
+| **Frameworks (Next.js + NestJS)** | Major | 2 | Implemented | Next.js 16 (React 19) for frontend UI and game canvas; NestJS 11 modular monolith backend architecture (`apps/web`, `apps/api`). | Roy, Zakaria |
 | **WebSockets / Real-Time Communication** | Major | 2 | Implemented | Socket.IO server and client gateways (`/office`, `/session`) for player movement, chat, games, tasks, and presence (`apps/api/src/office/office.gateway.ts`, `apps/web/features/office/connection.ts`). | Roy, Zakaria |
-| **Organization System** | Major | 2 | Implemented | Multi-user workspace management with roles (`OWNER`, `ADMIN`, `MEMBER`), member invites, desk assignments, and room layout controls (`apps/api/src/workspace`, `apps/web/features/team`). | Roy, Roy, Zakaria |
+| **Organization System** | Major | 2 | Implemented | Multi-user workspace management with roles (`OWNER`, `ADMIN`, `MEMBER`), member invites, desk assignments, and room layout controls (`apps/api/src/workspace`, `apps/web/features/team`). | Roy, Zakaria |
 | **ORM (Prisma)** | Minor | 1 | Implemented | Prisma ORM 6 connecting to PostgreSQL 16 with schema modeling, relations, indexes, migrations (`apps/api/prisma/schema.prisma`). | Roy, Zakaria |
 | **Real-Time Collaborative Features** | Minor | 1 | Implemented | Live collaborative Kanban board with instant WebSocket syncing, and live shared office layout editor with optimistic locking (`apps/api/src/tasks`, `apps/web/features/tasks`, `apps/web/features/office/EditorPanel.tsx`). | Zakaria, Roy |
-| **OAuth 2.0 Authentication** | Minor | 1 | Implemented | Third-party OAuth authentication with Google, GitHub, and 42 school API (`apps/api/src/auth/oauth`, `apps/web/features/auth/OAuthButtons.tsx`). | Roy, Roy, Zakaria |
-| **Two-Factor Authentication (2FA)** | Minor | 1 | Implemented | Time-based One-Time Password (TOTP) with AES-256-GCM encrypted secrets (HKDF-derived key, `apps/api/src/auth/crypto/secrets.ts`), QR code enrollment, backup codes, and login challenge enforcement (`apps/api/src/auth/auth.service.ts`, `apps/web/features/settings/TwoFactorCard.tsx`). | Roy, Roy, Zakaria |
+| **OAuth 2.0 Authentication** | Minor | 1 | Implemented | Third-party OAuth authentication with Google, GitHub, and 42 school API (`apps/api/src/auth/oauth`, `apps/web/features/auth/OAuthButtons.tsx`). | Roy, Zakaria |
+| **Two-Factor Authentication (2FA)** | Minor | 1 | Implemented | Time-based One-Time Password (TOTP) with AES-256-GCM encrypted secrets (HKDF-derived key, `apps/api/src/auth/crypto/secrets.ts`), QR code enrollment, backup codes, and login challenge enforcement (`apps/api/src/auth/auth.service.ts`, `apps/web/features/settings/TwoFactorCard.tsx`). | Roy, Zakaria |
 | **Module of Choice: Proximity Voice + Meeting Rooms** | Major | 2 | Implemented | Custom module combining peer-to-peer WebRTC mesh voice calling with 3D HRTF spatial audio via Web Audio API, dynamic proximity detection, and acoustic meeting room isolation (`apps/api/src/voice`, `apps/api/src/meetings`, `apps/web/features/voice`, `apps/web/features/meetings`). Detailed justification below. | Zakaria, Claude |
 | **Module of Choice: Kitchen Café on a Blockchain (PulseCoin)** | Major | 2 | Implemented | Solidity ERC-20 token (permits, on-chain daily allowance) and shop contracts on a local EVM chain started by `make`, custodial wallets with EIP-712 permit signatures and a gas-paying relayer, coins earned from tasks / games / grants, purchases at the kitchen with on-chain receipts and a verifiable ledger (`apps/api/contracts`, `apps/api/src/chain`, `apps/api/src/kitchen`, `apps/web/features/kitchen`). See justification below. | Claude |
 | *Candidate: Multiplayer Games (Baby foot, Uno, Lego) + Leaderboard* | Major | 2 | Implemented | Server-authoritative physics foosball, Uno turn rules engine, shared Lego art board, and weekly win/loss leaderboards (`apps/api/src/games`, `apps/web/features/games`). <!-- FILL: confirm type and points with the subject's module list --> | Zakaria |
-| *Candidate: Advanced Role & Permission Management* | Minor | — | Implemented | Multi-tier role permissions (`OWNER`, `ADMIN`, `MEMBER`) enforced on all API endpoints via `MembershipService.require` and UI capability guards. <!-- FILL: team decides whether to claim Advanced Permissions --> | Roy, Roy |
+| *Candidate: Advanced Role & Permission Management* | Minor | — | Implemented | Multi-tier role permissions (`OWNER`, `ADMIN`, `MEMBER`) enforced on all API endpoints via `MembershipService.require` and UI capability guards. <!-- FILL: team decides whether to claim Advanced Permissions --> | Roy |
 | Standard User Management (Avatar upload, public profile) | Major | 2 | Not implemented | Planned M3, not claimed. | — |
 | User Interaction (DMs, typing indicators, friends) | Major | 2 | Not implemented | Planned M7/H2, not claimed. | — |
 | Notification System | Minor | 1 | Not implemented | Planned buffer, not claimed. | — |
@@ -455,13 +454,6 @@ erDiagram
   - *Concurrent Layout Editing Conflicts:* Multiple organizers editing an office simultaneously risked silently overwriting each other's changes. Solved by implementing optimistic concurrency locking on `Workspace.layoutVersion` (`updateMany` where version matches), returning a conflict error that prompts the second saver to reload the latest layout.
   - *Multi-Tab Duplicate Player Desync:* Opening the virtual office across multiple browser tabs resulted in duplicate avatars and socket conflicts. Solved by implementing a single-office-tab lock during the `/office` handshake (`{ tabId, takeover }`), rejecting secondary tabs with `ALREADY_OPEN` and offering an instant "Use here" takeover prompt.
 <!-- FILL: Roy to confirm personal wording of challenges and solutions -->
-
-### Roy (Project Manager & Developer)
-
-- **Planned Scope & Ownership:** Planned owner for authentication architecture, workspace member management, email invitations, 2FA, OAuth, and user profiles.
-- **Git Evidence & Branch Scope:** Authored 10 commits on other branches of the repository history (Better Auth integration, 42 OAuth and 2FA fixes, workspace member guards with `@Roles`, dev seed users, invitation form, accept page and invitation email). None of them are on `zakaria/dev`, where the current auth and invitation code was written by Roy and Zakaria.
-- **Challenges & Solutions:** <!-- FILL: Roy: your own contributions to the evaluated code and the challenges you solved (the auth/invitation design in docs/AUTH.md and docs/code/auth.md can help you describe them). -->
-<!-- FILL: every member needs commits on the branch that is evaluated: get Roy's work merged or committed there -->
 
 > The challenge bullets under Roy and Zakaria are taken from what the repository documents (docs/HANDOFF.md, docs/code/performance.md, the code); the attribution follows the git history of the files involved. <!-- FILL: confirm attribution -->
 
@@ -516,6 +508,5 @@ AI assistants (Anthropic Claude) were utilized as pair-programming and code stru
 - **Performance & Documentation:** Assisted in compiling profiling data for `docs/code/performance.md` and drafting comprehensive subsystem architecture guides under `docs/code/`.
 - **Review and Verification Gates:** In accordance with 42 curriculum requirements, all AI-generated code was reviewed, validated, and tested by team members against static type checking (`pnpm typecheck`), unit test suites (`pnpm test`), and Playwright E2E suites. Team members possess full comprehension of all algorithms and code within the repository and can explain all implementations.
 
-<!-- FILL: Roy to confirm personal AI usage and verification methods -->
 <!-- FILL: Roy to confirm personal AI usage and verification methods -->
 <!-- FILL: Zakaria to confirm personal AI usage and verification methods -->

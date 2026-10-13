@@ -22,7 +22,7 @@ export interface LabTemplate {
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
 const NAMES = [
-  'Roy', 'Roy', 'Zakaria', 'Ines', 'Theo', 'Priya', 'Kofi', 'Lena', 'Mateo', 'Sana', 'Felix', 'Yuki', 'Ada', 'Nils',
+  'Roy', 'Zakaria', 'Ines', 'Theo', 'Priya', 'Kofi', 'Lena', 'Mateo', 'Sana', 'Felix', 'Yuki', 'Ada', 'Nils',
   'Rosa', 'Idris', 'June', 'Arlo', 'Noor', 'Ezra', 'Tariq', 'Wren', 'Luca', 'Esme', 'Kian', 'Amara', 'Bram', 'Cleo',
   'Dario', 'Elif', 'Femi', 'Greta', 'Hugo', 'Isla', 'Jonah', 'Kaia', 'Leon', 'Maren', 'Nadia', 'Otto', 'Pia', 'Quinn',
   'Rami', 'Suki', 'Tomas', 'Uma', 'Vera', 'Wes',
