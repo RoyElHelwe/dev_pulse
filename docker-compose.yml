@@ -54,11 +54,16 @@ services:
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
       # The local chain by default; set CHAIN_RPC_URL (and a funded CHAIN_RELAYER_KEY) in .env for e.g. Avalanche Fuji.
       CHAIN_RPC_URL: ${CHAIN_RPC_URL:-http://chain:8545}
+      # All transactional mail (verification, password reset, invitations, session emails) goes through
+      # the postfix Gmail relay in this stack. Empty SMTP_HOST in .env falls back to postfix too.
+      SMTP_HOST: ${SMTP_HOST:-postfix}
     depends_on:
       db:
         condition: service_healthy
       chain:
         condition: service_healthy
+      postfix:
+        condition: service_started
 
   # Next.js frontend serving web pages and the Phaser 2D virtual office client.
   # Built using the prod standalone target and runs on internal port 3000.
